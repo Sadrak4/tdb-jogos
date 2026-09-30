@@ -1,102 +1,58 @@
-# TDB JOGOS v4.2 — Online Sync Fix
+# TDB JOGOS v4.3 — Vercel Hobby Fix
 
-Esta versão corrige a sincronização entre computadores na Vercel.
+Esta versão corrige o erro de implantação do plano Hobby:
 
-## Problemas corrigidos
+`No plano Hobby, é possível adicionar no máximo 12 funções sem servidor a uma implantação.`
 
-### Salas
-- salas são atualizadas por HTTP/Redis mesmo se o WebSocket cair;
-- host passa a ver jogadores que entram sem precisar sair da tela;
-- lista pública de salas é atualizada periodicamente;
-- entrar por código e botão Entrar usam o backend;
-- sair da sala atualiza o servidor;
-- sala vazia é removida.
+## O que mudou
 
-### Truco e Xadrez
-O problema principal da v4.1 era que o botão Iniciar ainda podia iniciar a engine apenas no navegador do host.
+A v4.2 possuía 21 arquivos JavaScript dentro de `/api`, então a Vercel interpretava praticamente cada endpoint como uma função separada.
 
-Na v4.2:
-- host envia `start` para o servidor;
-- servidor cria a partida autoritativa;
-- todos os jogadores consultam o mesmo estado;
-- cada cliente entra automaticamente na partida quando ela surgir;
-- ações são enviadas para `/api/games/action`;
-- existe polling HTTP de segurança a cada ~850 ms;
-- WebSocket continua sendo usado como acelerador quando disponível.
+A v4.3 possui somente **2 funções Vercel**:
 
-### TDB Music
-- fila compartilhada persistida no Redis;
-- play/pause/próxima/anterior persistidos;
-- cada cliente consulta o estado compartilhado;
-- WebSocket não é mais requisito para a música sincronizar;
-- timestamp continua sendo usado para corrigir diferença entre players.
+1. `api/[...route].js` — recebe toda a API HTTP:
+   - health;
+   - autenticação;
+   - salas;
+   - jogos;
+   - Music/shared state;
+   - presença;
+   - amigos.
+2. `api/ws.js` — realtime/WebSocket.
 
-### Amigos por ID
-Na v4.1 a busca ainda era local.
+Os handlers individuais foram movidos para `server/http-handlers/`, onde não contam como funções independentes.
 
-Na v4.2:
-- amigos são procurados entre as contas registradas no servidor;
-- lista de amigos fica persistida no Redis;
-- presença é exibida como Online/Jogando/Assistindo/TDB Music quando disponível.
+## Recursos preservados
 
-### Espectadores
-- entrada como espectador é registrada no backend;
-- contagem fica compartilhada;
-- espectador continua sem receber cartas privadas do Truco.
+- contas online;
+- salas públicas/privadas;
+- amigos por ID;
+- presença;
+- TDB Music;
+- Xadrez online;
+- Truco online;
+- espectadores;
+- HTTP polling de segurança;
+- Redis;
+- WebSocket.
 
-## WebSocket + HTTP fallback
+## Importante
 
-A arquitetura agora é:
+Na Vercel use Framework/Application Preset **Other**.
 
-```text
-Navegador
-  ├─ WebSocket (rápido, quando disponível)
-  └─ HTTP polling (recuperação e sincronização garantida)
-             ↓
-           Redis
-             ↓
-      estado compartilhado
-```
-
-O WebSocket não é mais a única forma de receber mudanças.
-
-## Redis é obrigatório na Vercel
-
-Em produção, sem Redis, o site mostra:
-
-`SEM REDIS`
-
-e bloqueia operações multiplayer que poderiam gerar estados divergentes.
-
-No desenvolvimento local, Redis continua opcional.
-
-## Teste
+Redis continua obrigatório em produção para multiplayer confiável.
 
 Depois do deploy, abra:
 
-`https://SEU-DOMINIO.vercel.app/api/health`
+`/api/health`
 
-O esperado para produção é:
+O esperado é algo como:
 
 ```json
 {
   "ok": true,
-  "version": "4.2.0",
+  "version": "4.3.0",
   "redis": true,
-  "readyForMultiplayer": true,
-  "production": true
+  "readyForMultiplayer": true
 }
 ```
-
-Se `redis` estiver `false`, configure `REDIS_URL`.
-
-## Atualizando pelo GitHub Desktop
-
-1. Extraia este ZIP.
-2. Copie o conteúdo da pasta extraída para dentro da pasta local do repositório `tdb-jogos`.
-3. Substitua os arquivos existentes.
-4. GitHub Desktop:
-   - Summary: `TDB JOGOS v4.2 Online Sync Fix`
-   - Commit to main
-   - Push origin
-5. A Vercel fará um novo deploy.
