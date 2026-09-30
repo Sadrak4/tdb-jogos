@@ -52,16 +52,19 @@ export async function initSupabase(){
     try{
       supabaseClient=createClient(url,secret,{
         auth:{persistSession:false,autoRefreshToken:false},
-        global:{headers:{'X-Client-Info':'tdb-jogos-server/5.2'}}
+        global:{headers:{'X-Client-Info':'tdb-jogos-server/5.5'}}
       });
       const checks=await Promise.all([
         supabaseClient.from('tdb_rooms').select('code',{head:true,count:'exact'}).limit(1),
         supabaseClient.from('tdb_game_results').select('match_id',{head:true,count:'exact'}).limit(1),
         supabaseClient.from('tdb_friend_requests').select('sender_id',{head:true,count:'exact'}).limit(1),
-        supabaseClient.from('tdb_room_invites').select('id',{head:true,count:'exact'}).limit(1)
+        supabaseClient.from('tdb_room_invites').select('id',{head:true,count:'exact'}).limit(1),
+        supabaseClient.from('tdb_reports').select('id',{head:true,count:'exact'}).limit(1),
+        supabaseClient.from('tdb_admin_sessions').select('token',{head:true,count:'exact'}).limit(1),
+        supabaseClient.from('tdb_users').select('id,banned',{head:true,count:'exact'}).limit(1)
       ]);
       const schemaError=checks.find(x=>x.error)?.error;
-      if(schemaError){supabaseReady=true;schemaReady=false;lastError=`Schema v5.2 pendente: ${schemaError.message}`;return false;}
+      if(schemaError){supabaseReady=true;schemaReady=false;lastError=`Schema v5.5 pendente: ${schemaError.message}`;return false;}
 
 
       supabaseReady=true;

@@ -1,192 +1,133 @@
-# TDB JOGOS v5.4 — Gameplay + Lifecycle Fix
+# TDB JOGOS v5.5 — Admin + Áudio/UX
 
-A v5.2 consolida a base online do TDB JOGOS antes da adição de novos jogos.
+TDB JOGOS é uma plataforma browser-first com Truco Paulista, Xadrez e TDB Music, usando Vercel + Supabase para multiplayer e persistência.
 
-## Principais novidades
+## v5.5
 
-### Conexão e reconexão
-- estados visuais: `CONECTANDO…`, `ONLINE`, `ONLINE • FALLBACK`, `RECONECTANDO…` e `OFFLINE`;
-- heartbeat periódico;
-- retorno automático à sala/partida após atualizar a página ou uma queda curta;
-- tolerância de reconexão de **90 segundos**;
-- jogador aparece como `Reconectando (Xs)` durante a tolerância;
-- se o prazo acabar em Truco/Xadrez competitivo, a partida é encerrada por abandono.
+### Painel administrativo
 
-### Host migratório
-- saída explícita do host transfere a sala;
-- host desconectado por mais de 90 segundos é removido e a sala escolhe novo host;
-- preferência por jogador que esteja online.
+A v5.5 adiciona um painel administrativo separado do login normal do jogador.
 
-### Amigos e social
-- busca por **nome** ou `TDB-XXXXXXXX`;
-- pedido de amizade;
-- aceitar/recusar pedido;
-- pedidos enviados;
-- convite de sala para amigos;
-- aceitar convite entra diretamente na sala;
-- presença: Online, Jogando, TDB Music, Reconectando e Offline.
+A autenticação do administrador é validada no servidor. A senha não fica exposta no JavaScript do navegador; o código do servidor guarda somente um hash derivado.
 
-### Segurança / estabilidade
-- proteção contra clique duplo no cliente;
-- `actionId` para idempotência;
-- `expectedVersion` nas ações de partida;
-- estado de Truco/Xadrez validado pelo servidor;
-- rate limit por rota;
-- logs de erro de servidor e cliente no Supabase;
-- limpeza automática de presença/salas/sessões/eventos/logs antigos.
+O painel permite:
 
-### Histórico competitivo
-Somente partidas com **jogadores reais** contam.
+- visualizar quantidade de contas;
+- buscar conta por nome ou `TDB-ID`;
+- recuperar conta redefinindo a senha;
+- gerar senha temporária;
+- trocar a senha manualmente;
+- encerrar todas as sessões de uma conta;
+- banir e desbanir IDs;
+- visualizar logs de erro de cliente/servidor;
+- visualizar auditoria das ações administrativas;
+- receber e tratar reportes de bugs/erros enviados pelos jogadores.
 
-Partidas contra bots:
-- continuam disponíveis para teste;
-- não somam vitória;
-- não somam derrota;
-- não entram no ranking.
+> A senha antiga de um jogador nunca pode ser visualizada porque as senhas são armazenadas com hash. Recuperação significa redefinir a senha.
 
-O perfil mostra:
-- partidas jogadas;
-- vitórias;
-- derrotas;
-- empates;
-- partidas recentes;
-- PGN das partidas de Xadrez.
+O acesso pode ser aberto pela opção **Administração** na tela de login ou diretamente com `#admin` no endereço do site.
 
-### Ranking global
-Na tela de cada jogo aparece o TOP 3.
+### Reportes
 
-- Truco: ranking separado em **1x1** e **2x2**;
-- Xadrez: ranking **1x1**;
-- classificação principal: quantidade de vitórias;
-- desempate: taxa de vitória e derrotas.
+Todos os jogadores logados têm em **Configurações** um bloco **Reportar bug ou erro**.
 
-### TDB Music
-- fila compartilhada validada pelo servidor;
-- quem adicionou cada música;
-- limite de músicas por pessoa;
-- usuário pode remover/reordenar suas próprias músicas;
-- host pode reorganizar tudo;
-- votação para pular;
-- host pode bloquear/liberar controles;
-- mostra quem tocou, pausou, pulou ou alterou a fila;
-- sincronização com tolerância maior para evitar ficar corrigindo o player toda hora.
+O reporte envia ao painel ADM:
 
-### Truco Online
-- servidor é autoridade;
-- Mão de 11 com decisão da dupla;
-- parceiro vê as cartas da própria equipe na Mão de 11;
-- Mão de Ferro mantém todas as mãos ocultas;
-- timer por jogada controlado pelo servidor;
-- timeout joga uma carta aberta automaticamente;
-- reconexão e abandono de 90s;
-- espectador nunca recebe mãos privadas.
+- jogador/ID;
+- categoria;
+- descrição;
+- tela atual;
+- jogo e sala, quando houver;
+- versão do app;
+- estado da conexão e latência;
+- identificação técnica do navegador.
 
-### Xadrez Online
-- relógio calculado pelo servidor;
-- promoção permite escolher Dama, Torre, Bispo ou Cavalo;
-- PGN;
-- reconexão e abandono;
-- **sem empate automático por repetição**;
-- continuam válidos xeque-mate, afogamento, acordo, desistência, timeout etc.
+Nenhuma senha, token ou carta privada é enviada no reporte.
 
-## Arquitetura de dados
+### Banimento
 
-```text
-Supabase persistente
-├── usuários / perfil
-├── sessões
-├── amigos / pedidos
-├── convites
-├── histórico / resultados
-├── ranking
-└── logs
+Contas banidas:
 
-Estado online
-├── salas
-├── presença
-├── partidas
-├── TDB Music
-└── eventos Realtime
-```
+- não conseguem realizar um novo login;
+- têm as sessões existentes revogadas ao serem banidas;
+- perdem acesso às APIs protegidas quando a sessão é invalidada.
 
-## Importante ao atualizar da v5.0/v5.1
+### Áudio
 
-A v5.2 adiciona novas tabelas.
+O áudio foi centralizado em um único `AudioContext`, evitando criar um contexto novo a cada clique.
 
-Depois de publicar os arquivos, execute **novamente o arquivo completo**:
+Há efeitos de baixo volume para:
 
-`SUPABASE-SCHEMA.sql`
+- botões e navegação;
+- confirmar/voltar/erro/sucesso;
+- criar/entrar em sala;
+- iniciar partida;
+- distribuição e jogada de cartas;
+- carta escondida;
+- Truco/6/9/12;
+- rodada vencida/perdida;
+- vitória/derrota;
+- seleção, movimento, captura e xeque no Xadrez;
+- adicionar/remover faixa no TDB Music.
 
-no Supabase SQL Editor.
+Em **Configurações** existem controles separados para:
 
-O SQL usa `create table if not exists`, então ele mantém as tabelas e contas existentes e adiciona as estruturas da v5.2.
+- volume geral;
+- interface;
+- jogos;
+- alertas sonoros.
 
-## Testes incluídos
+Os volumes padrão são intencionalmente baixos.
 
-- `tests/online-engine-smoke.mjs`
-- `tests/v5.2-engine-smoke.mjs`
+### Ping
 
-Os testes v5.2 verificam:
-- Xadrez sem empate automático por repetição;
-- promoção para Cavalo;
-- Mão de 11;
-- visibilidade das cartas da dupla;
-- Mão de Ferro;
-- timer server-side do Truco;
-- privacidade do espectador.
+A barra superior agora exibe a latência aproximada da API em milissegundos. O valor é atualizado durante os heartbeats da sessão.
 
+### Ranking global removido
 
-## v5.3 — correções de produção
+O sistema de TOP global/ranking foi removido completamente da interface e da API.
 
-A v5.3 corrige os problemas de interface encontrados depois da v5.2:
+Foram preservados:
 
-- nenhuma sincronização de fundo chama mais `renderLobby()`, `drawGamePage()` ou `renderWaitingRoom()`;
-- lobby, amigos e lista de salas recebem somente patches nos blocos que mudaram;
-- Xadrez online reaproveita o tabuleiro montado e atualiza as peças sem recriar a tela inteira;
-- Truco/Xadrez passam a ter estados `playing-truco` e `playing-chess`, separados de `waiting`;
-- testes com bots desligam o sincronizador online e usam `bot-truco` / `bot-chess`;
-- ao voltar do teste com bot, a sala online original é restaurada;
-- convidar amigos abre um modal por cima da sala, sem navegar para Amigos;
-- convite recebido aparece em um aviso flutuante por 10 segundos e continua salvo em Amigos.
+- histórico individual do perfil;
+- vitórias/derrotas/empates do próprio jogador;
+- resultados das partidas reais;
+- regra de que partidas contra bots não contam para o histórico competitivo.
 
-### Banco
+### Notificações
 
-A v5.3 não adiciona tabelas novas. Se o `SUPABASE-SCHEMA.sql` da v5.2 já foi executado, não é necessário rodá-lo novamente apenas por causa desta correção.
+O sistema de notificações existente não foi alterado nesta atualização.
 
+## Multiplayer
 
-## v5.4 — revisão de Truco, Xadrez, Music e ciclo de partidas
+A v5.5 mantém as correções da v5.4:
 
-### Truco
-A interface não usa mais o host/seat 0 como referência visual para todos. O servidor mantém seats reais, mas cada navegador rotaciona apenas a apresentação:
+- Truco 1x1 e 2x2 com mão privada por jogador;
+- você sempre aparece embaixo na própria tela do Truco;
+- servidor autoritativo para Truco/Xadrez;
+- Xadrez com seleção estável e movimento otimista;
+- reconexão de 90 segundos;
+- host migratório;
+- ciclo Sala → Partida → Resultado → Sala → Nova partida;
+- TDB Music compartilhado sem usar o lifecycle competitivo.
 
-- você embaixo;
-- 1x1: rival em cima;
-- 2x2: parceiro em cima e adversários nas laterais.
+## Banco de dados
 
-O 1x1 também teve um erro estrutural corrigido: seats 0 e 2 eram opostos visualmente, mas o cálculo antigo podia colocá-los na mesma equipe.
+A v5.5 adiciona estruturas novas. É obrigatório executar a seção **MIGRAÇÃO v5.5** do `SUPABASE-SCHEMA.sql` antes de publicar o código v5.5.
 
-Cada resposta do servidor contém `localSeat` individualmente. Fora da Mão de 11, cada jogador recebe somente sua própria mão. Cartas escondidas já jogadas também não carregam a face real para os clientes.
+Novidades no banco:
 
-### Xadrez
-A seleção da peça agora é estado local da interface. Atualizações que só mudam relógio não apagam a seleção e não recriam o tabuleiro inteiro.
+- campos de banimento em `tdb_users`;
+- `tdb_admin_sessions`;
+- `tdb_reports`;
+- `tdb_admin_audit_logs`.
 
-Jogadas online usam atualização otimista:
-1. a peça se move imediatamente;
-2. a API valida;
-3. o estado oficial confirma;
-4. em rejeição, o cliente faz rollback e busca o estado correto.
+As contas e históricos existentes são preservados.
 
-### Ciclo de partida
-O fluxo é:
+## Produção
 
-`Sala -> Partida -> Resultado -> Voltar à sala -> Nova partida`
+Depois da migração e do deploy, confira:
 
-`Voltar à sala` interrompe o polling daquele jogo no navegador e reabre a sala.
+`https://tdb-jogos.vercel.app/api/health`
 
-`Nova partida` cria um `matchId` novo. O cliente distingue um rematch realmente mais novo de uma resposta atrasada do jogo antigo.
-
-### TDB Music
-Music permanece uma sala compartilhada aberta e não entra no fluxo competitivo `open -> playing -> finished`.
-
-### Banco
-Nenhuma tabela nova foi adicionada na v5.4. O schema Supabase da v5.2 continua válido.
+Esperado: `version: "5.5.0"`, `supabase: true`, `schemaReady: true` e `readyForMultiplayer: true`.

@@ -244,3 +244,68 @@ revoke all on table
 from anon, authenticated;
 
 commit;
+
+-- ============================================================
+-- MIGRAÇÃO v5.5 — administração, banimento e reportes
+-- Pode executar sobre o schema v5.2/v5.4 existente.
+-- ============================================================
+begin;
+
+alter table public.tdb_users add column if not exists banned boolean not null default false;
+alter table public.tdb_users add column if not exists banned_reason text;
+alter table public.tdb_users add column if not exists banned_at timestamptz;
+create index if not exists tdb_users_banned_idx on public.tdb_users(banned);
+
+create table if not exists public.tdb_admin_sessions (
+  token text primary key,
+  username text not null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+create index if not exists tdb_admin_sessions_expires_idx on public.tdb_admin_sessions(expires_at);
+
+create table if not exists public.tdb_reports (
+  id bigint generated always as identity primary key,
+  user_id text references public.tdb_users(id) on delete set null,
+  username_snapshot text,
+  category text not null default 'bug',
+  message text not null,
+  context jsonb not null default '{}'::jsonb,
+  status text not null default 'open',
+  admin_note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists tdb_reports_status_idx on public.tdb_reports(status,created_at desc);
+create index if not exists tdb_reports_user_idx on public.tdb_reports(user_id,created_at desc);
+
+create table if not exists public.tdb_admin_audit_logs (
+  id bigint generated always as identity primary key,
+  admin_username text not null,
+  action text not null,
+  target_user_id text,
+  details jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists tdb_admin_audit_created_idx on public.tdb_admin_audit_logs(created_at desc);
+create index if not exists tdb_admin_audit_target_idx on public.tdb_admin_audit_logs(target_user_id,created_at desc);
+
+alter table public.tdb_admin_sessions enable row level security;
+alter table public.tdb_reports enable row level security;
+alter table public.tdb_admin_audit_logs enable row level security;
+
+grant all on table
+  public.tdb_admin_sessions,
+  public.tdb_reports,
+  public.tdb_admin_audit_logs
+to service_role;
+
+grant usage, select on all sequences in schema public to service_role;
+
+revoke all on table
+  public.tdb_admin_sessions,
+  public.tdb_reports,
+  public.tdb_admin_audit_logs
+from anon, authenticated;
+
+commit;

@@ -14,21 +14,20 @@ if(!Core){
   throw new Error('TDBCore não foi carregado antes do app.js');
 }
 
-const DEFAULT_SETTINGS = { sound: true, friendNotifications: true };
+const DEFAULT_SETTINGS = { sound: true, friendNotifications: true, masterVolume: 55, uiVolume: 42, gameVolume: 50, notificationVolume: 48 };
 
 const state = {
   user: Core.auth.currentUser(),
   users: Core.auth.users(),
   friends: Core.storage.get('tbd_friends', []),
   rooms: Core.rooms.list(),
-  settings: Core.storage.get('tbd_settings', DEFAULT_SETTINGS),
+  settings: {...DEFAULT_SETTINGS,...Core.storage.get('tbd_settings', DEFAULT_SETTINGS)},
   view: 'login',
   selectedGame: null,
   activeRoom: Core.rooms.active(),
   roomFilter: 'all',
   social: {incoming:[],outgoing:[],invites:[]},
   userSearch: [],
-  rankings: {},
   profileHistory: null,
   actionLocks: new Set(),
   botReturnRoom: null,
@@ -71,9 +70,6 @@ window.addEventListener('tdb-online-sync',event=>{
     refreshSocialData(false);
   }
 
-  if(syncKind==='ranking' && state.selectedGame){
-    refreshRanking(state.selectedGame,true);
-  }
 
   // IMPORTANT: never call renderLobby(), drawGamePage() or renderWaitingRoom()
   // from background synchronization. Rebuilding #app caused the v5.2 flicker.
@@ -82,6 +78,8 @@ window.addEventListener('tdb-online-sync',event=>{
 window.addEventListener('tdb-online-status',event=>{
   const detail=event.detail||{};
   const el=document.getElementById('onlineStatusPill');
+  const ping=document.getElementById('onlinePingPill');
+  if(ping) ping.textContent=Number.isFinite(detail.latencyMs)?`${detail.latencyMs} ms`:'';
   if(!el) return;
   el.classList.remove('online','warning','connecting','offline');
   const phase=detail.phase||'connecting';
@@ -141,6 +139,7 @@ const games = {
 };
 
 Core.sound.setEnabled(state.settings.sound);
+window.TDBSound?.configure?.({enabled:state.settings.sound,master:(state.settings.masterVolume??55)/100,ui:(state.settings.uiVolume??42)/100,game:(state.settings.gameVolume??50)/100,notification:(state.settings.notificationVolume??48)/100});
 
 
 function migrateUsers() {
@@ -175,6 +174,7 @@ function saveRooms(){ Core.rooms.replace(state.rooms); }
 function saveSettings(){
   Core.storage.set('tbd_settings', state.settings);
   Core.sound.setEnabled(state.settings.sound);
+window.TDBSound?.configure?.({enabled:state.settings.sound,master:(state.settings.masterVolume??55)/100,ui:(state.settings.uiVolume??42)/100,game:(state.settings.gameVolume??50)/100,notification:(state.settings.notificationVolume??48)/100});
 }
 function saveSession(user){
   state.user=user;
@@ -212,14 +212,12 @@ function toast(msg){
 }
 function playUiSound(freq=460,duration=.055){
   if(!state.settings.sound) return;
-  try {
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    const osc=ctx.createOscillator(), gain=ctx.createGain();
-    osc.frequency.value=freq; gain.gain.value=.025;
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(); gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+duration);
-    osc.stop(ctx.currentTime+duration);
-  } catch {}
+  if(window.TDBSound?.tone){
+    return window.TDBSound.tone({frequency:freq,duration,volume:.5,type:'triangle',category:'ui'});
+  }
+  try{
+    window.TDBCore?.sound?.tone?.({frequency:freq,duration,volume:.018,type:'triangle'});
+  }catch{}
 }
 function currentStatus(){
   if(state.activeRoom){
@@ -433,6 +431,7 @@ function renderAuth(mode='login'){
         </form>
         ${isRegister?`<div class="mini-note">Não pedimos e-mail nesta versão. Seu identificador público será algo como <strong>TBD-7X4K92</strong>.</div>`:''}
         <div class="auth-switch">${isRegister?'Já tem uma conta?':'Ainda não tem uma conta?'} <button class="link-btn" id="switchAuth">${isRegister?'Entrar':'Criar conta'}</button></div>
+        <div class="auth-admin-link"><a href="#admin" class="link-btn">Administração</a></div>
       </div>
     </section>
   </section>`;
@@ -454,7 +453,7 @@ function renderAuth(mode='login'){
           const user=await window.TDBAuthOnline.register(username,password,null);
           saveSession(user);
           state.user=user;
-          playUiSound(620);
+          window.TDBSound?.play?.('success',{channel:'auth-success',dedupeMs:120});
           await window.TDBOnline?.refreshSnapshot?.();
           setTimeout(renderLobby,120);
           return;
@@ -468,7 +467,7 @@ function renderAuth(mode='login'){
       state.users.push(user);
       saveUsers();
       saveSession(user);
-      playUiSound(620);
+      window.TDBSound?.play?.('success',{channel:'auth-success',dedupeMs:120});
       setTimeout(renderLobby,180);
       return;
     }
@@ -478,7 +477,7 @@ function renderAuth(mode='login'){
         const user=await window.TDBAuthOnline.login(username,password);
         saveSession(user);
         state.user=user;
-        playUiSound(620);
+        window.TDBSound?.play?.('success',{channel:'auth-success',dedupeMs:120});
         await window.TDBOnline?.refreshSnapshot?.();
         setTimeout(()=>{
           if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===user.id)) renderWaitingRoom();
@@ -493,7 +492,7 @@ function renderAuth(mode='login'){
     const user=state.users.find(u=>(u.username||'').toLowerCase()===username.toLowerCase()&&u.password===password);
     if(!user) return toast('Nome de usuário ou senha incorretos.');
     saveSession(user);
-    playUiSound(620);
+    window.TDBSound?.play?.('success',{channel:'auth-success',dedupeMs:120});
     setTimeout(()=>{
       if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===user.id)) renderWaitingRoom();
       else renderLobby();
@@ -513,7 +512,7 @@ function topbar(active='home'){
       </nav>
     </div>
     <div class="topbar-right">
-      <span id="onlineStatusPill" class="online-status-pill ${window.TDBOnline?.readyForMultiplayer?'online':window.TDBOnline?.phase==='reconnecting'||window.TDBOnline?.phase==='connecting'?'connecting':'offline'}">${window.TDBOnline?.readyForMultiplayer?(window.TDBOnline?.realtime?'ONLINE':'ONLINE • FALLBACK'):window.TDBOnline?.phase==='reconnecting'?'RECONECTANDO…':window.TDBOnline?.phase==='connecting'?'CONECTANDO…':'OFFLINE'}</span>
+      <span id="onlineStatusPill" class="online-status-pill ${window.TDBOnline?.readyForMultiplayer?'online':window.TDBOnline?.phase==='reconnecting'||window.TDBOnline?.phase==='connecting'?'connecting':'offline'}">${window.TDBOnline?.readyForMultiplayer?(window.TDBOnline?.realtime?'ONLINE':'ONLINE • FALLBACK'):window.TDBOnline?.phase==='reconnecting'?'RECONECTANDO…':window.TDBOnline?.phase==='connecting'?'CONECTANDO…':'OFFLINE'}</span><span id="onlinePingPill" class="online-ping-pill">${Number.isFinite(window.TDBOnline?.latencyMs)?`${window.TDBOnline.latencyMs} ms`:''}</span>
       <div class="profile-mini" onclick="renderProfile()" style="cursor:pointer">
         <div class="avatar">${escapeHtml(state.user?.avatar||initials(state.user?.username))}</div>
         <div class="profile-lines"><strong>${escapeHtml(state.user?.username||'Jogador')}</strong><small>${escapeHtml(state.user?.id||'')}</small></div>
@@ -780,49 +779,9 @@ async function inviteFriend(id){
 }
 
 
-function rankingRowsHtml(rows=[]){
-  return rows.length?rows.slice(0,3).map((r,i)=>`<div class="ranking-row"><b class="rank-pos">${['🥇','🥈','🥉'][i]||i+1}</b><div class="avatar">${escapeHtml(r.avatar||initials(r.username))}</div><div><strong>${escapeHtml(r.username)}</strong><small>${r.wins} vitória${r.wins===1?'':'s'} • ${r.played} partida${r.played===1?'':'s'} • ${r.winRate}%</small></div></div>`).join(''):`<div class="muted">Ainda não há vitórias reais registradas neste modo.</div>`;
-}
-function renderRankingPlaceholder(key){
-  if(key==='music') return `<div class="panel ranking-panel"><div class="panel-header"><h2>Comunidade TDB Music</h2></div><div class="panel-body"><p class="muted">TDB Music não possui ranking competitivo.</p></div></div>`;
-  if(key==='truco'){
-    return `<div class="panel ranking-panel">
-      <div class="panel-header"><div><h2>Ranking global • Truco</h2><p class="muted">Somente partidas contra jogadores reais contam.</p></div><span class="badge open">TOP 3</span></div>
-      <div class="panel-body">
-        <h3>1x1</h3><div class="ranking-list">${rankingRowsHtml(state.rankings['truco:1v1']||[])}</div>
-        <h3 style="margin-top:20px">2x2</h3><div class="ranking-list">${rankingRowsHtml(state.rankings['truco:2v2']||[])}</div>
-      </div>
-    </div>`;
-  }
-  const mode=key==='chess'?'1v1':null;
-  const rows=state.rankings[mode?`${key}:${mode}`:key]||[];
-  return `<div class="panel ranking-panel"><div class="panel-header"><div><h2>Ranking global • ${escapeHtml(games[key]?.name||key)}</h2><p class="muted">Somente vitórias contra jogadores reais contam.</p></div><span class="badge open">TOP 3</span></div><div class="panel-body ranking-list">${rankingRowsHtml(rows)}</div></div>`;
-}
-async function refreshRanking(key,render=true){
-  if(!window.TDBOnline?.connected||key==='music') return;
-  try{
-    if(key==='truco'){
-      const [one,two]=await Promise.all([
-        window.TDBOnline.getRanking('truco','1v1'),
-        window.TDBOnline.getRanking('truco','2v2')
-      ]);
-      state.rankings['truco:1v1']=one;
-      state.rankings['truco:2v2']=two;
-    }else if(key==='chess'){
-      state.rankings['chess:1v1']=await window.TDBOnline.getRanking('chess','1v1');
-    }else{
-      state.rankings[key]=await window.TDBOnline.getRanking(key);
-    }
-    if(render&&state.view==='game'&&state.selectedGame===key){
-      const el=document.getElementById('gameRankingPanel');if(el)el.innerHTML=renderRankingPlaceholder(key);
-    }
-  }catch(err){console.warn('[Ranking]',err)}
-}
-
 function renderGame(key){
   state.selectedGame=key; state.view='game'; state.roomFilter='all';
   drawGamePage();
-  refreshRanking(key,true);
 }
 function drawGamePage(){
   const key=state.selectedGame, g=games[key];
@@ -833,7 +792,6 @@ function drawGamePage(){
       <div class="game-head"><div class="big-symbol">${g.symbol}</div><div><h1>${g.name}</h1><p>${g.subtitle} • até ${g.players} jogadores</p></div></div>
       <div class="room-actions"><button class="btn btn-primary" onclick="openCreateRoom()">+ Criar jogo</button><button class="btn btn-secondary" onclick="openJoinCode()">Entrar com código</button><button class="btn btn-dark" onclick="goHome()">Voltar</button></div>
     </div>
-    <div id="gameRankingPanel" class="ranking-wrap">${renderRankingPlaceholder(key)}</div>
     <div class="filter-row">
       <button class="filter-chip ${state.roomFilter==='all'?'active':''}" onclick="setRoomFilter('all')">Todas</button>
       <button class="filter-chip ${state.roomFilter==='open'?'active':''}" onclick="setRoomFilter('open')">Abertas</button>
@@ -986,7 +944,7 @@ async function createRoom(){
     saveActiveRoom(room);
     state.selectedGame=room.game;
     state.view=room.game==='music'?'music':'waiting';
-    closeModal(); playUiSound(560);
+    closeModal(); window.TDBSound?.play?.('roomJoin',{channel:'room-create',dedupeMs:120});
     if(room.game==='music') return openMusicRoom();
     renderWaitingRoom();
     return true;
@@ -1062,7 +1020,7 @@ function joinRoom(code,password=''){
 
   state.selectedGame=room.game;
   closeModal();
-  playUiSound(520);
+  window.TDBSound?.play?.('roomJoin',{channel:'room-join',dedupeMs:120});
 
   if(room.game==='music'){
     state.view='music';
@@ -1243,7 +1201,7 @@ async function startGame(){
     OnlineGameBridge.stop();
     OnlineGameBridge.roomCode=room.code;
     OnlineGameBridge.role='player';
-    playUiSound(700,.09);
+    window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
 
     const ok=await window.TDBOnline.startGame(room.code);
     if(!ok){
@@ -1268,7 +1226,7 @@ async function startGame(){
     updateStoredRoom(room);
     upsertMatch({matchId:`TRUCO-${Date.now()}`,roomCode:room.code,game:'truco',status:'playing',players:structuredClone(room.players),createdAt:Date.now()});
     setPresence('playing',{roomCode:room.code,game:'truco'});
-    playUiSound(700,.09);
+    window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
     return startTrucoGame(room,false);
   }
 
@@ -1279,14 +1237,14 @@ async function startGame(){
     updateStoredRoom(room);
     upsertMatch({matchId:`CHESS-${Date.now()}`,roomCode:room.code,game:'chess',status:'playing',players:structuredClone(room.players),createdAt:Date.now()});
     setPresence('playing',{roomCode:room.code,game:'chess'});
-    playUiSound(700,.09);
+    window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
     return window.startChessGame?.(room,false);
   }
 
   if((room.players?.length||0)<g.minPlayers) return toast(`Aguarde pelo menos ${g.minPlayers} jogador${g.minPlayers>1?'es':''}.`);
   room.status='playing';
   updateStoredRoom(room);
-  playUiSound(700,.09);
+  window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
   toast(`Partida de ${g.name} iniciada.`);
   renderWaitingRoom();
 
@@ -1488,21 +1446,71 @@ async function saveProfile(){
   toast('Perfil atualizado.'); renderProfile();
 }
 
+function audioSlider(title,desc,key,value){
+  return `<div class="panel setting-row audio-setting"><div><h3>${title}</h3><p>${desc}</p></div><div class="audio-slider-wrap"><input type="range" min="0" max="100" step="1" value="${Number(value??50)}" oninput="updateAudioSetting('${key}',this.value,this.nextElementSibling)"><output>${Number(value??50)}%</output></div></div>`;
+}
 function renderSettings(){
   state.view='settings';
   app.innerHTML=`${topbar('settings')}<section class="dashboard fade-in">
-    <div class="page-head"><div><h1 class="page-title">Configurações</h1><p class="muted">Ajustes básicos do TDB JOGOS.</p></div></div>
+    <div class="page-head"><div><h1 class="page-title">Configurações</h1><p class="muted">Áudio, interface e suporte do TDB JOGOS.</p></div></div>
     <div class="settings-stack">
-      ${settingRow('Sons da interface','Cliques e sons leves ao entrar em uma sala.','sound',state.settings.sound)}
+      ${settingRow('Sons do TDB JOGOS','Ativa cliques, efeitos de partidas e alertas sonoros.','sound',state.settings.sound)}
+      ${audioSlider('Volume geral','Limite mestre de todos os efeitos. O padrão é propositalmente baixo.','masterVolume',state.settings.masterVolume??55)}
+      ${audioSlider('Interface','Botões, navegação, confirmação e retorno.','uiVolume',state.settings.uiVolume??42)}
+      ${audioSlider('Jogos','Cartas do Truco e movimentos do Xadrez.','gameVolume',state.settings.gameVolume??50)}
+      ${audioSlider('Alertas sonoros','Efeitos curtos de avisos.','notificationVolume',state.settings.notificationVolume??48)}
+      <div class="panel setting-row"><div><h3>Testar áudio</h3><p>Toca um efeito curto no volume atual.</p></div><button class="btn btn-secondary" onclick="testCurrentAudio()">Testar som</button></div>
       ${settingRow('Avisos de amigos','Preparado para avisar quando amigos ficarem online.','friendNotifications',state.settings.friendNotifications)}
       <div class="panel setting-row"><div><h3>Tela cheia</h3><p>Use o navegador em modo imersivo.</p></div><button class="btn btn-secondary" onclick="toggleFullscreen()">Alternar tela cheia</button></div>
+      <div class="panel report-panel">
+        <div class="panel-header"><div><h2>Reportar bug ou erro</h2><p class="muted">O reporte vai diretamente para o painel administrativo.</p></div><span class="badge open">SUPORTE</span></div>
+        <div class="panel-body report-form">
+          <div class="field"><label>Tipo</label><select id="reportCategory" class="select"><option value="bug">Bug</option><option value="error">Erro</option><option value="other">Outro problema</option></select></div>
+          <div class="field"><label>Descreva o que aconteceu</label><textarea id="reportMessage" rows="5" maxlength="4000" placeholder="Ex.: Entrei no Truco 2x2, cliquei em... e aconteceu..."></textarea></div>
+          <div class="report-context-note">O sistema envia junto apenas contexto técnico útil: tela atual, jogo, sala, versão e navegador.</div>
+          <button class="btn btn-primary" id="sendReportBtn" onclick="submitBugReport()">Enviar reporte</button>
+        </div>
+      </div>
     </div>
   </section>`;
 }
 function settingRow(title,desc,key,value){
   return `<div class="panel setting-row"><div><h3>${title}</h3><p>${desc}</p></div><label class="switch"><input type="checkbox" ${value?'checked':''} onchange="toggleSetting('${key}',this.checked)"><span class="slider"></span></label></div>`;
 }
-function toggleSetting(key,val){ state.settings[key]=val; saveSettings(); if(key==='sound'&&val) playUiSound(); toast('Configuração salva.'); }
+function toggleSetting(key,val){ state.settings[key]=val; saveSettings(); if(key==='sound'&&val) window.TDBSound?.play?.('confirm'); toast('Configuração salva.'); }
+function updateAudioSetting(key,value,output){
+  state.settings[key]=Math.max(0,Math.min(100,Number(value)||0));
+  if(output) output.textContent=`${state.settings[key]}%`;
+  saveSettings();
+}
+function testCurrentAudio(){
+  if(!state.settings.sound) return toast('Ative os sons primeiro.');
+  window.TDBSound?.play?.('success',{channel:'audio-test',dedupeMs:0});
+}
+async function submitBugReport(){
+  if(!window.TDBOnline?.connected) return toast('É preciso estar online para enviar um reporte.');
+  const category=document.getElementById('reportCategory')?.value||'bug';
+  const message=document.getElementById('reportMessage')?.value.trim()||'';
+  if(message.length<8) return toast('Descreva o problema com um pouco mais de detalhe.');
+  const btn=document.getElementById('sendReportBtn');if(btn){btn.disabled=true;btn.textContent='Enviando…'}
+  try{
+    await window.TDBOnline.submitReport(category,message,{
+      view:state.view,
+      game:state.selectedGame||state.activeRoom?.game||null,
+      roomCode:state.activeRoom?.code||null,
+      version:'5.5.0',
+      onlinePhase:window.TDBOnline?.phase||null,
+      latencyMs:window.TDBOnline?.latencyMs??null,
+      browser:navigator.userAgent.slice(0,500)
+    });
+    document.getElementById('reportMessage').value='';
+    window.TDBSound?.play?.('success');
+    toast('Reporte enviado para a administração.');
+  }catch(err){
+    window.TDBSound?.play?.('error');
+    toast(err.message||'Não foi possível enviar o reporte.');
+  }finally{if(btn){btn.disabled=false;btn.textContent='Enviar reporte'}}
+}
 
 function logout(){
   try{
@@ -1637,6 +1645,9 @@ window.respondRoomInvite=respondRoomInvite;
 window.copyRecentPgn=copyRecentPgn;
 window.saveProfile=saveProfile;
 window.renderSettings=renderSettings;
+window.updateAudioSetting=updateAudioSetting;
+window.testCurrentAudio=testCurrentAudio;
+window.submitBugReport=submitBugReport;
 window.toggleSetting=toggleSetting;
 window.inviteFriend=inviteFriend;
 window.logout=logout;
@@ -1665,48 +1676,9 @@ let trucoTimerInterval = null;
 
 
 
-function playDealSound(step=0){
-  if(!state.settings.sound) return;
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    const osc=ctx.createOscillator();
-    const gain=ctx.createGain();
-    osc.type='triangle';
-    osc.frequency.value=190 + (step%4)*12;
-    gain.gain.setValueAtTime(.018,ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.045);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime+.045);
-  }catch{}
-}
-function playCardSound(){
-  if(!state.settings.sound) return;
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    const osc=ctx.createOscillator(), gain=ctx.createGain();
-    osc.type='triangle'; osc.frequency.value=150;
-    gain.gain.setValueAtTime(.035,ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.07);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(); osc.stop(ctx.currentTime+.07);
-  }catch{}
-}
-function playTrucoSound(){
-  if(!state.settings.sound) return;
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    [260,390].forEach((f,i)=>{
-      const osc=ctx.createOscillator(), gain=ctx.createGain();
-      osc.type='square'; osc.frequency.value=f;
-      gain.gain.setValueAtTime(.025,ctx.currentTime+i*.045);
-      gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.18+i*.045);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(ctx.currentTime+i*.045); osc.stop(ctx.currentTime+.18+i*.045);
-    });
-  }catch{}
-}
+function playDealSound(step=0){ if(!state.settings.sound)return; window.TDBSound?.play?.('cardDeal',{channel:`deal-${step}`,dedupeMs:0}); }
+function playCardSound(hidden=false){ if(!state.settings.sound)return; window.TDBSound?.play?.(hidden?'cardHidden':'cardPlay',{channel:'card-play',dedupeMs:20}); }
+function playTrucoSound(){ if(!state.settings.sound)return; window.TDBSound?.play?.('truco',{channel:'truco-call',dedupeMs:80}); }
 function startTrucoWithBots(){
   if(!state.activeRoom || state.activeRoom.game!=='truco') return;
   OnlineGameBridge.stop();
@@ -1741,6 +1713,7 @@ function startTrucoWithBots(){
 function applyOnlineTrucoState(serverState,role='player'){
   const previousSelected=truco?.selectedCard ?? null;
   const previousVersion=Number(truco?.version||0);
+  const previousWinner=truco?.winner ?? null;
 
   truco=structuredClone(serverState);
   truco.onlineMode=true;
@@ -1783,6 +1756,10 @@ function applyOnlineTrucoState(serverState,role='player'){
   if(truco.pendingRaise && truco.pendingRaise.bySeat!==undefined){
     truco.pendingRaise.byPlayer=truco.pendingRaise.bySeat;
     truco.pendingRaise.votes=truco.pendingRaise.responses||{};
+  }
+
+  if(previousWinner===null && truco.winner!==null && !truco.spectatorMode){
+    window.TDBSound?.play?.(truco.winner===localTrucoTeam()?'victory':'defeat',{channel:'truco-result',dedupeMs:500});
   }
 
   renderTruco();
@@ -2521,7 +2498,7 @@ function applyPlayCard({playerIdx,cardIdx,hidden=false}){
   truco.selectedCard=null;
   const actingPlayer=playerBySeat(playerIdx);
   logTruco(`${actingPlayer?.username||'Jogador'} ${hidden?'jogou uma carta escondida':`jogou ${cardText(card)}`}.`);
-  playCardSound();
+  playCardSound(hidden);
   if(truco.trickCards.length===truco.activeSeats.length){
     truco.phase='resolving';
     renderTruco();
@@ -2549,6 +2526,7 @@ function resolveTrick(){
   const localTeam=localTrucoTeam();
   logTruco(`Rodada ${truco.round+1}: ${winner==='tie'?'empate':winner===localTeam?(truco.mode==='1v1'?'você':'nossa dupla'):(truco.mode==='1v1'?'adversário':'adversários')}.`);
   showRoundFlash(winner==='tie'?'EMPATE NA RODADA':winner===localTeam?(truco.mode==='1v1'?'VOCÊ VENCEU A RODADA':'NOSSA DUPLA VENCEU A RODADA'):(truco.mode==='1v1'?'ADVERSÁRIO VENCEU A RODADA':'ELES VENCERAM A RODADA'));
+  if(winner!=='tie') window.TDBSound?.play?.(winner===localTeam?'roundWin':'roundLose',{channel:'truco-round',dedupeMs:100});
   truco.discardCount += truco.activeSeats.length;
   const handWinner=evaluateHandWinner();
   if(handWinner!==null) return awardHand(handWinner);
@@ -2600,6 +2578,7 @@ function awardHand(team){
   if(truco.scores[0]>=12 || truco.scores[1]>=12){
     truco.winner=truco.scores[0]>=12?0:1;
     truco.phase='finished';
+    window.TDBSound?.play?.(truco.winner===localTrucoTeam()?'victory':'defeat',{channel:'truco-result',dedupeMs:500});
     return renderTruco();
   }
   truco.phase='hand-end';

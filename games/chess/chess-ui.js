@@ -23,13 +23,10 @@ function botColor(){
   const lc=localColor();
   return E.other(lc);
 }
-function chessMoveSound(){
+function chessMoveSound(kind='move'){
   try{
-    if(window.TDBCore?.sound?.tone){
-      window.TDBCore.sound.tone({frequency:250,duration:.055,volume:.022,type:'triangle'});
-    }else if(typeof playUiSound==='function'){
-      playUiSound(250,.055);
-    }
+    const map={move:'chessMove',capture:'chessCapture',select:'chessSelect',invalid:'chessInvalid',check:'chessCheck'};
+    window.TDBSound?.play?.(map[kind]||'chessMove',{channel:`chess-${kind}`,dedupeMs:25});
   }catch{}
 }
 
@@ -134,6 +131,12 @@ function applyOnlineChessState(serverState,activeRoom,role='player'){
 
   if(pendingOnlineMove && incomingVersion>pendingOnlineMove.baseVersion){
     pendingOnlineMove=null;
+  }
+
+  if(previous?.status==='playing' && chess.status!=='playing'){
+    const mine=chess.localColor;
+    if(chess.winner) window.TDBSound?.play?.(chess.winner===mine?'victory':'defeat',{channel:'chess-result',dedupeMs:400});
+    else window.TDBSound?.play?.('notification',{channel:'chess-result',dedupeMs:400});
   }
 
   window.__TDB_CHESS_STATE__=chess;
@@ -364,6 +367,7 @@ async function clickChessSquare(r,c){
       if(chess.onlineMode){
         const before=structuredClone(chess);
         const baseVersion=Number(before.version||0);
+        const wasCapture=!!before.board?.[move.to.r]?.[move.to.c] || !!move.enPassant;
 
         // Immediate local feedback. The server remains authoritative.
         const optimistic=E.applyMove(structuredClone(chess),move,promotion);
@@ -378,7 +382,9 @@ async function clickChessSquare(r,c){
         pendingOnlineMove={baseVersion,before};
         chess=optimistic;
         window.__TDB_CHESS_STATE__=chess;
-        chessMoveSound();
+        chessMoveSound(wasCapture?'capture':'move');
+        if(chess.status==='checkmate') window.TDBSound?.play?.('victory',{channel:'chess-result',dedupeMs:400});
+        else if(E.isInCheck?.(chess,chess.turn)) chessMoveSound('check');
         updateChessUI();
 
         const ok=await OnlineGameBridge.action({
@@ -406,6 +412,7 @@ async function clickChessSquare(r,c){
   if(p && p.color===chess.turn && p.color===mine){
     chess.selectedSquare={r,c};
     chess.legalMoves=E.legalMovesFrom(chess,r,c);
+    chessMoveSound('select');
   }else{
     chess.selectedSquare=null;
     chess.legalMoves=[];
@@ -466,10 +473,13 @@ function makeChessMove(move,promotion='queen'){
   }
 
   const movingColor=chess.turn; const hadOpponentOffer=chess.drawOffer && chess.drawOffer!==movingColor;
+  const wasCapture=!!chess.board?.[valid.to.r]?.[valid.to.c] || !!valid.enPassant;
   chess=E.applyMove(chess,valid,promotion);
   if(hadOpponentOffer) chess.drawOffer=null;
   window.__TDB_CHESS_STATE__=chess;
-  chessMoveSound();
+  chessMoveSound(wasCapture?'capture':'move');
+  if(chess.status==='checkmate') window.TDBSound?.play?.(chess.winner===localColor()?'victory':'defeat',{channel:'chess-result',dedupeMs:400});
+  else if(E.isInCheck?.(chess,chess.turn)) chessMoveSound('check');
   renderChessScreen(false);
 
   if(chess.status==='playing') setTimeout(maybeBotMove,80);
@@ -506,7 +516,7 @@ function maybeBotMove(){
             chosen=(candidates[Math.floor(Math.random()*candidates.length)] || ranked[0])?.move || null;
           }
         }catch(err){
-          console.warn('[TDB Xadrez] Ranking do bot falhou; usando jogadas legais simples.',err);
+          console.warn('[TDB Xadrez] Avaliação do bot falhou; usando jogadas legais simples.',err);
         }
       }
 

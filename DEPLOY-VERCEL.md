@@ -1,119 +1,85 @@
-# DEPLOY — TDB JOGOS v5.4
+# DEPLOY — TDB JOGOS v5.5
 
-## 1. Atualizar os arquivos
+## IMPORTANTE: faça o SQL antes do deploy
 
-No computador onde está o repositório `Sadrak4/tdb-jogos`:
+A v5.5 adiciona tabelas e colunas necessárias para o painel ADM. Para evitar que o site entre em `schemaReady:false`, faça nesta ordem:
 
-1. extraia `TDB-JOGOS-v5.4-GAMEPLAY-LIFECYCLE-FIX.zip`;
-2. abra a pasta clonada `tdb-jogos`;
-3. substitua os arquivos antigos pelos da v5.4.
+1. abra o projeto do TDB JOGOS no Supabase;
+2. abra **SQL Editor**;
+3. abra o arquivo `SUPABASE-SCHEMA.sql` da v5.5;
+4. execute o arquivo completo novamente (ele usa `if not exists` / `add column if not exists`);
+5. confirme que a execução terminou sem erro;
+6. somente depois envie a v5.5 para GitHub/Vercel.
 
-A pasta `api` deve conter somente:
+A migração preserva as contas existentes.
 
-```text
-api/
-└── router.js
-```
+## Tabelas/colunas novas
 
-## 2. Supabase
+- `tdb_users.banned`
+- `tdb_users.banned_reason`
+- `tdb_users.banned_at`
+- `tdb_admin_sessions`
+- `tdb_reports`
+- `tdb_admin_audit_logs`
 
-A v5.4 **não cria tabelas novas**.
+## Atualizar projeto
 
-Se você já executou com sucesso o `SUPABASE-SCHEMA.sql` da v5.2, não precisa executar SQL novamente.
+1. extraia `TDB-JOGOS-v5.5-ADMIN-AUDIO-UX.zip`;
+2. copie todos os arquivos para a pasta clonada `tdb-jogos`;
+3. substitua os arquivos antigos;
+4. confirme que `api/` contém apenas `router.js`.
 
-Não apague nem recrie `tdb_users`, `tdb_sessions`, `tdb_friends` ou outras tabelas existentes.
+No GitHub Desktop:
 
-## 3. GitHub / Vercel
+**Summary**
 
-No GitHub Desktop use:
-
-```text
-TDB JOGOS v5.4 Gameplay Lifecycle Fix
-```
+`TDB JOGOS v5.5 Admin Audio UX`
 
 Depois:
 
 `Commit to main` → `Push origin`
 
-Como a Vercel está ligada ao repositório, o novo deploy deve iniciar automaticamente.
-
-Também é possível usar:
-
-```bash
-npx vercel --prod
-```
-
-## 4. Verificar o backend
+## Verificar
 
 Abra:
 
-```text
-https://tdb-jogos.vercel.app/api/health
-```
+`https://tdb-jogos.vercel.app/api/health`
 
 Esperado:
 
 ```json
 {
   "ok": true,
-  "version": "5.4.0",
+  "version": "5.5.0",
   "supabase": true,
   "schemaReady": true,
   "readyForMultiplayer": true
 }
 ```
 
-## 5. Teste multiplayer recomendado
+## Painel ADM
 
-### Truco 1x1
+Na tela de login existe a opção **Administração**. Também é possível acessar adicionando `#admin` ao endereço do site.
 
-- PC 1 cria a sala.
-- PC 2 entra.
-- cada computador deve mostrar sua própria mão embaixo;
-- o outro jogador aparece em cima;
-- somente o dono de cada mão enxerga suas cartas;
-- os dois precisam conseguir jogar quando chegar sua vez.
+O login administrativo é independente das contas normais. A validação é feita exclusivamente no servidor e a senha em texto puro não fica no código do navegador.
 
-### Truco 2x2
+## Teste recomendado
 
-Com quatro contas:
+1. entrar como jogador e enviar um reporte em Configurações;
+2. entrar no painel ADM e confirmar que o reporte chegou;
+3. buscar uma conta pelo nome e pelo ID;
+4. testar geração de senha temporária em uma conta de teste;
+5. confirmar que a senha antiga deixa de funcionar;
+6. banir uma conta de teste e confirmar que as sessões são encerradas;
+7. desbanir e testar login novamente;
+8. abrir Logs e Auditoria;
+9. testar volumes e botões;
+10. testar Truco, Xadrez e Music com dois PCs.
 
-- cada jogador se vê embaixo;
-- parceiro fica em cima;
-- adversários ficam nas laterais;
-- mãos adversárias ficam ocultas;
-- Mão de 11 e Mão de Ferro devem respeitar suas regras.
-
-### Xadrez
-
-- cada lado deve mover sem a seleção desaparecer por atualização de relógio;
-- a peça deve responder imediatamente ao clique;
-- o servidor confirma a jogada;
-- pretas devem enxergar seu próprio lado embaixo.
-
-### Final da partida
-
-Em Truco e Xadrez:
-
-1. termine uma partida;
-2. clique `Voltar à sala`;
-3. confirme que o resultado antigo não reabre;
-4. host inicia `Nova partida`;
-5. confirme que um novo jogo começa para todos.
-
-### TDB Music
-
-- crie uma sala Music;
-- outro jogador entra;
-- ambos devem ver a mesma fila;
-- a sala continua disponível/joinable enquanto o player está aberto.
-
-## 6. Segurança
+## Segurança
 
 Nunca envie ao GitHub:
 
 - `SUPABASE_SECRET_KEY`;
 - `.env.local`;
-- tokens privados.
-
-Esses valores continuam nas Environment Variables da Vercel.
+- tokens de sessão.
