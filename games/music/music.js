@@ -659,8 +659,13 @@ function renderMusic(){
   createPlayer();
 
   clearInterval(syncTimer);
-  syncTimer=setInterval(()=>{
+  syncTimer=setInterval(async()=>{
     if(window.TDBCore?.mode==='online'){
+      const latest=await window.TDBOnline?.refreshShared?.(sharedMusicKey());
+      if(latest && latest.updatedAt!==musicState.updatedAt){
+        musicState=latest;
+        renderDynamic();
+      }
       if(musicState.status==='playing') syncPlayer();
       return;
     }
@@ -685,6 +690,12 @@ function startMusicRoom(activeRoom){
   musicState=readMusicState();
 
   if(window.TDBCore?.mode==='online' && window.TDBCore.sharedState){
+    window.TDBOnline?.refreshShared?.(sharedMusicKey()).then(value=>{
+      if(!value) return;
+      musicState=value;
+      renderDynamic();
+      syncPlayer();
+    });
     window.__tdbMusicUnsubscribe?.();
     window.__tdbMusicUnsubscribe=window.TDBCore.sharedState.subscribe(sharedMusicKey(),value=>{
       if(!value) return;

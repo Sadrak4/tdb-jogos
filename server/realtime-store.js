@@ -213,3 +213,13 @@ export async function setRoomPrivate(room){
   await hashUpsert('tdb:rooms',room.code,room,MEMORY.rooms);
   return room;
 }
+
+
+export async function backendStatus(){
+  await initRedis();
+  return {
+    redis: redisReady,
+    production: !!process.env.VERCEL,
+    readyForMultiplayer: redisReady || !process.env.VERCEL
+  };
+}

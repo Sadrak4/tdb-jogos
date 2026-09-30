@@ -1,143 +1,166 @@
-# COMO PUBLICAR O TDB JOGOS — GitHub + Vercel
+# TDB JOGOS v4.2 — GitHub + Vercel + Redis
 
-## 1. Extraia o ZIP
+## PASSO 1 — Atualizar o GitHub
 
-Extraia a pasta inteira. Não envie somente `index.html`.
+No seu PC, abra a pasta usada pelo GitHub Desktop para o repositório `tdb-jogos`.
 
-## 2. Teste local
+Copie TODOS os arquivos desta v4.2 para dentro dela e substitua os antigos.
 
-Dentro da pasta:
+No GitHub Desktop:
 
-```bash
-npm install
-npm run dev
-```
+1. escreva no Summary:
+   `TDB JOGOS v4.2 Online Sync Fix`
+2. clique em `Commit to main`;
+3. clique em `Push origin`.
 
-Abra o endereço mostrado no terminal.
+A Vercel deve detectar o novo commit automaticamente.
 
-Teste:
-- cadastro/login;
-- criar sala TDB Music;
-- duas abas;
-- criar Xadrez;
-- criar Truco.
+---
 
-## 3. GitHub
+## PASSO 2 — Framework da Vercel
 
-Crie um repositório vazio, por exemplo:
+No projeto TDB JOGOS:
 
-`tdb-jogos`
+- Framework / Application Preset: `Other`
+- Root Directory: `./`
+- Build Command: padrão/vazio
+- Output Directory: padrão/vazio
 
-Na pasta do projeto:
+O projeto é frontend estático + funções em `/api`.
 
-```bash
-git init
-git add .
-git commit -m "TDB JOGOS v4.0 Online"
-git branch -M main
-git remote add origin https://github.com/SEU_USUARIO/tdb-jogos.git
-git push -u origin main
-```
+---
 
-## 4. Vercel
+## PASSO 3 — Redis (OBRIGATÓRIO)
 
-1. Abra Vercel.
-2. `Add New` > `Project`.
-3. Importe `tdb-jogos`.
-4. Framework Preset: `Other`.
-5. Root Directory: raiz do repositório.
-6. Deploy.
-
-## 5. Redis — obrigatório para multiplayer de produção
+Sem Redis, duas pessoas podem cair em instâncias diferentes da Vercel e enxergar estados diferentes.
 
 No projeto da Vercel:
 
-1. abra Marketplace/Storage;
+1. abra `Marketplace` ou `Storage`;
 2. adicione um Redis compatível;
 3. conecte ao projeto;
-4. crie/confirme a variável:
+4. obtenha uma URL TCP Redis no formato:
+   `redis://...`
+   ou
+   `rediss://...`
+5. abra:
+   `Settings > Environment Variables`
+6. crie:
+   `REDIS_URL`
+7. coloque a URL como valor;
+8. marque Production, Preview e Development se desejar;
+9. salve;
+10. faça `Redeploy`.
 
-```text
-REDIS_URL
-```
+NUNCA coloque o valor de REDIS_URL dentro do GitHub.
 
-Use a URL de conexão entregue pelo provedor.
+---
 
-Depois faça um Redeploy.
-
-## 6. Testar backend
+## PASSO 4 — Conferir
 
 Abra:
 
-```text
-https://SEU-DOMINIO.vercel.app/api/health
-```
+`https://SEU-DOMINIO.vercel.app/api/health`
 
-Deve responder com JSON do TDB JOGOS.
+Precisa aparecer:
 
-No site, o topo deve mostrar:
+- `"redis": true`
+- `"readyForMultiplayer": true`
+
+No topo do site deve aparecer:
 
 `ONLINE`
 
-## 7. Teste real em dois computadores
+Se aparecer:
 
-### Music
-PC 1:
-- cria sala;
-- adiciona link.
+`SEM REDIS`
 
-PC 2:
-- entra pelo código;
-- deve receber a fila;
-- teste play/pause/próxima.
+o banco ainda não está conectado.
 
-### Xadrez
-- dois usuários diferentes;
-- entrar na mesma sala;
-- host inicia;
-- cada jogador recebe sua cor;
-- movimentos aparecem nos dois PCs.
+---
 
-### Truco
-- crie 1x1 primeiro;
-- dois usuários;
-- host inicia;
-- cada jogador vê somente sua mão.
+## PASSO 5 — Contas
 
-Depois teste 2x2 com quatro usuários.
+Se você criou contas na versão anterior SEM Redis, recrie as contas depois de configurar o Redis.
 
-### Espectador
-Em outro navegador/conta:
-- Lobby > Partidas ao Vivo;
-- Assistir;
-- confirmar que não existem botões para jogar;
-- no Truco, confirmar que nenhuma mão privada aparece.
+Sem banco compartilhado, as contas antigas podiam existir apenas na memória temporária de uma instância.
 
-## 8. YouTube API
+---
 
-Não é obrigatória.
+## PASSO 6 — Teste de sala
 
-Adicionar por link funciona sem a YouTube Data API.
+### PC 1
+- conta A;
+- cria sala Xadrez/Truco/Music.
 
-Para pesquisa, configure uma chave separadamente.
+### PC 2
+- conta B;
+- abre o mesmo domínio;
+- a sala deve aparecer em até aproximadamente 2 segundos;
+- entra.
 
-## 9. Atualizações futuras
+No host, o nome do segundo jogador deve aparecer automaticamente.
 
-Depois que GitHub e Vercel estiverem conectados:
+---
 
-```bash
-git add .
-git commit -m "Atualização"
-git push
-```
+## PASSO 7 — Xadrez
 
-A Vercel cria novo deploy automaticamente.
+- dois usuários na sala;
+- host clica Iniciar;
+- os dois devem abrir o tabuleiro;
+- uma jogada deve aparecer no outro PC em menos de ~1 segundo.
 
-## Segurança
+---
 
-Não coloque no GitHub:
-- `.env`;
-- `REDIS_URL`;
-- chaves privadas.
+## PASSO 8 — Truco
 
-O `.gitignore` já ignora arquivos `.env`.
+Comece em 1x1.
+
+- jogador A vê somente sua mão;
+- jogador B vê somente sua mão;
+- cartas jogadas aparecem para ambos;
+- depois teste 2x2.
+
+---
+
+## PASSO 9 — TDB Music
+
+- ambos entram na mesma sala;
+- PC 1 adiciona vídeo;
+- PC 2 recebe a fila;
+- teste Tocar/Pausar/Próxima;
+- diferenças pequenas de tempo são corrigidas automaticamente.
+
+---
+
+## PASSO 10 — Amigos
+
+Copie o ID exibido no perfil de uma conta, por exemplo:
+
+`TDB-XXXXXXXX`
+
+Na outra conta:
+
+`Amigos > Adicionar por ID`
+
+A busca agora acontece no backend, não somente no navegador local.
+
+---
+
+## Diagnóstico rápido
+
+### Sala aparece às vezes e às vezes não
+Verifique `/api/health`.
+Se `redis:false`, esse é o problema.
+
+### Site mostra LOCAL
+O frontend não está conseguindo acessar as funções `/api`.
+
+### Site mostra SEM REDIS
+Backend está acessível, mas `REDIS_URL` não está configurado corretamente.
+
+### Site mostra ONLINE
+Backend + Redis estão prontos para multiplayer.
+
+### WebSocket falha mas ONLINE continua
+Normal nesta versão: o HTTP fallback mantém a sincronização.

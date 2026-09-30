@@ -17,37 +17,51 @@ const cache={
 };
 
 let socket=null;
+let wsConnected=false;
+let backendConnected=false;
+let redisBacked=false;
+let production=false;
+let readyForMultiplayer=false;
 let reconnectTimer=null;
 let reconnectDelay=1000;
-let connected=false;
-let redisBacked=false;
+let snapshotTimer=null;
+let currentGame=null;
+let gamePollTimer=null;
 
 function read(key,fallback){
   try{
     const raw=localStorage.getItem(key);
     return raw===null?fallback:JSON.parse(raw);
-  }catch{
-    return fallback;
-  }
+  }catch{return fallback}
 }
 function write(key,value){
   try{localStorage.setItem(key,JSON.stringify(value))}catch{}
 }
+function token(){
+  return localStorage.getItem('tdb_session_token')||'';
+}
+async function api(path,options={}){
+  const headers={'Content-Type':'application/json',...(options.headers||{})};
+  if(token()) headers.Authorization=`Bearer ${token()}`;
+
+  const res=await fetch(path,{
+    cache:'no-store',
+    ...options,
+    headers
+  });
+
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok){
+    const err=new Error(data.error||`Erro HTTP ${res.status}`);
+    err.status=res.status;
+    throw err;
+  }
+  return data;
+}
 function emitLocal(channel,payload){
   for(const cb of listeners.get(channel)||[]){
-    try{cb(structuredClone(payload))}catch{}
+    try{cb(structuredClone(payload))}catch(err){console.error(err)}
   }
-}
-function send(message){
-  if(socket?.readyState===WebSocket.OPEN){
-    socket.send(JSON.stringify(message));
-    return true;
-  }
-  return false;
-}
-function wsUrl(){
-  const proto=location.protocol==='https:'?'wss:':'ws:';
-  return `${proto}//${location.host}/api/ws`;
 }
 function persistAll(){
   write(CACHE_KEYS.rooms,cache.rooms);
@@ -55,107 +69,167 @@ function persistAll(){
   write(CACHE_KEYS.presence,cache.presence);
   write(CACHE_KEYS.shared,cache.shared);
 }
-function dispatchSync(kind){
+function signature(value){
+  try{return JSON.stringify(value)}catch{return String(Date.now())}
+}
+function statusEvent(){
+  window.dispatchEvent(new CustomEvent('tdb-online-status',{
+    detail:{
+      connected:backendConnected,
+      websocket:wsConnected,
+      redis:redisBacked,
+      production,
+      readyForMultiplayer
+    }
+  }));
+}
+function syncEvent(kind){
   window.dispatchEvent(new CustomEvent('tdb-online-sync',{detail:{kind}}));
 }
+function onlineError(err){
+  const message=err?.message||String(err||'Erro online');
+  console.error('[TDB Online]',err);
+  window.dispatchEvent(new CustomEvent('tdb-online-error',{detail:{message}}));
+  if(typeof window.toast==='function') window.toast(message);
+}
 
-function applyMessage(msg){
+function applySnapshot(payload){
+  const data=payload?.data||{};
+  const status=payload?.status||{};
+
+  const oldRooms=signature(cache.rooms);
+  const oldMatches=signature(cache.matches);
+  const oldPresence=signature(cache.presence);
+  const oldShared=signature(cache.shared);
+
+  cache.rooms=Array.isArray(data.rooms)?data.rooms:[];
+  cache.matches=Array.isArray(data.matches)?data.matches:[];
+  cache.presence=data.presence||{};
+  cache.shared=data.shared||{};
+
+  redisBacked=!!status.redis;
+  production=!!status.production;
+  readyForMultiplayer=!!status.readyForMultiplayer;
+  backendConnected=true;
+  persistAll();
+  activateOnlineAdapters();
+  statusEvent();
+
+  if(signature(cache.rooms)!==oldRooms) syncEvent('rooms');
+  if(signature(cache.matches)!==oldMatches) syncEvent('matches');
+  if(signature(cache.presence)!==oldPresence) syncEvent('presence');
+
+  if(signature(cache.shared)!==oldShared){
+    for(const [key,value] of Object.entries(cache.shared)){
+      emitLocal(`shared:${key}`,value);
+    }
+    syncEvent('shared');
+  }
+}
+
+async function refreshSnapshot(){
+  try{
+    const result=await api(`/api/state/snapshot?_=${Date.now()}`,{method:'GET'});
+    applySnapshot(result);
+  }catch(err){
+    if(backendConnected){
+      backendConnected=false;
+      readyForMultiplayer=false;
+      statusEvent();
+    }
+  }
+}
+
+function scheduleSnapshot(){
+  clearInterval(snapshotTimer);
+  snapshotTimer=setInterval(()=>{
+    refreshSnapshot();
+  }, document.hidden ? 5000 : 1800);
+}
+document.addEventListener('visibilitychange',scheduleSnapshot);
+
+function wsUrl(){
+  const proto=location.protocol==='https:'?'wss:':'ws:';
+  return `${proto}//${location.host}/api/ws`;
+}
+function wsSend(message){
+  if(socket?.readyState===WebSocket.OPEN){
+    try{socket.send(JSON.stringify(message));return true}catch{}
+  }
+  return false;
+}
+function handleWsMessage(msg){
   if(!msg) return;
 
   if(msg.type==='connected'){
-    connected=true;
-    redisBacked=!!msg.redis;
+    wsConnected=true;
     reconnectDelay=1000;
-    send({type:'hello',userId:window.TDBCore?.auth?.currentUser?.()?.id||window.state?.user?.id||null});
-    window.dispatchEvent(new CustomEvent('tdb-online-status',{detail:{connected:true,redis:redisBacked}}));
+    statusEvent();
+    wsSend({type:'hello',userId:window.TDBCore?.auth?.currentUser?.()?.id||null});
     return;
   }
 
   if(msg.type==='snapshot'){
-    cache.rooms=Array.isArray(msg.data?.rooms)?msg.data.rooms:[];
-    cache.matches=Array.isArray(msg.data?.matches)?msg.data.matches:[];
-    cache.presence=msg.data?.presence||{};
-    cache.shared=msg.data?.shared||{};
-    redisBacked=!!msg.data?.redis;
-    persistAll();
-    activateOnlineAdapters();
-    dispatchSync('snapshot');
+    // WebSocket snapshot is only an accelerator. HTTP remains source of recovery.
+    if(msg.data){
+      applySnapshot({
+        data:msg.data,
+        status:{
+          redis:!!msg.data.redis,
+          production,
+          readyForMultiplayer:!!msg.data.redis||!production
+        }
+      });
+    }
     return;
   }
 
-  if(msg.type==='room:join:result'){
-    window.dispatchEvent(new CustomEvent('tdb-room-join-result',{detail:msg}));
-    return;
-  }
-
-  if(msg.type==='room:upsert' && msg.room?.code){
-    const i=cache.rooms.findIndex(r=>r.code===msg.room.code);
-    if(i>=0) cache.rooms[i]=msg.room; else cache.rooms.push(msg.room);
-    write(CACHE_KEYS.rooms,cache.rooms);
-    dispatchSync('rooms');
-    return;
-  }
-
-  if(msg.type==='room:remove'){
-    cache.rooms=cache.rooms.filter(r=>r.code!==msg.code);
-    write(CACHE_KEYS.rooms,cache.rooms);
-    dispatchSync('rooms');
-    return;
-  }
-
-  if(msg.type==='match:upsert' && msg.match?.matchId){
-    const i=cache.matches.findIndex(m=>m.matchId===msg.match.matchId);
-    if(i>=0) cache.matches[i]=msg.match; else cache.matches.push(msg.match);
-    write(CACHE_KEYS.matches,cache.matches);
-    dispatchSync('matches');
-    return;
-  }
-
-  if(msg.type==='match:remove'){
-    cache.matches=cache.matches.filter(m=>m.matchId!==msg.matchId);
-    write(CACHE_KEYS.matches,cache.matches);
-    dispatchSync('matches');
-    return;
-  }
-
-  if(msg.type==='presence:set' && msg.userId){
-    cache.presence[msg.userId]=msg.presence||{
-      userId:msg.userId,status:msg.status,...(msg.extra||{}),updatedAt:Date.now()
-    };
-    write(CACHE_KEYS.presence,cache.presence);
-    dispatchSync('presence');
-    return;
-  }
-
-  if(msg.type==='shared:set' && msg.key){
-    cache.shared[msg.key]=msg.value;
-    write(CACHE_KEYS.shared,cache.shared);
-    emitLocal(`shared:${msg.key}`,msg.value);
-    dispatchSync('shared');
-    return;
-  }
-
-  if(msg.type==='shared:value' && msg.key){
-    cache.shared[msg.key]=msg.value;
-    write(CACHE_KEYS.shared,cache.shared);
-    emitLocal(`shared:${msg.key}`,msg.value);
-    return;
-  }
-
-  if(msg.type==='error'){
-    window.dispatchEvent(new CustomEvent('tdb-online-error',{detail:{message:msg.message||'Erro online'}}));
-    if(typeof window.toast==='function') window.toast(msg.message||'Erro online');
+  if(msg.type==='room:upsert'||msg.type==='room:remove'||msg.type==='shared:set'||msg.type==='presence:set'){
+    refreshSnapshot();
     return;
   }
 
   if(msg.type==='game:state'){
-    emitLocal(`game:${msg.roomCode}`,msg.state);
-    window.dispatchEvent(new CustomEvent('tdb-game-state',{detail:{roomCode:msg.roomCode,state:msg.state}}));
+    window.dispatchEvent(new CustomEvent('tdb-game-state',{
+      detail:{roomCode:msg.roomCode,state:msg.state}
+    }));
+    return;
+  }
+
+  if(msg.type==='game:invalidate'&&msg.roomCode){
+    if(currentGame?.roomCode===msg.roomCode) syncGame(msg.roomCode,currentGame.role);
     return;
   }
 
   if(msg.type==='realtime:event'){
     emitLocal(msg.channel,msg.payload);
+    return;
+  }
+
+  if(msg.type==='error'){
+    onlineError(new Error(msg.message||'Erro no realtime.'));
+  }
+}
+
+function connectWebSocket(){
+  if(location.protocol==='file:') return;
+  if(socket && [WebSocket.OPEN,WebSocket.CONNECTING].includes(socket.readyState)) return;
+
+  clearTimeout(reconnectTimer);
+  try{
+    socket=new WebSocket(wsUrl());
+    socket.addEventListener('message',event=>{
+      try{handleWsMessage(JSON.parse(event.data))}catch{}
+    });
+    socket.addEventListener('close',()=>{
+      wsConnected=false;
+      statusEvent();
+      reconnectTimer=setTimeout(connectWebSocket,reconnectDelay);
+      reconnectDelay=Math.min(reconnectDelay*1.6,10000);
+    });
+    socket.addEventListener('error',()=>{});
+  }catch{
+    reconnectTimer=setTimeout(connectWebSocket,reconnectDelay);
   }
 }
 
@@ -164,7 +238,6 @@ class OnlineRoomAdapter{
   replace(rooms){
     cache.rooms=structuredClone(rooms||[]);
     write(CACHE_KEYS.rooms,cache.rooms);
-    for(const room of cache.rooms) send({type:'room:upsert',room});
     return rooms;
   }
   active(){return window.TDBCore.storage.get('tbd_active_room',null)}
@@ -174,17 +247,31 @@ class OnlineRoomAdapter{
   }
   upsert(room){
     const i=cache.rooms.findIndex(r=>r.code===room.code);
-    if(i>=0) cache.rooms[i]=structuredClone(room); else cache.rooms.push(structuredClone(room));
+    if(i>=0) cache.rooms[i]=structuredClone(room);
+    else cache.rooms.push(structuredClone(room));
     write(CACHE_KEYS.rooms,cache.rooms);
-    send({type:'room:upsert',room});
+
+    api('/api/rooms/upsert',{
+      method:'POST',
+      body:JSON.stringify({room})
+    }).then(result=>{
+      if(result.room){
+        const j=cache.rooms.findIndex(r=>r.code===result.room.code);
+        if(j>=0) cache.rooms[j]=result.room;
+        write(CACHE_KEYS.rooms,cache.rooms);
+        syncEvent('rooms');
+      }
+    }).catch(onlineError);
+
     return room;
   }
   remove(code){
     cache.rooms=cache.rooms.filter(r=>r.code!==code);
     write(CACHE_KEYS.rooms,cache.rooms);
-    send({type:'room:remove',code});
-    const active=this.active();
-    if(active?.code===code) this.setActive(null);
+    api('/api/rooms/remove',{
+      method:'POST',
+      body:JSON.stringify({code})
+    }).catch(err=>console.warn('[TDB remove room]',err.message));
   }
 }
 
@@ -193,23 +280,21 @@ class OnlineMatchAdapter{
   replace(matches){
     cache.matches=structuredClone(matches||[]);
     write(CACHE_KEYS.matches,cache.matches);
-    for(const match of cache.matches) send({type:'match:upsert',match});
     return matches;
   }
   upsert(match){
     const i=cache.matches.findIndex(m=>m.matchId===match.matchId);
-    if(i>=0) cache.matches[i]=structuredClone(match); else cache.matches.push(structuredClone(match));
+    if(i>=0) cache.matches[i]=structuredClone(match);
+    else cache.matches.push(structuredClone(match));
     write(CACHE_KEYS.matches,cache.matches);
-    send({type:'match:upsert',match});
     return match;
   }
   remove(matchId){
     cache.matches=cache.matches.filter(m=>m.matchId!==matchId);
     write(CACHE_KEYS.matches,cache.matches);
-    send({type:'match:remove',matchId});
   }
   byRoom(roomCode){
-    return structuredClone(cache.matches.find(m=>m.roomCode===roomCode && m.status!=='finished')||null);
+    return structuredClone(cache.matches.find(m=>m.roomCode===roomCode&&m.status!=='finished')||null);
   }
 }
 
@@ -218,7 +303,12 @@ class OnlinePresenceAdapter{
     const value={userId,status,...extra,updatedAt:Date.now()};
     cache.presence[userId]=value;
     write(CACHE_KEYS.presence,cache.presence);
-    send({type:'presence:set',userId,status,extra});
+
+    api('/api/presence/set',{
+      method:'POST',
+      body:JSON.stringify({status,extra})
+    }).catch(()=>{});
+
     return value;
   }
   get(userId){return structuredClone(cache.presence[userId]||{status:'offline'})}
@@ -233,24 +323,28 @@ class OnlineRealtimeAdapter{
   }
   publish(channel,payload){
     emitLocal(channel,payload);
-    send({type:'realtime:publish',channel,payload});
+    wsSend({type:'realtime:publish',channel,payload});
   }
 }
 
 class OnlineSharedStateAdapter{
   get(key,fallback=null){
-    const value=cache.shared[key];
-    if(value===undefined){
-      send({type:'shared:get',key});
-      return fallback;
-    }
-    return structuredClone(value);
+    return cache.shared[key]===undefined?fallback:structuredClone(cache.shared[key]);
   }
   set(key,value){
     cache.shared[key]=structuredClone(value);
     write(CACHE_KEYS.shared,cache.shared);
     emitLocal(`shared:${key}`,value);
-    send({type:'shared:set',key,value});
+
+    api('/api/shared/set',{
+      method:'POST',
+      body:JSON.stringify({key,value})
+    }).then(result=>{
+      cache.shared[key]=result.value;
+      write(CACHE_KEYS.shared,cache.shared);
+      emitLocal(`shared:${key}`,result.value);
+    }).catch(onlineError);
+
     return value;
   }
   subscribe(key,callback){
@@ -269,45 +363,192 @@ function activateOnlineAdapters(){
   window.TDBCore.useOnlineAdapters({rooms,matches,presence,realtime,sharedState});
 }
 
-function connect(){
-  if(location.protocol==='file:') return;
-  if(socket && [WebSocket.OPEN,WebSocket.CONNECTING].includes(socket.readyState)) return;
-
-  clearTimeout(reconnectTimer);
-
+async function joinRoom(code,password=''){
   try{
-    socket=new WebSocket(wsUrl());
-
-    socket.addEventListener('message',event=>{
-      try{applyMessage(JSON.parse(event.data))}catch{}
+    const result=await api('/api/rooms/join',{
+      method:'POST',
+      body:JSON.stringify({code,password})
     });
 
-    socket.addEventListener('close',()=>{
-      connected=false;
-      window.dispatchEvent(new CustomEvent('tdb-online-status',{detail:{connected:false,redis:redisBacked}}));
-      reconnectTimer=setTimeout(connect,reconnectDelay);
-      reconnectDelay=Math.min(reconnectDelay*1.6,10000);
-    });
+    const room=result.room;
+    const i=cache.rooms.findIndex(r=>r.code===room.code);
+    if(i>=0) cache.rooms[i]=room;
+    else cache.rooms.push(room);
+    write(CACHE_KEYS.rooms,cache.rooms);
 
-    socket.addEventListener('error',()=>{});
-  }catch{
-    reconnectTimer=setTimeout(connect,reconnectDelay);
+    window.dispatchEvent(new CustomEvent('tdb-room-join-result',{
+      detail:{ok:true,room}
+    }));
+    syncEvent('rooms');
+    return true;
+  }catch(err){
+    window.dispatchEvent(new CustomEvent('tdb-room-join-result',{
+      detail:{ok:false,code,error:err.message}
+    }));
+    return false;
   }
 }
 
+async function watchRoom(code){
+  try{
+    const result=await api('/api/rooms/watch',{
+      method:'POST',
+      body:JSON.stringify({code})
+    });
+    if(result.room){
+      const i=cache.rooms.findIndex(r=>r.code===result.room.code);
+      if(i>=0) cache.rooms[i]=result.room; else cache.rooms.push(result.room);
+      write(CACHE_KEYS.rooms,cache.rooms);
+      syncEvent('rooms');
+    }
+    return result.room;
+  }catch(err){
+    onlineError(err);
+    return null;
+  }
+}
+
+async function leaveRoom(code){
+  try{
+    await api('/api/rooms/leave',{
+      method:'POST',
+      body:JSON.stringify({code})
+    });
+    await refreshSnapshot();
+    return true;
+  }catch(err){
+    onlineError(err);
+    return false;
+  }
+}
+
+function dispatchGameState(roomCode,state){
+  window.dispatchEvent(new CustomEvent('tdb-game-state',{
+    detail:{roomCode,state}
+  }));
+}
+
+async function startGame(roomCode){
+  try{
+    const result=await api('/api/games/start',{
+      method:'POST',
+      body:JSON.stringify({roomCode})
+    });
+    if(result.state) dispatchGameState(roomCode,result.state);
+    await refreshSnapshot();
+    return true;
+  }catch(err){
+    onlineError(err);
+    return false;
+  }
+}
+
+async function syncGame(roomCode,role='player'){
+  try{
+    const result=await api(`/api/games/state?roomCode=${encodeURIComponent(roomCode)}&role=${encodeURIComponent(role)}&_=${Date.now()}`,{
+      method:'GET'
+    });
+    if(result.state) dispatchGameState(roomCode,result.state);
+    return true;
+  }catch(err){
+    if(err.status!==404) console.warn('[TDB game sync]',err.message);
+    return false;
+  }
+}
+
+function joinGame(roomCode,userId,role='player'){
+  currentGame={roomCode,role};
+  wsSend({type:'game:join',roomCode,userId,role});
+
+  clearInterval(gamePollTimer);
+  syncGame(roomCode,role);
+  gamePollTimer=setInterval(()=>{
+    if(currentGame?.roomCode===roomCode) syncGame(roomCode,role);
+  },850);
+  return true;
+}
+
+async function gameAction(roomCode,userId,action){
+  try{
+    const result=await api('/api/games/action',{
+      method:'POST',
+      body:JSON.stringify({roomCode,action})
+    });
+    if(result.state) dispatchGameState(roomCode,result.state);
+    return true;
+  }catch(err){
+    onlineError(err);
+    return false;
+  }
+}
+
+function stopGameSync(){
+  currentGame=null;
+  clearInterval(gamePollTimer);
+  gamePollTimer=null;
+}
+
+async function refreshShared(key){
+  try{
+    const result=await api(`/api/shared/get?key=${encodeURIComponent(key)}&_=${Date.now()}`,{method:'GET'});
+    cache.shared[key]=result.value;
+    write(CACHE_KEYS.shared,cache.shared);
+    emitLocal(`shared:${key}`,result.value);
+    return result.value;
+  }catch(err){
+    return null;
+  }
+}
+
+async function listFriends(){
+  const result=await api(`/api/friends/list?_=${Date.now()}`,{method:'GET'});
+  return result.friends||[];
+}
+async function addFriend(friendId){
+  const result=await api('/api/friends/add',{
+    method:'POST',
+    body:JSON.stringify({friendId})
+  });
+  return result.friend;
+}
+async function removeFriend(friendId){
+  await api('/api/friends/remove',{
+    method:'POST',
+    body:JSON.stringify({friendId})
+  });
+  return true;
+}
+
+async function boot(){
+  await refreshSnapshot();
+  scheduleSnapshot();
+  connectWebSocket();
+}
+
 window.TDBOnline={
-  connect,
-  send,
-  joinRoom(code,password,user){return send({type:'room:join',code,password,user})},
-  joinGame(roomCode,userId,role='player'){return send({type:'game:join',roomCode,userId,role})},
-  startGame(roomCode,userId){return send({type:'game:start',roomCode,userId})},
-  gameAction(roomCode,userId,action){return send({type:'game:action',roomCode,userId,action})},
-  syncGame(roomCode,userId,role='player'){return send({type:'game:sync',roomCode,userId,role})},
-  get connected(){return connected},
+  connect:boot,
+  refreshSnapshot,
+  refreshShared,
+  joinRoom,
+  watchRoom,
+  leaveRoom,
+  joinGame,
+  stopGameSync,
+  startGame,
+  gameAction,
+  syncGame,
+  listFriends,
+  addFriend,
+  removeFriend,
+  send:wsSend,
+  get connected(){return backendConnected},
+  get websocket(){return wsConnected},
   get redis(){return redisBacked},
+  get production(){return production},
+  get readyForMultiplayer(){return readyForMultiplayer},
   get cache(){return cache},
   get url(){return wsUrl()}
 };
 
-connect();
+boot();
 })();

@@ -1,0 +1,9 @@
+TDB JOGOS v4.2 Online Sync Fix
+
+- HTTP polling fallback
+- Redis obrigatório em produção
+- Salas sincronizadas
+- Truco/Xadrez iniciados no servidor
+- TDB Music compartilhado
+- Amigos online por ID
+- Espectadores online

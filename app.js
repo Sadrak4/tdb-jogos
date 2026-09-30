@@ -45,14 +45,28 @@ window.addEventListener('tdb-online-sync',()=>{
   // Atualiza somente telas de navegação. Não remonta sala de espera/player/partida.
   if(state.view==='lobby') renderLobby();
   else if(state.view==='game') drawGamePage();
+  else if(state.view==='waiting') renderWaitingRoom();
 });
 
-window.addEventListener('tdb-online-status',()=>{
+window.addEventListener('tdb-online-status',event=>{
+  const detail=event.detail||{};
   const el=document.getElementById('onlineStatusPill');
-  if(el){
-    const online=window.TDBOnline?.connected;
-    el.textContent=online?'ONLINE':'LOCAL';
-    el.classList.toggle('online',!!online);
+  if(!el) return;
+
+  el.classList.remove('online','warning');
+
+  if(detail.connected && detail.readyForMultiplayer){
+    el.textContent='ONLINE';
+    el.classList.add('online');
+  }else if(detail.connected && detail.production && !detail.redis){
+    el.textContent='SEM REDIS';
+    el.classList.add('warning');
+    if(!window.__tdbRedisWarned){
+      window.__tdbRedisWarned=true;
+      toast('Configure REDIS_URL na Vercel. Sem Redis, o multiplayer entre PCs não é confiável.');
+    }
+  }else{
+    el.textContent='LOCAL';
   }
 });
 
@@ -60,21 +74,15 @@ window.addEventListener('tdb-online-status',()=>{
 const OnlineGameBridge={
   roomCode:null,
   role:'player',
-  syncTimer:null,
   start(room,role='player'){
     if(Core.mode!=='online' || !window.TDBOnline?.connected) return false;
     this.roomCode=room.code;
     this.role=role;
     window.TDBOnline.joinGame(room.code,state.user.id,role);
-    clearInterval(this.syncTimer);
-    this.syncTimer=setInterval(()=>{
-      if(this.roomCode) window.TDBOnline.syncGame(this.roomCode,state.user.id,this.role);
-    },1000);
     return true;
   },
   stop(){
-    clearInterval(this.syncTimer);
-    this.syncTimer=null;
+    window.TDBOnline?.stopGameSync?.();
     this.roomCode=null;
   },
   action(action){
@@ -219,20 +227,29 @@ function removeSpectator(room,userId){ room.spectators=(room.spectators||[]).fil
 function publicLiveMatches(){
   return state.rooms.filter(r=>r.status==='playing').map(room=>({room,match:getActiveMatchByRoom(room.code),spectators:(room.spectators||[]).length}));
 }
-function watchRoom(code){
-  const room=getRoomByCode(code);
+async function watchRoom(code){
+  let room=getRoomByCode(code);
   if(!room) return toast('Sala não encontrada.');
   if(room.status!=='playing') return toast('Essa partida ainda não começou.');
+
+  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess'].includes(room.game)){
+    if(!ensureOnlineMultiplayerReady()) return;
+
+    const remoteRoom=await window.TDBOnline.watchRoom(code);
+    if(!remoteRoom) return;
+    room=remoteRoom;
+
+    saveActiveRoom(room);
+    setPresence('watching',{roomCode:room.code,game:room.game});
+    OnlineGameBridge.start(room,'spectator');
+
+    app.innerHTML=`${topbar()}<section class="spectator-placeholder">${logoTag()}<h1>Conectando à partida...</h1><p>Modo espectador online</p><button class="btn btn-secondary" onclick="leaveRoom()">Voltar</button></section>`;
+    return;
+  }
 
   addSpectator(room,state.user);
   saveActiveRoom(room);
   setPresence('watching',{roomCode:room.code,game:room.game});
-
-  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess'].includes(room.game)){
-    OnlineGameBridge.start(room,'spectator');
-    app.innerHTML=`${topbar()}<section class="spectator-placeholder">${logoTag()}<h1>Conectando à partida...</h1><p>Modo espectador online</p><button class="btn btn-secondary" onclick="leaveRoom()">Voltar</button></section>`;
-    return;
-  }
 
   if(room.game==='chess' && typeof window.renderChessSpectator==='function') return window.renderChessSpectator(room);
   if(room.game==='truco' && typeof window.renderTrucoSpectator==='function') return window.renderTrucoSpectator(room);
@@ -397,7 +414,7 @@ function topbar(active='home'){
       </nav>
     </div>
     <div class="topbar-right">
-      <span id="onlineStatusPill" class="online-status-pill ${window.TDBOnline?.connected?'online':''}">${window.TDBOnline?.connected?'ONLINE':'LOCAL'}</span>
+      <span id="onlineStatusPill" class="online-status-pill ${window.TDBOnline?.readyForMultiplayer?'online':window.TDBOnline?.connected&&window.TDBOnline?.production&&!window.TDBOnline?.redis?'warning':''}">${window.TDBOnline?.readyForMultiplayer?'ONLINE':window.TDBOnline?.connected&&window.TDBOnline?.production&&!window.TDBOnline?.redis?'SEM REDIS':'LOCAL'}</span>
       <div class="profile-mini" onclick="renderProfile()" style="cursor:pointer">
         <div class="avatar">${escapeHtml(state.user?.avatar||initials(state.user?.username))}</div>
         <div class="profile-lines"><strong>${escapeHtml(state.user?.username||'Jogador')}</strong><small>${escapeHtml(state.user?.id||'')}</small></div>
@@ -420,6 +437,12 @@ function exitActiveContext(reason='leave'){
   OnlineGameBridge.stop();
   const room=state.activeRoom;
   if(!room) return;
+
+  if(Core.mode==='online' && window.TDBOnline?.connected && !room.simulation){
+    window.TDBOnline.leaveRoom(room.code);
+    saveActiveRoom(null);
+    return;
+  }
 
   const role=currentRole(room);
 
@@ -471,6 +494,15 @@ window.goHome=goHome;
 function renderLobby(){
   if(!state.user) return renderAuth('login');
   state.view='lobby';
+  if(Core.mode==='online' && window.TDBOnline?.connected && !window.__tdbFriendsLobbyRefresh){
+    window.__tdbFriendsLobbyRefresh=setTimeout(async()=>{
+      try{
+        state.friends=await window.TDBOnline.listFriends();
+        saveFriends();
+      }catch{}
+      window.__tdbFriendsLobbyRefresh=null;
+    },200);
+  }
   app.innerHTML=`${topbar('home')}
   <section class="dashboard fade-in">
     <div class="hero-strip">
@@ -609,7 +641,22 @@ function openJoinCode(){
   </div></div>`);
 }
 function closeModal(){ document.getElementById('modalBackdrop')?.remove(); }
+
+function ensureOnlineMultiplayerReady(){
+  if(!window.TDBOnline) return true;
+  if(window.TDBOnline.production && !window.TDBOnline.redis){
+    toast('O multiplayer precisa do Redis. Configure REDIS_URL na Vercel e faça um novo deploy.');
+    return false;
+  }
+  if(location.protocol!=='file:' && !window.TDBOnline.connected){
+    toast('Conectando ao servidor. Aguarde alguns segundos e tente novamente.');
+    return false;
+  }
+  return true;
+}
+
 function createRoom(){
+  if(location.protocol!=='file:' && window.TDBOnline && !ensureOnlineMultiplayerReady()) return;
   const name=document.getElementById('roomName').value.trim()||`Sala de ${state.user.username}`;
   const privacy=document.getElementById('roomPrivacy').value;
   const password=document.getElementById('roomPassword').value.trim();
@@ -687,6 +734,7 @@ window.addEventListener('tdb-room-join-result',event=>{
 });
 
 function requestJoinRoom(code){
+  if(location.protocol!=='file:' && window.TDBOnline && !ensureOnlineMultiplayerReady()) return;
   const room=getRoomByCode(code);
   if(!room) return toast('Sala não encontrada.');
 
@@ -745,6 +793,7 @@ function joinRoom(code,password=''){
   renderWaitingRoom();
 }
 function joinByCode(){
+  if(location.protocol!=='file:' && window.TDBOnline && !ensureOnlineMultiplayerReady()) return;
   const code=document.getElementById('joinCode').value.trim().toUpperCase();
   const pass=document.getElementById('joinPassword').value;
   if(!code) return toast('Digite o código da sala.');
@@ -882,20 +931,58 @@ function openMusicRoom(){
 window.openMusicRoom=openMusicRoom;
 
 function startGame(){
-  let room=state.activeRoom, g=games[room.game];
+  const room=state.activeRoom;
+  if(!room) return toast('Sala não encontrada.');
+  const g=games[room.game];
+
+  if(room.game==='music') return openMusicRoom();
+
+  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess'].includes(room.game)){
+    if(!ensureOnlineMultiplayerReady()) return;
+
+    const required=room.game==='truco'?roomCapacity(room):2;
+    if((room.players?.length||0)<required){
+      return toast(`${g.name} precisa de ${required} jogador${required>1?'es':''}.`);
+    }
+
+    room.status='playing';
+    updateStoredRoom(room);
+    setPresence('playing',{roomCode:room.code,game:room.game});
+    OnlineGameBridge.start(room,'player');
+    playUiSound(700,.09);
+
+    window.TDBOnline.startGame(room.code).then(ok=>{
+      if(!ok) room.status='open';
+    });
+    return;
+  }
+
   if(room.game==='truco'){
     const cap=roomCapacity(room);
-    if((room.players?.length||0)<cap) return toast(`Truco precisa de ${cap} jogador${cap>1?'es':''}. Use “Testar com bots” nesta versão local.`);
-    room.status='playing'; updateStoredRoom(room); upsertMatch({matchId:`TRUCO-${Date.now()}`,roomCode:room.code,game:'truco',status:'playing',players:structuredClone(room.players),createdAt:Date.now()}); setPresence('playing',{roomCode:room.code,game:'truco'}); playUiSound(700,.09); return startTrucoGame(room,false);
+    if((room.players?.length||0)<cap) return toast(`Truco precisa de ${cap} jogador${cap>1?'es':''}. Use “Testar com bots” no modo local.`);
+    room.status='playing';
+    updateStoredRoom(room);
+    upsertMatch({matchId:`TRUCO-${Date.now()}`,roomCode:room.code,game:'truco',status:'playing',players:structuredClone(room.players),createdAt:Date.now()});
+    setPresence('playing',{roomCode:room.code,game:'truco'});
+    playUiSound(700,.09);
+    return startTrucoGame(room,false);
   }
+
   if(room.game==='chess'){
-    if((room.players?.length||0)<2) return toast('Xadrez precisa de 2 jogadores. Use “Testar com bot” nesta versão local.');
-    room.status='playing'; updateStoredRoom(room); upsertMatch({matchId:`CHESS-${Date.now()}`,roomCode:room.code,game:'chess',status:'playing',players:structuredClone(room.players),createdAt:Date.now()}); setPresence('playing',{roomCode:room.code,game:'chess'}); playUiSound(700,.09); return window.startChessGame?.(room,false);
+    if((room.players?.length||0)<2) return toast('Xadrez precisa de 2 jogadores. Use “Testar com bot” no modo local.');
+    room.status='playing';
+    updateStoredRoom(room);
+    upsertMatch({matchId:`CHESS-${Date.now()}`,roomCode:room.code,game:'chess',status:'playing',players:structuredClone(room.players),createdAt:Date.now()});
+    setPresence('playing',{roomCode:room.code,game:'chess'});
+    playUiSound(700,.09);
+    return window.startChessGame?.(room,false);
   }
-  if(room.game==='music') return openMusicRoom();
+
   if((room.players?.length||0)<g.minPlayers) return toast(`Aguarde pelo menos ${g.minPlayers} jogador${g.minPlayers>1?'es':''}.`);
-  room.status='playing'; updateStoredRoom(room); playUiSound(700,.09);
-  toast(`Partida de ${g.name} iniciada. Motor do jogo entra na próxima etapa.`);
+  room.status='playing';
+  updateStoredRoom(room);
+  playUiSound(700,.09);
+  toast(`Partida de ${g.name} iniciada.`);
   renderWaitingRoom();
 }
 function copyCode(code){
@@ -907,28 +994,62 @@ function toggleFullscreen(){
   else document.exitFullscreen?.();
 }
 
-function renderFriends(){
+function renderFriends(skipRefresh=false){
   if(!state.user) return renderAuth('login');
+  state.view='friends';
+
   app.innerHTML=`${topbar('friends')}<section class="dashboard fade-in">
     <div class="page-head"><div><h1 class="page-title">Amigos</h1><p class="muted">Adicione pelo ID público e convide para suas salas.</p></div></div>
     <div class="two-col">
-      <div class="panel"><div class="panel-header"><h2>Seus amigos</h2><span class="muted">${state.friends.length}</span></div><div class="panel-body"><div class="friend-list">${state.friends.map(friendCard).join('')}</div></div></div>
+      <div class="panel"><div class="panel-header"><h2>Seus amigos</h2><span class="muted">${state.friends.length}</span></div><div class="panel-body"><div class="friend-list">${state.friends.length?state.friends.map(friendCard).join(''):'<div class="muted">Nenhum amigo adicionado.</div>'}</div></div></div>
       <div class="panel"><div class="panel-header"><h2>Adicionar por ID</h2></div><div class="panel-body">
-        <div class="field"><label>ID do jogador</label><input id="friendId" placeholder="TBD-7X4K92" style="text-transform:uppercase"></div>
+        <div class="field"><label>ID do jogador</label><input id="friendId" placeholder="TDB-XXXXXXXX" style="text-transform:uppercase"></div>
         <button class="btn btn-primary full" style="margin-top:12px" onclick="addFriendById()">Adicionar amigo</button>
-        <div class="mini-note">Nesta v0.2 local, contas criadas neste mesmo navegador podem ser encontradas por ID. O multiplayer real virá com o backend.</div>
+        <div class="mini-note">${Core.mode==='online'?'A busca usa as contas registradas no servidor.':'No modo local, só contas deste navegador podem ser encontradas.'}</div>
       </div></div>
     </div>
   </section>`;
+
+  if(!skipRefresh && Core.mode==='online' && window.TDBOnline?.connected){
+    refreshOnlineFriends();
+  }
 }
-function addFriendById(){
-  const id=document.getElementById('friendId').value.trim().toUpperCase();
+
+async function refreshOnlineFriends(){
+  try{
+    const friends=await window.TDBOnline.listFriends();
+    state.friends=friends;
+    saveFriends();
+    if(state.view==='friends') renderFriends(true);
+  }catch(err){
+    console.warn('[TDB Amigos]',err);
+  }
+}
+
+async function addFriendById(){
+  const id=document.getElementById('friendId')?.value.trim().toUpperCase();
+  if(!id) return toast('Digite o ID do jogador.');
   if(id===state.user.id) return toast('Esse é o seu próprio ID.');
   if(state.friends.some(f=>f.id===id)) return toast('Esse jogador já está nos seus amigos.');
+
+  if(Core.mode==='online' && window.TDBOnline?.connected){
+    try{
+      const friend=await window.TDBOnline.addFriend(id);
+      state.friends.push(friend);
+      saveFriends();
+      toast(`${friend.username} foi adicionado.`);
+      return renderFriends(true);
+    }catch(err){
+      return toast(err.message||'Não foi possível adicionar o amigo.');
+    }
+  }
+
   const u=state.users.find(u=>u.id===id);
   if(!u) return toast('ID não encontrado entre as contas locais.');
   state.friends.push({id:u.id,username:u.username,avatar:u.avatar,status:u.status||'Offline'});
-  saveFriends(); toast(`${u.username} foi adicionado.`); renderFriends();
+  saveFriends();
+  toast(`${u.username} foi adicionado.`);
+  renderFriends(true);
 }
 
 function renderProfile(){

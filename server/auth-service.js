@@ -44,3 +44,41 @@ export async function logout(token){
   const sessions=await getSharedValue(sessionsKey(),{});
   delete sessions[token];await setSharedValue(sessionsKey(),sessions);
 }
+
+
+export async function findUserById(id){
+  const users=await getSharedValue(usersKey(),[]);
+  const wanted=String(id||'').trim().toUpperCase();
+  const user=users.find(u=>String(u.id||'').toUpperCase()===wanted);
+  return user?safeUser(user):null;
+}
+
+function friendKey(userId){return `friends:${userId}`}
+
+export async function listFriends(userId){
+  const ids=await getSharedValue(friendKey(userId),[]);
+  const users=await getSharedValue(usersKey(),[]);
+  return ids
+    .map(id=>users.find(u=>u.id===id))
+    .filter(Boolean)
+    .map(safeUser);
+}
+
+export async function addFriend(userId,friendId){
+  if(String(userId)===String(friendId)) throw new Error('Você não pode adicionar a si mesmo.');
+  const target=await findUserById(friendId);
+  if(!target) throw new Error('ID de jogador não encontrado.');
+
+  const ids=await getSharedValue(friendKey(userId),[]);
+  if(!ids.includes(target.id)){
+    ids.push(target.id);
+    await setSharedValue(friendKey(userId),ids);
+  }
+  return target;
+}
+
+export async function removeFriend(userId,friendId){
+  const ids=await getSharedValue(friendKey(userId),[]);
+  await setSharedValue(friendKey(userId),ids.filter(id=>id!==friendId));
+  return true;
+}

@@ -3009,3 +3009,13 @@ input,select,button{
   display:inline-flex;padding:5px 9px;border-radius:999px;
   border:1px solid rgba(214,175,67,.3);color:#d9bd72;font-size:10px;
 }
+
+
+.online-status-pill.warning{
+  color:#f1cb72;
+  border-color:rgba(241,184,63,.35);
+  background:rgba(241,184,63,.08);
+}
+.online-status-pill.warning:before{
+  background:#e5ac35;
+}
