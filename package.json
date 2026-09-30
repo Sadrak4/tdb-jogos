@@ -1,6 +1,6 @@
 {
   "name": "tdb-jogos",
-  "version": "4.3.0",
+  "version": "5.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,8 +8,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^5.1.0",
-    "redis": "^5.8.2",
-    "ws": "^8.18.3"
+    "@supabase/supabase-js": "^2.57.4",
+    "express": "^5.1.0"
   }
 }

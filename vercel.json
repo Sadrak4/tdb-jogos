@@ -1,11 +1,98 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
-    "api/ws.js": {
-      "maxDuration": 300
-    },
-    "api/[...route].js": {
+    "api/router.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/health",
+      "destination": "/api/router?route=health"
+    },
+    {
+      "source": "/api/config",
+      "destination": "/api/router?route=config"
+    },
+    {
+      "source": "/api/profile/update",
+      "destination": "/api/router?route=profile/update"
+    },
+    {
+      "source": "/api/auth/register",
+      "destination": "/api/router?route=auth/register"
+    },
+    {
+      "source": "/api/auth/login",
+      "destination": "/api/router?route=auth/login"
+    },
+    {
+      "source": "/api/auth/session",
+      "destination": "/api/router?route=auth/session"
+    },
+    {
+      "source": "/api/auth/logout",
+      "destination": "/api/router?route=auth/logout"
+    },
+    {
+      "source": "/api/state/snapshot",
+      "destination": "/api/router?route=state/snapshot"
+    },
+    {
+      "source": "/api/rooms/upsert",
+      "destination": "/api/router?route=rooms/upsert"
+    },
+    {
+      "source": "/api/rooms/join",
+      "destination": "/api/router?route=rooms/join"
+    },
+    {
+      "source": "/api/rooms/leave",
+      "destination": "/api/router?route=rooms/leave"
+    },
+    {
+      "source": "/api/rooms/remove",
+      "destination": "/api/router?route=rooms/remove"
+    },
+    {
+      "source": "/api/rooms/watch",
+      "destination": "/api/router?route=rooms/watch"
+    },
+    {
+      "source": "/api/games/start",
+      "destination": "/api/router?route=games/start"
+    },
+    {
+      "source": "/api/games/state",
+      "destination": "/api/router?route=games/state"
+    },
+    {
+      "source": "/api/games/action",
+      "destination": "/api/router?route=games/action"
+    },
+    {
+      "source": "/api/shared/get",
+      "destination": "/api/router?route=shared/get"
+    },
+    {
+      "source": "/api/shared/set",
+      "destination": "/api/router?route=shared/set"
+    },
+    {
+      "source": "/api/presence/set",
+      "destination": "/api/router?route=presence/set"
+    },
+    {
+      "source": "/api/friends/list",
+      "destination": "/api/router?route=friends/list"
+    },
+    {
+      "source": "/api/friends/add",
+      "destination": "/api/router?route=friends/add"
+    },
+    {
+      "source": "/api/friends/remove",
+      "destination": "/api/router?route=friends/remove"
+    }
+  ]
 }

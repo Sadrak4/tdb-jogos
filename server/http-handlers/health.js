@@ -5,10 +5,14 @@ export default async function handler(_req,res){
   res.status(200).json({
     ok:true,
     app:'TDB JOGOS',
-    version:'4.3.0',
-    realtime:'websocket+http-fallback',
-    redis:status.redis,
+    version:'5.0.0',
+    realtime:'supabase-realtime+http-fallback',
+    supabase:status.supabase,
+    configured:status.configured,
+    schemaReady:status.schemaReady,
+    storage:status.storage,
     readyForMultiplayer:status.readyForMultiplayer,
-    production:status.production
+    production:status.production,
+    error:status.readyForMultiplayer?null:status.error
   });
 }

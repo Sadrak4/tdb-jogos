@@ -1,4 +1,6 @@
 import health from './http-handlers/health.js';
+import publicConfig from './http-handlers/config/public.js';
+import profileUpdate from './http-handlers/profile/update.js';
 import authRegister from './http-handlers/auth/register.js';
 import authLogin from './http-handlers/auth/login.js';
 import authSession from './http-handlers/auth/session.js';
@@ -26,6 +28,8 @@ import friendsRemove from './http-handlers/friends/remove.js';
 
 const ROUTES=new Map([
   ['health',health],
+  ['config',publicConfig],
+  ['profile/update',profileUpdate],
   ['auth/register',authRegister],
   ['auth/login',authLogin],
   ['auth/session',authSession],

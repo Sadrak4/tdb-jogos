@@ -5,7 +5,7 @@ export default async function handler(req,res){
   if(req.method!=='POST') return res.status(405).json({error:'Método inválido'});
   try{
     const [user,status]=await Promise.all([requireApiUser(req),backendStatus()]);
-    if(status.production&&!status.redis) return res.json({ok:true,skipped:true});
+    if(status.production&&!status.supabase) return res.json({ok:true,skipped:true});
 
     const message={
       type:'presence:set',

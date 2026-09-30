@@ -232,7 +232,7 @@
     sound,
 
     // Future switch point:
-    // Replace auth/rooms/realtime with Supabase/WebSocket adapters,
+    // Replace local adapters with online/Supabase-backed adapters,
     // keeping the same methods used by the UI.
     useOnlineAdapters(adapters) {
       if (!adapters) return;

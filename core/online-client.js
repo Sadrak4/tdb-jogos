@@ -16,17 +16,17 @@ const cache={
   shared:read(CACHE_KEYS.shared,{})
 };
 
-let socket=null;
-let wsConnected=false;
 let backendConnected=false;
-let redisBacked=false;
+let supabaseBacked=false;
+let realtimeConnected=false;
 let production=false;
 let readyForMultiplayer=false;
-let reconnectTimer=null;
-let reconnectDelay=1000;
 let snapshotTimer=null;
 let currentGame=null;
 let gamePollTimer=null;
+let supabaseBrowser=null;
+let realtimeChannel=null;
+let realtimeInitStarted=false;
 
 function read(key,fallback){
   try{
@@ -44,12 +44,7 @@ async function api(path,options={}){
   const headers={'Content-Type':'application/json',...(options.headers||{})};
   if(token()) headers.Authorization=`Bearer ${token()}`;
 
-  const res=await fetch(path,{
-    cache:'no-store',
-    ...options,
-    headers
-  });
-
+  const res=await fetch(path,{cache:'no-store',...options,headers});
   const data=await res.json().catch(()=>({}));
   if(!res.ok){
     const err=new Error(data.error||`Erro HTTP ${res.status}`);
@@ -76,8 +71,8 @@ function statusEvent(){
   window.dispatchEvent(new CustomEvent('tdb-online-status',{
     detail:{
       connected:backendConnected,
-      websocket:wsConnected,
-      redis:redisBacked,
+      supabase:supabaseBacked,
+      realtime:realtimeConnected,
       production,
       readyForMultiplayer
     }
@@ -107,7 +102,7 @@ function applySnapshot(payload){
   cache.presence=data.presence||{};
   cache.shared=data.shared||{};
 
-  redisBacked=!!status.redis;
+  supabaseBacked=!!status.supabase;
   production=!!status.production;
   readyForMultiplayer=!!status.readyForMultiplayer;
   backendConnected=true;
@@ -127,109 +122,97 @@ function applySnapshot(payload){
   }
 }
 
+async function refreshHealth(){
+  try{
+    const result=await api(`/api/health?_=${Date.now()}`,{method:'GET'});
+    backendConnected=!!result.ok;
+    supabaseBacked=!!result.supabase;
+    production=!!result.production;
+    readyForMultiplayer=!!result.readyForMultiplayer;
+    statusEvent();
+    return result;
+  }catch(err){
+    backendConnected=false;
+    readyForMultiplayer=false;
+    statusEvent();
+    return null;
+  }
+}
+
 async function refreshSnapshot(){
   try{
     const result=await api(`/api/state/snapshot?_=${Date.now()}`,{method:'GET'});
     applySnapshot(result);
+    return true;
   }catch(err){
-    if(backendConnected){
-      backendConnected=false;
-      readyForMultiplayer=false;
-      statusEvent();
-    }
+    console.warn('[TDB snapshot]',err?.message||err);
+    await refreshHealth();
+    return false;
   }
 }
 
 function scheduleSnapshot(){
   clearInterval(snapshotTimer);
-  snapshotTimer=setInterval(()=>{
-    refreshSnapshot();
-  }, document.hidden ? 5000 : 1800);
+  snapshotTimer=setInterval(()=>refreshSnapshot(),document.hidden?5000:2500);
 }
 document.addEventListener('visibilitychange',scheduleSnapshot);
 
-function wsUrl(){
-  const proto=location.protocol==='https:'?'wss:':'ws:';
-  return `${proto}//${location.host}/api/ws`;
-}
-function wsSend(message){
-  if(socket?.readyState===WebSocket.OPEN){
-    try{socket.send(JSON.stringify(message));return true}catch{}
-  }
-  return false;
-}
-function handleWsMessage(msg){
-  if(!msg) return;
+async function initSupabaseRealtime(){
+  if(realtimeInitStarted || location.protocol==='file:') return;
+  realtimeInitStarted=true;
 
-  if(msg.type==='connected'){
-    wsConnected=true;
-    reconnectDelay=1000;
-    statusEvent();
-    wsSend({type:'hello',userId:window.TDBCore?.auth?.currentUser?.()?.id||null});
-    return;
-  }
-
-  if(msg.type==='snapshot'){
-    // WebSocket snapshot is only an accelerator. HTTP remains source of recovery.
-    if(msg.data){
-      applySnapshot({
-        data:msg.data,
-        status:{
-          redis:!!msg.data.redis,
-          production,
-          readyForMultiplayer:!!msg.data.redis||!production
-        }
-      });
-    }
-    return;
-  }
-
-  if(msg.type==='room:upsert'||msg.type==='room:remove'||msg.type==='shared:set'||msg.type==='presence:set'){
-    refreshSnapshot();
-    return;
-  }
-
-  if(msg.type==='game:state'){
-    window.dispatchEvent(new CustomEvent('tdb-game-state',{
-      detail:{roomCode:msg.roomCode,state:msg.state}
-    }));
-    return;
-  }
-
-  if(msg.type==='game:invalidate'&&msg.roomCode){
-    if(currentGame?.roomCode===msg.roomCode) syncGame(msg.roomCode,currentGame.role);
-    return;
-  }
-
-  if(msg.type==='realtime:event'){
-    emitLocal(msg.channel,msg.payload);
-    return;
-  }
-
-  if(msg.type==='error'){
-    onlineError(new Error(msg.message||'Erro no realtime.'));
-  }
-}
-
-function connectWebSocket(){
-  if(location.protocol==='file:') return;
-  if(socket && [WebSocket.OPEN,WebSocket.CONNECTING].includes(socket.readyState)) return;
-
-  clearTimeout(reconnectTimer);
   try{
-    socket=new WebSocket(wsUrl());
-    socket.addEventListener('message',event=>{
-      try{handleWsMessage(JSON.parse(event.data))}catch{}
-    });
-    socket.addEventListener('close',()=>{
-      wsConnected=false;
+    const cfg=await api(`/api/config?_=${Date.now()}`,{method:'GET'});
+    if(!cfg.realtimeEnabled || !cfg.supabaseUrl || !cfg.supabasePublishableKey){
+      realtimeConnected=false;
       statusEvent();
-      reconnectTimer=setTimeout(connectWebSocket,reconnectDelay);
-      reconnectDelay=Math.min(reconnectDelay*1.6,10000);
-    });
-    socket.addEventListener('error',()=>{});
-  }catch{
-    reconnectTimer=setTimeout(connectWebSocket,reconnectDelay);
+      return;
+    }
+    if(!window.supabase?.createClient){
+      console.warn('[TDB] supabase-js não carregou no navegador.');
+      return;
+    }
+
+    supabaseBrowser=window.supabase.createClient(
+      cfg.supabaseUrl,
+      cfg.supabasePublishableKey,
+      {auth:{persistSession:false,autoRefreshToken:false}}
+    );
+
+    realtimeChannel=supabaseBrowser
+      .channel('tdb-events-client')
+      .on('postgres_changes',{
+        event:'INSERT',
+        schema:'public',
+        table:'tdb_events'
+      },payload=>{
+        const row=payload.new||{};
+        const topic=row.topic||'general';
+        const roomCode=row.room_code||null;
+
+        if(topic==='game' && currentGame?.roomCode===roomCode){
+          syncGame(roomCode,currentGame.role);
+          return;
+        }
+        if(topic==='music'){
+          refreshSnapshot();
+          if(roomCode) refreshShared(`music:${roomCode}`);
+          return;
+        }
+        if(topic==='friends'){
+          syncEvent('friends');
+          return;
+        }
+        refreshSnapshot();
+      })
+      .subscribe(status=>{
+        realtimeConnected=status==='SUBSCRIBED';
+        statusEvent();
+      });
+  }catch(err){
+    console.warn('[TDB Supabase Realtime]',err);
+    realtimeConnected=false;
+    statusEvent();
   }
 }
 
@@ -262,7 +245,6 @@ class OnlineRoomAdapter{
         syncEvent('rooms');
       }
     }).catch(onlineError);
-
     return room;
   }
   remove(code){
@@ -274,20 +256,13 @@ class OnlineRoomAdapter{
     }).catch(err=>console.warn('[TDB remove room]',err.message));
   }
 }
-
 class OnlineMatchAdapter{
   list(){return structuredClone(cache.matches)}
-  replace(matches){
-    cache.matches=structuredClone(matches||[]);
-    write(CACHE_KEYS.matches,cache.matches);
-    return matches;
-  }
+  replace(matches){cache.matches=structuredClone(matches||[]);write(CACHE_KEYS.matches,cache.matches);return matches}
   upsert(match){
     const i=cache.matches.findIndex(m=>m.matchId===match.matchId);
-    if(i>=0) cache.matches[i]=structuredClone(match);
-    else cache.matches.push(structuredClone(match));
-    write(CACHE_KEYS.matches,cache.matches);
-    return match;
+    if(i>=0) cache.matches[i]=structuredClone(match); else cache.matches.push(structuredClone(match));
+    write(CACHE_KEYS.matches,cache.matches);return match;
   }
   remove(matchId){
     cache.matches=cache.matches.filter(m=>m.matchId!==matchId);
@@ -297,24 +272,17 @@ class OnlineMatchAdapter{
     return structuredClone(cache.matches.find(m=>m.roomCode===roomCode&&m.status!=='finished')||null);
   }
 }
-
 class OnlinePresenceAdapter{
   set(userId,status,extra={}){
     const value={userId,status,...extra,updatedAt:Date.now()};
     cache.presence[userId]=value;
     write(CACHE_KEYS.presence,cache.presence);
-
-    api('/api/presence/set',{
-      method:'POST',
-      body:JSON.stringify({status,extra})
-    }).catch(()=>{});
-
+    api('/api/presence/set',{method:'POST',body:JSON.stringify({status,extra})}).catch(()=>{});
     return value;
   }
   get(userId){return structuredClone(cache.presence[userId]||{status:'offline'})}
   all(){return structuredClone(cache.presence)}
 }
-
 class OnlineRealtimeAdapter{
   subscribe(channel,callback){
     if(!listeners.has(channel)) listeners.set(channel,new Set());
@@ -323,10 +291,8 @@ class OnlineRealtimeAdapter{
   }
   publish(channel,payload){
     emitLocal(channel,payload);
-    wsSend({type:'realtime:publish',channel,payload});
   }
 }
-
 class OnlineSharedStateAdapter{
   get(key,fallback=null){
     return cache.shared[key]===undefined?fallback:structuredClone(cache.shared[key]);
@@ -369,16 +335,11 @@ async function joinRoom(code,password=''){
       method:'POST',
       body:JSON.stringify({code,password})
     });
-
     const room=result.room;
     const i=cache.rooms.findIndex(r=>r.code===room.code);
-    if(i>=0) cache.rooms[i]=room;
-    else cache.rooms.push(room);
+    if(i>=0) cache.rooms[i]=room; else cache.rooms.push(room);
     write(CACHE_KEYS.rooms,cache.rooms);
-
-    window.dispatchEvent(new CustomEvent('tdb-room-join-result',{
-      detail:{ok:true,room}
-    }));
+    window.dispatchEvent(new CustomEvent('tdb-room-join-result',{detail:{ok:true,room}}));
     syncEvent('rooms');
     return true;
   }catch(err){
@@ -388,66 +349,38 @@ async function joinRoom(code,password=''){
     return false;
   }
 }
-
 async function watchRoom(code){
   try{
-    const result=await api('/api/rooms/watch',{
-      method:'POST',
-      body:JSON.stringify({code})
-    });
+    const result=await api('/api/rooms/watch',{method:'POST',body:JSON.stringify({code})});
     if(result.room){
       const i=cache.rooms.findIndex(r=>r.code===result.room.code);
       if(i>=0) cache.rooms[i]=result.room; else cache.rooms.push(result.room);
-      write(CACHE_KEYS.rooms,cache.rooms);
-      syncEvent('rooms');
+      write(CACHE_KEYS.rooms,cache.rooms);syncEvent('rooms');
     }
     return result.room;
-  }catch(err){
-    onlineError(err);
-    return null;
-  }
+  }catch(err){onlineError(err);return null}
 }
-
 async function leaveRoom(code){
   try{
-    await api('/api/rooms/leave',{
-      method:'POST',
-      body:JSON.stringify({code})
-    });
+    await api('/api/rooms/leave',{method:'POST',body:JSON.stringify({code})});
     await refreshSnapshot();
     return true;
-  }catch(err){
-    onlineError(err);
-    return false;
-  }
+  }catch(err){onlineError(err);return false}
 }
-
 function dispatchGameState(roomCode,state){
-  window.dispatchEvent(new CustomEvent('tdb-game-state',{
-    detail:{roomCode,state}
-  }));
+  window.dispatchEvent(new CustomEvent('tdb-game-state',{detail:{roomCode,state}}));
 }
-
 async function startGame(roomCode){
   try{
-    const result=await api('/api/games/start',{
-      method:'POST',
-      body:JSON.stringify({roomCode})
-    });
+    const result=await api('/api/games/start',{method:'POST',body:JSON.stringify({roomCode})});
     if(result.state) dispatchGameState(roomCode,result.state);
     await refreshSnapshot();
     return true;
-  }catch(err){
-    onlineError(err);
-    return false;
-  }
+  }catch(err){onlineError(err);return false}
 }
-
 async function syncGame(roomCode,role='player'){
   try{
-    const result=await api(`/api/games/state?roomCode=${encodeURIComponent(roomCode)}&role=${encodeURIComponent(role)}&_=${Date.now()}`,{
-      method:'GET'
-    });
+    const result=await api(`/api/games/state?roomCode=${encodeURIComponent(roomCode)}&role=${encodeURIComponent(role)}&_=${Date.now()}`,{method:'GET'});
     if(result.state) dispatchGameState(roomCode,result.state);
     return true;
   }catch(err){
@@ -455,39 +388,27 @@ async function syncGame(roomCode,role='player'){
     return false;
   }
 }
-
 function joinGame(roomCode,userId,role='player'){
   currentGame={roomCode,role};
-  wsSend({type:'game:join',roomCode,userId,role});
-
   clearInterval(gamePollTimer);
   syncGame(roomCode,role);
   gamePollTimer=setInterval(()=>{
     if(currentGame?.roomCode===roomCode) syncGame(roomCode,role);
-  },850);
+  },1200);
   return true;
 }
-
 async function gameAction(roomCode,userId,action){
   try{
-    const result=await api('/api/games/action',{
-      method:'POST',
-      body:JSON.stringify({roomCode,action})
-    });
+    const result=await api('/api/games/action',{method:'POST',body:JSON.stringify({roomCode,action})});
     if(result.state) dispatchGameState(roomCode,result.state);
     return true;
-  }catch(err){
-    onlineError(err);
-    return false;
-  }
+  }catch(err){onlineError(err);return false}
 }
-
 function stopGameSync(){
   currentGame=null;
   clearInterval(gamePollTimer);
   gamePollTimer=null;
 }
-
 async function refreshShared(key){
   try{
     const result=await api(`/api/shared/get?key=${encodeURIComponent(key)}&_=${Date.now()}`,{method:'GET'});
@@ -495,39 +416,38 @@ async function refreshShared(key){
     write(CACHE_KEYS.shared,cache.shared);
     emitLocal(`shared:${key}`,result.value);
     return result.value;
-  }catch(err){
-    return null;
-  }
+  }catch{return null}
 }
-
+async function updateProfile(username,avatar){
+  const result=await api('/api/profile/update',{
+    method:'POST',
+    body:JSON.stringify({username,avatar})
+  });
+  return result.user;
+}
 async function listFriends(){
   const result=await api(`/api/friends/list?_=${Date.now()}`,{method:'GET'});
   return result.friends||[];
 }
 async function addFriend(friendId){
-  const result=await api('/api/friends/add',{
-    method:'POST',
-    body:JSON.stringify({friendId})
-  });
+  const result=await api('/api/friends/add',{method:'POST',body:JSON.stringify({friendId})});
   return result.friend;
 }
 async function removeFriend(friendId){
-  await api('/api/friends/remove',{
-    method:'POST',
-    body:JSON.stringify({friendId})
-  });
+  await api('/api/friends/remove',{method:'POST',body:JSON.stringify({friendId})});
   return true;
 }
-
 async function boot(){
+  await refreshHealth();
   await refreshSnapshot();
   scheduleSnapshot();
-  connectWebSocket();
+  await initSupabaseRealtime();
 }
 
 window.TDBOnline={
   connect:boot,
   refreshSnapshot,
+  refreshHealth,
   refreshShared,
   joinRoom,
   watchRoom,
@@ -537,17 +457,16 @@ window.TDBOnline={
   startGame,
   gameAction,
   syncGame,
+  updateProfile,
   listFriends,
   addFriend,
   removeFriend,
-  send:wsSend,
   get connected(){return backendConnected},
-  get websocket(){return wsConnected},
-  get redis(){return redisBacked},
+  get supabase(){return supabaseBacked},
+  get realtime(){return realtimeConnected},
   get production(){return production},
   get readyForMultiplayer(){return readyForMultiplayer},
-  get cache(){return cache},
-  get url(){return wsUrl()}
+  get cache(){return cache}
 };
 
 boot();

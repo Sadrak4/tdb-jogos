@@ -58,12 +58,12 @@ window.addEventListener('tdb-online-status',event=>{
   if(detail.connected && detail.readyForMultiplayer){
     el.textContent='ONLINE';
     el.classList.add('online');
-  }else if(detail.connected && detail.production && !detail.redis){
-    el.textContent='SEM REDIS';
+  }else if(detail.connected && detail.production && !detail.supabase){
+    el.textContent='SEM SUPABASE';
     el.classList.add('warning');
-    if(!window.__tdbRedisWarned){
-      window.__tdbRedisWarned=true;
-      toast('Configure REDIS_URL na Vercel. Sem Redis, o multiplayer entre PCs não é confiável.');
+    if(!window.__tdbSupabaseWarned){
+      window.__tdbSupabaseWarned=true;
+      toast('Conecte o Supabase e execute SUPABASE-SCHEMA.sql. Sem isso, o multiplayer online fica desativado.');
     }
   }else{
     el.textContent='LOCAL';
@@ -380,25 +380,67 @@ function renderAuth(mode='login'){
     </section>
   </section>`;
   document.getElementById('switchAuth').onclick=()=>renderAuth(isRegister?'login':'register');
-  document.getElementById('authForm').onsubmit=e=>{
+  document.getElementById('authForm').onsubmit=async e=>{
     e.preventDefault();
     const username=document.getElementById('username').value.trim();
     const password=document.getElementById('password').value;
+    const useServer=location.protocol!=='file:' && !!window.TDBAuthOnline;
+
     if(isRegister){
       const p2=document.getElementById('password2').value;
       if(username.length<3) return toast('Use pelo menos 3 caracteres no nome.');
+      if(password.length<4) return toast('Use pelo menos 4 caracteres na senha.');
       if(password!==p2) return toast('As senhas não coincidem.');
+
+      if(useServer){
+        try{
+          const user=await window.TDBAuthOnline.register(username,password,null);
+          saveSession(user);
+          state.user=user;
+          playUiSound(620);
+          await window.TDBOnline?.refreshSnapshot?.();
+          setTimeout(renderLobby,120);
+          return;
+        }catch(err){
+          return toast(err.message||'Não foi possível criar a conta online.');
+        }
+      }
+
       if(state.users.some(u=>(u.username||'').toLowerCase()===username.toLowerCase())) return toast('Esse nome de usuário já está em uso.');
       const user={id:genPlayerId(),username,password,avatar:initials(username),status:'No lobby',createdAt:new Date().toISOString()};
-      state.users.push(user); saveUsers(); saveSession(user); playUiSound(620); setTimeout(renderLobby,180);
-    }else{
-      const user=state.users.find(u=>(u.username||'').toLowerCase()===username.toLowerCase()&&u.password===password);
-      if(!user) return toast('Nome de usuário ou senha incorretos.');
-      saveSession(user); playUiSound(620); setTimeout(()=>{
-        if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===user.id)) renderWaitingRoom();
-        else renderLobby();
-      },180);
+      state.users.push(user);
+      saveUsers();
+      saveSession(user);
+      playUiSound(620);
+      setTimeout(renderLobby,180);
+      return;
     }
+
+    if(useServer){
+      try{
+        const user=await window.TDBAuthOnline.login(username,password);
+        saveSession(user);
+        state.user=user;
+        playUiSound(620);
+        await window.TDBOnline?.refreshSnapshot?.();
+        setTimeout(()=>{
+          if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===user.id)) renderWaitingRoom();
+          else renderLobby();
+        },120);
+        return;
+      }catch(err){
+        return toast(err.message||'Nome de usuário ou senha incorretos.');
+      }
+    }
+
+    const user=state.users.find(u=>(u.username||'').toLowerCase()===username.toLowerCase()&&u.password===password);
+    if(!user) return toast('Nome de usuário ou senha incorretos.');
+    saveSession(user);
+    playUiSound(620);
+    setTimeout(()=>{
+      if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===user.id)) renderWaitingRoom();
+      else renderLobby();
+    },180);
   };
 }
 
@@ -414,7 +456,7 @@ function topbar(active='home'){
       </nav>
     </div>
     <div class="topbar-right">
-      <span id="onlineStatusPill" class="online-status-pill ${window.TDBOnline?.readyForMultiplayer?'online':window.TDBOnline?.connected&&window.TDBOnline?.production&&!window.TDBOnline?.redis?'warning':''}">${window.TDBOnline?.readyForMultiplayer?'ONLINE':window.TDBOnline?.connected&&window.TDBOnline?.production&&!window.TDBOnline?.redis?'SEM REDIS':'LOCAL'}</span>
+      <span id="onlineStatusPill" class="online-status-pill ${window.TDBOnline?.readyForMultiplayer?'online':window.TDBOnline?.connected&&window.TDBOnline?.production&&!window.TDBOnline?.supabase?'warning':''}">${window.TDBOnline?.readyForMultiplayer?'ONLINE':window.TDBOnline?.connected&&window.TDBOnline?.production&&!window.TDBOnline?.supabase?'SEM SUPABASE':'LOCAL'}</span>
       <div class="profile-mini" onclick="renderProfile()" style="cursor:pointer">
         <div class="avatar">${escapeHtml(state.user?.avatar||initials(state.user?.username))}</div>
         <div class="profile-lines"><strong>${escapeHtml(state.user?.username||'Jogador')}</strong><small>${escapeHtml(state.user?.id||'')}</small></div>
@@ -494,7 +536,7 @@ window.goHome=goHome;
 function renderLobby(){
   if(!state.user) return renderAuth('login');
   state.view='lobby';
-  if(Core.mode==='online' && window.TDBOnline?.connected && !window.__tdbFriendsLobbyRefresh){
+  if(location.protocol!=='file:' && window.TDBOnline?.connected && window.TDBOnline?.supabase && !window.__tdbFriendsLobbyRefresh){
     window.__tdbFriendsLobbyRefresh=setTimeout(async()=>{
       try{
         state.friends=await window.TDBOnline.listFriends();
@@ -644,8 +686,8 @@ function closeModal(){ document.getElementById('modalBackdrop')?.remove(); }
 
 function ensureOnlineMultiplayerReady(){
   if(!window.TDBOnline) return true;
-  if(window.TDBOnline.production && !window.TDBOnline.redis){
-    toast('O multiplayer precisa do Redis. Configure REDIS_URL na Vercel e faça um novo deploy.');
+  if(window.TDBOnline.production && !window.TDBOnline.supabase){
+    toast('O multiplayer precisa do Supabase. Conecte o banco, execute SUPABASE-SCHEMA.sql e faça um novo deploy.');
     return false;
   }
   if(location.protocol!=='file:' && !window.TDBOnline.connected){
@@ -1005,12 +1047,12 @@ function renderFriends(skipRefresh=false){
       <div class="panel"><div class="panel-header"><h2>Adicionar por ID</h2></div><div class="panel-body">
         <div class="field"><label>ID do jogador</label><input id="friendId" placeholder="TDB-XXXXXXXX" style="text-transform:uppercase"></div>
         <button class="btn btn-primary full" style="margin-top:12px" onclick="addFriendById()">Adicionar amigo</button>
-        <div class="mini-note">${Core.mode==='online'?'A busca usa as contas registradas no servidor.':'No modo local, só contas deste navegador podem ser encontradas.'}</div>
+        <div class="mini-note">${location.protocol!=='file:'?'A busca usa as contas persistidas no Supabase.':'No modo local, só contas deste navegador podem ser encontradas.'}</div>
       </div></div>
     </div>
   </section>`;
 
-  if(!skipRefresh && Core.mode==='online' && window.TDBOnline?.connected){
+  if(!skipRefresh && location.protocol!=='file:' && window.TDBOnline?.connected && window.TDBOnline?.supabase){
     refreshOnlineFriends();
   }
 }
@@ -1032,7 +1074,16 @@ async function addFriendById(){
   if(id===state.user.id) return toast('Esse é o seu próprio ID.');
   if(state.friends.some(f=>f.id===id)) return toast('Esse jogador já está nos seus amigos.');
 
-  if(Core.mode==='online' && window.TDBOnline?.connected){
+  const hosted=location.protocol!=='file:' && !!window.TDBOnline;
+
+  if(hosted){
+    if(!window.TDBOnline.connected){
+      return toast('Servidor online indisponível. Aguarde a conexão e tente novamente.');
+    }
+    if(window.TDBOnline.production && !window.TDBOnline.supabase){
+      return toast('Supabase não configurado. Conecte o banco e execute SUPABASE-SCHEMA.sql antes de usar amigos online.');
+    }
+
     try{
       const friend=await window.TDBOnline.addFriend(id);
       state.friends.push(friend);
@@ -1040,7 +1091,7 @@ async function addFriendById(){
       toast(`${friend.username} foi adicionado.`);
       return renderFriends(true);
     }catch(err){
-      return toast(err.message||'Não foi possível adicionar o amigo.');
+      return toast(err.message||'ID não encontrado no servidor.');
     }
   }
 
@@ -1065,10 +1116,25 @@ function renderProfile(){
     </div>
   </section>`;
 }
-function saveProfile(){
+async function saveProfile(){
   const username=document.getElementById('editUsername').value.trim();
   const avatar=document.getElementById('editAvatar').value.trim()||initials(username);
   if(username.length<3) return toast('Use pelo menos 3 caracteres.');
+
+  if(location.protocol!=='file:' && window.TDBOnline?.connected && window.TDBOnline?.supabase){
+    try{
+      const updated=await window.TDBOnline.updateProfile(username,avatar);
+      state.user=updated;
+      Core.auth.setCurrentUser(updated);
+      const idx=state.users.findIndex(u=>u.id===updated.id);
+      if(idx>=0) state.users[idx]={...state.users[idx],...updated};
+      toast('Perfil atualizado no Supabase.');
+      return renderProfile();
+    }catch(err){
+      return toast(err.message||'Não foi possível atualizar o perfil.');
+    }
+  }
+
   if(state.users.some(u=>u.id!==state.user.id&&(u.username||'').toLowerCase()===username.toLowerCase())) return toast('Esse nome já está em uso.');
   const idx=state.users.findIndex(u=>u.id===state.user.id);
   state.user.username=username; state.user.avatar=avatar;
@@ -1096,14 +1162,14 @@ function logout(){
   try{
     exitActiveContext('logout');
     if(state.user?.id) Core.presence.set(state.user.id,'offline');
-    if(Core.mode==='online' && window.TDBAuthOnline) window.TDBAuthOnline.logout();
+    if(location.protocol!=='file:' && window.TDBAuthOnline) window.TDBAuthOnline.logout();
     Core.auth.setCurrentUser(null);
     state.user=null;
     saveActiveRoom(null);
     renderAuth('login');
   }catch(err){
     console.error('[TDB JOGOS] Falha no logout:',err);
-    if(Core.mode==='online' && window.TDBAuthOnline) window.TDBAuthOnline.logout();
+    if(location.protocol!=='file:' && window.TDBAuthOnline) window.TDBAuthOnline.logout();
     Core.auth.setCurrentUser(null);
     state.user=null;
     saveActiveRoom(null);

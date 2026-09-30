@@ -1,9 +1,13 @@
-TDB JOGOS v4.2 Online Sync Fix
+TDB JOGOS v5.0 — Supabase Online
 
-- HTTP polling fallback
-- Redis obrigatório em produção
-- Salas sincronizadas
-- Truco/Xadrez iniciados no servidor
-- TDB Music compartilhado
-- Amigos online por ID
-- Espectadores online
+- Supabase persistente
+- contas online
+- amigos online
+- salas online
+- Xadrez online
+- Truco online com cartas privadas filtradas
+- TDB Music online
+- espectadores
+- Supabase Realtime para invalidação
+- HTTP fallback
+- somente 1 função Vercel

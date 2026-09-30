@@ -1,11 +1,7 @@
 import express from 'express';
-import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
-
-import { attachRealtime } from './server/realtime-hub.js';
-
 import { handleHttpApi } from './server/http-router.js';
 
 const __filename=fileURLToPath(import.meta.url);
@@ -24,14 +20,12 @@ function openBrowser(url){
   }catch{}
 }
 
-
 async function start(port,attempt=0){
   const app=express();
   app.use(express.json({limit:'1mb'}));
-  app.use('/api',async(req,res,next)=>{
-    if(req.path==='/ws') return next();
-    const route=req.path.replace(/^\/+|\/+$/g,'');
-    await handleHttpApi(req,res,route);
+
+  app.use('/api',async(req,res)=>{
+    await handleHttpApi(req,res);
   });
 
   app.use(express.static(__dirname,{
@@ -45,30 +39,25 @@ async function start(port,attempt=0){
     res.sendFile(path.join(__dirname,'index.html'));
   });
 
-  const server=http.createServer(app);
-  await attachRealtime(server);
-
-  server.once('error',err=>{
-    if(err.code==='EADDRINUSE'&&attempt<20){
-      console.log(`Porta ${port} ocupada. Tentando ${port+1}...`);
-      return setTimeout(()=>start(port+1,attempt+1),100);
-    }
-    console.error(err);
-  });
-
-  server.listen(port,'127.0.0.1',()=>{
+  const server=app.listen(port,'127.0.0.1',()=>{
     const url=`http://localhost:${port}`;
     console.log('');
     console.log('======================================');
-    console.log(' TDB JOGOS v4.2 - Online Sync Fix');
+    console.log(' TDB JOGOS v5.0 - Supabase Online');
     console.log('======================================');
     console.log(`Site: ${url}`);
-    console.log(`API: ${url}/api/health`);
-    console.log(`WebSocket: ws://localhost:${port}/api/ws`);
-    console.log(process.env.REDIS_URL?'Redis: configurado':'Redis: memória local (válido apenas para desenvolvimento)');
+    console.log(`Health: ${url}/api/health`);
+    console.log(process.env.SUPABASE_URL?'Supabase: variáveis encontradas':'Supabase: não configurado (memória local)');
     console.log('');
     openBrowser(url);
   });
-}
 
+  server.on('error',err=>{
+    if(err.code==='EADDRINUSE'&&attempt<20){
+      server.close(()=>setTimeout(()=>start(port+1,attempt+1),100));
+      return;
+    }
+    console.error(err);
+  });
+}
 start(startPort);

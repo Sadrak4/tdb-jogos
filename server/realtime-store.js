@@ -1,45 +1,80 @@
-import { createClient } from 'redis';
+import { createClient } from '@supabase/supabase-js';
 
 const MEMORY = {
-  rooms: new Map(),
-  matches: new Map(),
-  presence: new Map(),
-  shared: new Map()
+  rooms:new Map(),
+  matches:new Map(),
+  presence:new Map(),
+  shared:new Map(),
+  events:[]
 };
 
-let redisClient = null;
-let publisher = null;
-let subscriber = null;
-let redisReady = false;
-let initPromise = null;
+let supabaseClient=null;
+let supabaseReady=false;
+let schemaReady=false;
+let initPromise=null;
+let lastError=null;
+let lastInitAt=0;
 
-export async function initRedis(){
-  if(initPromise) return initPromise;
+function envSecret(){
+  return process.env.SUPABASE_SECRET_KEY
+    || process.env.SUPABASE_SERVICE_ROLE_KEY
+    || '';
+}
+function envUrl(){
+  return process.env.SUPABASE_URL
+    || process.env.NEXT_PUBLIC_SUPABASE_URL
+    || '';
+}
+function envPublishable(){
+  return process.env.SUPABASE_PUBLISHABLE_KEY
+    || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    || process.env.SUPABASE_ANON_KEY
+    || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    || '';
+}
 
+export async function initSupabase(){
+  if(initPromise && isSupabaseReady()) return initPromise;
+  if(initPromise && Date.now()-lastInitAt<5000) return initPromise;
+
+  lastInitAt=Date.now();
   initPromise=(async()=>{
-    const url=process.env.REDIS_URL;
-    if(!url) return false;
+    const url=envUrl();
+    const secret=envSecret();
+
+    if(!url || !secret){
+      supabaseReady=false;
+      schemaReady=false;
+      lastError='Variáveis do Supabase ausentes.';
+      return false;
+    }
 
     try{
-      redisClient=createClient({url});
-      publisher=redisClient.duplicate();
-      subscriber=redisClient.duplicate();
+      supabaseClient=createClient(url,secret,{
+        auth:{persistSession:false,autoRefreshToken:false},
+        global:{headers:{'X-Client-Info':'tdb-jogos-server/5.0'}}
+      });
 
-      redisClient.on('error',err=>console.error('[TDB Redis]',err));
-      publisher.on('error',err=>console.error('[TDB Redis Publisher]',err));
-      subscriber.on('error',err=>console.error('[TDB Redis Subscriber]',err));
+      const {error}=await supabaseClient
+        .from('tdb_rooms')
+        .select('code',{head:true,count:'exact'})
+        .limit(1);
 
-      await Promise.all([
-        redisClient.connect(),
-        publisher.connect(),
-        subscriber.connect()
-      ]);
+      if(error){
+        supabaseReady=true;
+        schemaReady=false;
+        lastError=error.message;
+        return false;
+      }
 
-      redisReady=true;
+      supabaseReady=true;
+      schemaReady=true;
+      lastError=null;
       return true;
     }catch(err){
-      console.error('[TDB] Redis indisponível; usando memória da instância.',err);
-      redisReady=false;
+      supabaseReady=false;
+      schemaReady=false;
+      lastError=err?.message||String(err);
       return false;
     }
   })();
@@ -47,179 +82,275 @@ export async function initRedis(){
   return initPromise;
 }
 
-export function isRedisReady(){
-  return redisReady;
+export function getSupabaseClient(){
+  return supabaseClient;
+}
+export function isSupabaseReady(){
+  return supabaseReady && schemaReady;
+}
+export function publicSupabaseConfig(){
+  return {
+    url:envUrl(),
+    publishableKey:envPublishable()
+  };
 }
 
-async function mapAll(hash, memoryMap){
-  await initRedis();
-  if(redisReady){
-    const data=await redisClient.hGetAll(hash);
-    return Object.values(data).map(v=>{
-      try{return JSON.parse(v)}catch{return null}
-    }).filter(Boolean);
+function clone(v){return structuredClone(v)}
+
+export async function emitEvent(topic,roomCode=null,kind='update'){
+  await initSupabase();
+
+  if(isSupabaseReady()){
+    try{
+      const {error}=await supabaseClient.from('tdb_events').insert({
+        topic:String(topic||'general'),
+        room_code:roomCode||null,
+        kind:String(kind||'update')
+      });
+      if(error) console.warn('[TDB Supabase event]',error.message);
+
+      // Small probabilistic cleanup so this tiny invalidation table does not grow forever.
+      if(Math.random()<0.015){
+        const cutoff=new Date(Date.now()-24*60*60*1000).toISOString();
+        supabaseClient.from('tdb_events').delete().lt('created_at',cutoff).then(()=>{}).catch(()=>{});
+      }
+    }catch{}
+    return;
   }
-  return [...memoryMap.values()];
+
+  MEMORY.events.push({topic,room_code:roomCode,kind,created_at:Date.now()});
+  if(MEMORY.events.length>500) MEMORY.events.splice(0,MEMORY.events.length-500);
 }
 
-async function hashUpsert(hash,key,value,memoryMap){
-  await initRedis();
-  if(redisReady){
-    await redisClient.hSet(hash,key,JSON.stringify(value));
-  }else{
-    memoryMap.set(key,structuredClone(value));
-  }
-}
-
-async function hashRemove(hash,key,memoryMap){
-  await initRedis();
-  if(redisReady) await redisClient.hDel(hash,key);
-  else memoryMap.delete(key);
+async function listTable(table){
+  await initSupabase();
+  if(!isSupabaseReady()) return null;
+  const {data,error}=await supabaseClient.from(table).select('*');
+  if(error) throw new Error(error.message);
+  return data||[];
 }
 
 export async function snapshot(){
-  const [rooms,matches,presenceEntries,sharedEntries]=await Promise.all([
-    mapAll('tdb:rooms',MEMORY.rooms),
-    mapAll('tdb:matches',MEMORY.matches),
-    mapAll('tdb:presence',MEMORY.presence),
-    mapAll('tdb:shared',MEMORY.shared)
-  ]);
+  await initSupabase();
 
-  const presence={};
-  for(const item of presenceEntries){
-    if(item?.userId) presence[item.userId]=item;
+  if(isSupabaseReady()){
+    const [roomsRes,matchesRes,presenceRes,sharedRes]=await Promise.all([
+      supabaseClient.from('tdb_rooms').select('data').neq('status','closed'),
+      supabaseClient.from('tdb_matches').select('data').neq('status','finished'),
+      supabaseClient.from('tdb_presence').select('user_id,data,updated_at'),
+      supabaseClient.from('tdb_shared').select('key,value').like('key','music:%')
+    ]);
+
+    for(const r of [roomsRes,matchesRes,presenceRes,sharedRes]){
+      if(r.error) throw new Error(r.error.message);
+    }
+
+    const rooms=(roomsRes.data||[]).map(row=>{
+      const room=clone(row.data||{});
+      room.hasPassword=!!room.password;
+      delete room.password;
+      return room;
+    });
+
+    const matches=(matchesRes.data||[]).map(row=>clone(row.data||{}));
+
+    const presence={};
+    for(const row of presenceRes.data||[]){
+      const value=clone(row.data||{});
+      value.updatedAt=value.updatedAt||new Date(row.updated_at).getTime();
+      presence[row.user_id]=value;
+    }
+
+    const shared={};
+    for(const row of sharedRes.data||[]) shared[row.key]=clone(row.value);
+
+    return {rooms,matches,presence,shared,supabase:true};
   }
 
-  // Only explicitly public shared state goes to browsers.
-  // auth:* and game:* are never exposed by a global snapshot.
-  const shared={};
-  for(const item of sharedEntries){
-    if(item?.key?.startsWith('music:')) shared[item.key]=item.value;
-  }
-
-  const publicRooms=rooms.map(room=>{
-    const copy=structuredClone(room);
+  const rooms=[...MEMORY.rooms.values()].map(room=>{
+    const copy=clone(room);
     copy.hasPassword=!!copy.password;
     delete copy.password;
     return copy;
   });
+  const matches=[...MEMORY.matches.values()].map(clone);
+  const presence=Object.fromEntries([...MEMORY.presence.entries()].map(([k,v])=>[k,clone(v)]));
+  const shared={};
+  for(const [key,value] of MEMORY.shared.entries()){
+    if(key.startsWith('music:')) shared[key]=clone(value);
+  }
+  return {rooms,matches,presence,shared,supabase:false};
+}
 
-  return {rooms:publicRooms,matches,presence,shared,redis:redisReady};
+async function upsertRoom(room){
+  if(isSupabaseReady()){
+    const {error}=await supabaseClient.from('tdb_rooms').upsert({
+      code:room.code,
+      game:room.game||null,
+      owner_id:room.ownerId||null,
+      status:room.status||'open',
+      privacy:room.privacy||'public',
+      data:room,
+      updated_at:new Date().toISOString()
+    },{onConflict:'code'});
+    if(error) throw new Error(error.message);
+  }else{
+    MEMORY.rooms.set(room.code,clone(room));
+  }
+  await emitEvent('rooms',room.code,'upsert');
+}
+
+async function removeRoom(code){
+  if(isSupabaseReady()){
+    const {error}=await supabaseClient.from('tdb_rooms').delete().eq('code',code);
+    if(error) throw new Error(error.message);
+  }else MEMORY.rooms.delete(code);
+  await emitEvent('rooms',code,'remove');
+}
+
+async function upsertMatch(match){
+  if(isSupabaseReady()){
+    const {error}=await supabaseClient.from('tdb_matches').upsert({
+      match_id:match.matchId,
+      room_code:match.roomCode||null,
+      game:match.game||null,
+      status:match.status||'playing',
+      data:match,
+      updated_at:new Date().toISOString()
+    },{onConflict:'match_id'});
+    if(error) throw new Error(error.message);
+  }else MEMORY.matches.set(match.matchId,clone(match));
+  await emitEvent('matches',match.roomCode||null,'upsert');
+}
+
+async function removeMatch(matchId){
+  let roomCode=null;
+  if(isSupabaseReady()){
+    const {data}=await supabaseClient.from('tdb_matches').select('room_code').eq('match_id',matchId).maybeSingle();
+    roomCode=data?.room_code||null;
+    const {error}=await supabaseClient.from('tdb_matches').delete().eq('match_id',matchId);
+    if(error) throw new Error(error.message);
+  }else{
+    roomCode=MEMORY.matches.get(matchId)?.roomCode||null;
+    MEMORY.matches.delete(matchId);
+  }
+  await emitEvent('matches',roomCode,'remove');
+}
+
+async function setPresence(userId,status,extra={}){
+  const payload={userId,status:status||'online',...extra,updatedAt:Date.now()};
+  if(isSupabaseReady()){
+    const {error}=await supabaseClient.from('tdb_presence').upsert({
+      user_id:userId,
+      status:payload.status,
+      data:payload,
+      updated_at:new Date().toISOString()
+    },{onConflict:'user_id'});
+    if(error) throw new Error(error.message);
+  }else MEMORY.presence.set(userId,clone(payload));
+  await emitEvent('presence',extra?.roomCode||null,'set');
+  return payload;
 }
 
 export async function applyMutation(message){
+  await initSupabase();
   switch(message.type){
     case 'room:upsert':
-      if(message.room?.code){
-        await hashUpsert('tdb:rooms',message.room.code,message.room,MEMORY.rooms);
-      }
+      if(message.room?.code) await upsertRoom(message.room);
       return;
     case 'room:remove':
-      if(message.code){
-        await hashRemove('tdb:rooms',message.code,MEMORY.rooms);
-      }
+      if(message.code) await removeRoom(message.code);
       return;
     case 'match:upsert':
-      if(message.match?.matchId){
-        await hashUpsert('tdb:matches',message.match.matchId,message.match,MEMORY.matches);
-      }
+      if(message.match?.matchId) await upsertMatch(message.match);
       return;
     case 'match:remove':
-      if(message.matchId){
-        await hashRemove('tdb:matches',message.matchId,MEMORY.matches);
-      }
+      if(message.matchId) await removeMatch(message.matchId);
       return;
     case 'presence:set':
-      if(message.userId){
-        const payload={
-          userId:message.userId,
-          status:message.status||'online',
-          ...(message.extra||{}),
-          updatedAt:Date.now()
-        };
-        await hashUpsert('tdb:presence',message.userId,payload,MEMORY.presence);
-        message.presence=payload;
-      }
+      if(message.userId) message.presence=await setPresence(message.userId,message.status,message.extra||{});
       return;
     case 'shared:set':
-      if(message.key){
-        await hashUpsert(
-          'tdb:shared',
-          message.key,
-          {key:message.key,value:message.value,updatedAt:Date.now()},
-          MEMORY.shared
-        );
-      }
+      if(message.key) await setSharedValue(message.key,message.value);
       return;
   }
 }
 
-export async function publishGlobal(message){
-  await initRedis();
-  if(redisReady){
-    await publisher.publish('tdb:broadcast',JSON.stringify(message));
-    return true;
-  }
-  return false;
-}
-
-export async function subscribeGlobal(callback){
-  await initRedis();
-  if(!redisReady) return false;
-
-  await subscriber.subscribe('tdb:broadcast',(raw)=>{
-    try{
-      callback(JSON.parse(raw));
-    }catch(err){
-      console.error('[TDB] Evento Redis inválido',err);
-    }
-  });
-  return true;
-}
-
+// Kept for compatibility with older code. Supabase Realtime now carries invalidations.
+export async function publishGlobal(){return false}
+export async function subscribeGlobal(){return false}
 
 export async function getSharedValue(key,fallback=null){
-  await initRedis();
-  if(redisReady){
-    const raw=await redisClient.hGet('tdb:shared',key);
-    if(!raw) return fallback;
-    try{
-      const obj=JSON.parse(raw);
-      return obj?.value ?? fallback;
-    }catch{return fallback}
+  await initSupabase();
+
+  if(isSupabaseReady()){
+    const {data,error}=await supabaseClient
+      .from('tdb_shared')
+      .select('value')
+      .eq('key',key)
+      .maybeSingle();
+
+    if(error) throw new Error(error.message);
+    return data?.value ?? fallback;
   }
-  return MEMORY.shared.get(key)?.value ?? fallback;
+
+  return MEMORY.shared.has(key)?clone(MEMORY.shared.get(key)):fallback;
 }
 
 export async function setSharedValue(key,value){
-  await initRedis();
-  const payload={key,value,updatedAt:Date.now()};
-  if(redisReady) await redisClient.hSet('tdb:shared',key,JSON.stringify(payload));
-  else MEMORY.shared.set(key,payload);
+  await initSupabase();
+
+  if(isSupabaseReady()){
+    const {error}=await supabaseClient.from('tdb_shared').upsert({
+      key,
+      value,
+      updated_at:new Date().toISOString()
+    },{onConflict:'key'});
+    if(error) throw new Error(error.message);
+  }else MEMORY.shared.set(key,clone(value));
+
+  const roomCode=key.startsWith('game:')?key.slice(5):key.startsWith('music:')?key.slice(6):null;
+  const topic=key.startsWith('game:')?'game':key.startsWith('music:')?'music':'shared';
+  await emitEvent(topic,roomCode,'set');
   return value;
 }
 
 export async function getRoomPrivate(code){
-  await initRedis();
-  if(redisReady){
-    const raw=await redisClient.hGet('tdb:rooms',code);
-    if(!raw) return null;
-    try{return JSON.parse(raw)}catch{return null}
+  await initSupabase();
+
+  if(isSupabaseReady()){
+    const {data,error}=await supabaseClient
+      .from('tdb_rooms')
+      .select('data')
+      .eq('code',code)
+      .maybeSingle();
+
+    if(error) throw new Error(error.message);
+    return data?.data?clone(data.data):null;
   }
-  return MEMORY.rooms.get(code) ? structuredClone(MEMORY.rooms.get(code)) : null;
+
+  return MEMORY.rooms.get(code)?clone(MEMORY.rooms.get(code)):null;
 }
+
 export async function setRoomPrivate(room){
   if(!room?.code) return null;
-  await hashUpsert('tdb:rooms',room.code,room,MEMORY.rooms);
+  await initSupabase();
+  await upsertRoom(room);
   return room;
 }
 
-
 export async function backendStatus(){
-  await initRedis();
+  await initSupabase();
+  const production=!!process.env.VERCEL;
+  const configured=!!envUrl() && !!envSecret();
+
   return {
-    redis: redisReady,
-    production: !!process.env.VERCEL,
-    readyForMultiplayer: redisReady || !process.env.VERCEL
+    supabase:isSupabaseReady(),
+    configured,
+    schemaReady,
+    production,
+    storage:isSupabaseReady()?'supabase':'memory',
+    readyForMultiplayer:isSupabaseReady() || !production,
+    error:lastError
   };
 }

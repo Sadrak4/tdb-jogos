@@ -12,7 +12,7 @@ export default async function handler(req,res){
   if(req.method!=='POST') return res.status(405).json({error:'Método inválido'});
   try{
     const [user,status]=await Promise.all([requireApiUser(req),backendStatus()]);
-    if(status.production&&!status.redis) throw new Error('Redis não configurado. Configure REDIS_URL na Vercel para usar o multiplayer.');
+    if(status.production&&!status.supabase) throw new Error('Supabase não configurado. Conecte o banco e execute SUPABASE-SCHEMA.sql.');
 
     const room=structuredClone(req.body?.room||null);
     if(!room?.code) throw new Error('Sala inválida.');
