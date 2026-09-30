@@ -1,32 +1,29 @@
-TDB JOGOS v5.6 — BLACKJACK TDB
+TDB JOGOS v5.7 — Blackjack Premium UI
 
-NOVO JOGO: BLACKJACK
-- módulo visual próprio, sem reaproveitar a mesa do Truco
-- engine server-side própria
-- 1 a 3 jogadores reais contra dealer automático
-- jogador pode entrar durante uma rodada e aguarda a próxima
-- Pedir / Parar / Dobrar / Separar
-- split por mesmo valor, até 3 mãos
-- split de ases recebe uma carta por mão e para
-- Blackjack natural paga 3:2
-- dealer para em qualquer 17, incluindo soft 17
-- 1 / 2 / 4 baralhos no shoe
-- fichas virtuais da sala e recarga gratuita quando acabam
-- apostas configuráveis
-- timer server-side por decisão
-- dealer revela e compra cartas em etapas
-- reconexão existente de 90s compatível com a mesa
-- espectadores suportados
-- sons discretos próprios do Blackjack
-- design premium preto, verde profundo e dourado
+BLACKJACK
+- mesa visual completamente refeita sem reutilizar o design do Truco
+- layout desktop compacto para caber no viewport sem rolagem vertical
+- cartas dos outros jogadores ficam visíveis e legíveis
+- dealer, shoe, felt e rails receberam visual premium
+- fichas 3D próximas de cada jogador
+- apostas permanecem visíveis na região central da mesa
+- animação de fichas saindo do jogador para a mesa
+- animação de fichas retornando da mesa quando existe pagamento
+- seletor de aposta com fichas visuais
+- Double e Split lançam fichas adicionais na mesa
+- cartas usam animação de entrada e sobreposição compacta
+- painel lateral de regras/atividade compactado
+- controles permanecem sempre visíveis no desktop
 
-MULTIPLAYER
-- baralho, apostas, turnos, split, double e dealer controlados pelo servidor
-- todos os clientes recebem o mesmo estado público
-- carta fechada do dealer nunca é enviada aberta antes da hora
-- sala comporta no máximo 3 jogadores
-- mesa pode começar com 1, 2 ou 3 jogadores
+REGRAS
+- nenhuma regra do Blackjack foi removida
+- 1–3 jogadores contra dealer
+- entrada durante rodada continua aguardando a próxima
+- Hit / Stand / Double / Split preservados
+- Split de ases preservado
+- Blackjack 3:2 preservado
+- dealer para em 17 preservado
 
-SUPABASE
-- nenhuma tabela nova na v5.6
-- mantém o schema v5.5 já instalado
+BANCO
+- nenhuma tabela nova
+- nenhuma migração nova necessária

@@ -174,6 +174,10 @@ function settleRound(state,now=Date.now()){
       p.bankroll+=payout;net+=payout-hand.bet;
     }
     p.roundNet=net;p.roundResult=summarizePlayer(p);p.ready=false;
+    const returned=p.hands.reduce((sum,h)=>sum+Number(h.payout||0),0);
+    if(returned>0){
+      log(state,'payout',`${p.username} recebeu ${returned} fichas da mesa.`,{playerId:p.id,amount:returned});
+    }
   }
   state.phase='roundEnd';
   state.nextRoundAt=now+7000;
@@ -270,7 +274,7 @@ export function applyAction(state,userId,action,room,now=Date.now()){
     if(amount<s.rules.minBet)throw new Error(`A aposta mínima é ${s.rules.minBet}.`);
     if(amount>p.bankroll)throw new Error('Fichas insuficientes.');
     p.bet=amount;p.ready=true;p.sittingOut=false;
-    log(s,'bet',`${p.username} confirmou ${amount} fichas.`,{playerId:p.id});
+    log(s,'bet',`${p.username} confirmou ${amount} fichas.`,{playerId:p.id,amount});
     s.version++;
     if(allReady(s))dealRound(s,now);
     return s;
@@ -309,10 +313,11 @@ export function applyAction(state,userId,action,room,now=Date.now()){
   }
   if(type==='DOUBLE'){
     if(!flags.double)throw new Error('Não é possível dobrar esta mão.');
-    p.bankroll-=hand.bet;hand.bet*=2;hand.doubled=true;hand.actions++;
+    const addedBet=hand.bet;
+    p.bankroll-=addedBet;hand.bet*=2;hand.doubled=true;hand.actions++;
     hand.cards.push(draw(s));
     const value=handValue(hand.cards);hand.status=value.bust?'bust':'stand';
-    log(s,'double',`${p.username} dobrou para ${hand.bet} fichas.`,{playerId:p.id});
+    log(s,'double',`${p.username} dobrou para ${hand.bet} fichas.`,{playerId:p.id,amount:addedBet,totalBet:hand.bet});
     advanceFromHand(s,p,now);s.version++;return s;
   }
   if(type==='SPLIT'){
@@ -323,7 +328,7 @@ export function applyAction(state,userId,action,room,now=Date.now()){
     const h2=makeHand([c2,draw(s)],bet,{fromSplit:true,splitAces:isAces});
     if(isAces){h1.status='stand';h2.status='stand'}
     p.hands.splice(p.activeHand,1,h1,h2);
-    log(s,'split',`${p.username} separou a mão.`,{playerId:p.id});
+    log(s,'split',`${p.username} separou a mão.`,{playerId:p.id,amount:bet,totalBet:bet*2});
     if(h1.status==='playing'){
       s.currentPlayerId=p.id;s.turnDeadlineAt=s.rules.turnTimer>0?now+s.rules.turnTimer*1000:null;
     }else{

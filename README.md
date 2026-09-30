@@ -1,6 +1,6 @@
-# TDB JOGOS v5.6 — BLACKJACK TDB
+# TDB JOGOS v5.7 — BLACKJACK PREMIUM
 
-A v5.6 adiciona um módulo de Blackjack completo e independente da interface/engine do Truco.
+A v5.7 mantém o módulo completo de Blackjack e refaz a experiência visual para uma mesa premium, compacta e independente do Truco.
 
 ## Conceito da mesa
 
@@ -153,3 +153,42 @@ Eles cobrem, entre outros casos:
 - pagamento 3:2;
 - ativação do jogador novo na rodada seguinte;
 - integração com `game-service`.
+
+
+## v5.7 — Blackjack Premium UI
+
+A v5.7 mantém a engine e as regras da v5.6, mas substitui a apresentação do Blackjack por uma mesa própria e mais próxima de uma interface de cassino premium.
+
+### Mudanças visuais
+
+- viewport desktop sem necessidade de rolagem vertical;
+- dealer no topo e jogador local na parte inferior;
+- até dois colegas nas laterais;
+- cartas dos colegas visíveis e com tamanho legível;
+- shoe do dealer;
+- rails e felt em preto, verde profundo e dourado;
+- fichas 3D próximas de cada jogador;
+- área central de apostas;
+- seletor de aposta usando fichas, em vez de botões simples;
+- painel de regras e atividade compactos.
+
+### Animação das fichas
+
+Eventos de aposta agora carregam o valor no estado público da partida.
+
+Quando um jogador:
+- confirma a aposta;
+- dobra;
+- separa;
+
+uma pilha de fichas é animada da área daquele jogador até a sua posição de aposta na mesa.
+
+Quando a rodada paga fichas de volta, existe uma animação inversa da mesa para o jogador.
+
+### Privacidade
+
+No Blackjack as mãos dos jogadores são públicas na mesa. Somente a carta fechada do dealer continua oculta até a fase correta.
+
+### Banco
+
+Nenhuma migração nova é necessária na v5.7.

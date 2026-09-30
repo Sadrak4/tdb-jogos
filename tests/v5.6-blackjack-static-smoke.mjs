@@ -25,7 +25,7 @@ assert('server applies blackjack actions independently',service.includes("Blackj
 assert('room creation has blackjack configuration',upsert.includes('blackjackTurnTimer')&&upsert.includes('blackjackMinBet')&&upsert.includes('blackjackStartingChips')&&upsert.includes('blackjackDecks'));
 assert('app handles blackjack realtime state',app.includes("gameState.game==='blackjack'"));
 assert('blackjack has its own JS module',bj.includes('window.applyOnlineBlackjackState'));
-assert('blackjack has its own professional table layout',bj.includes('bj-stage')&&bj.includes('BLACKJACK PAYS 3:2'));
+assert('blackjack has its own professional table layout',bj.includes('bj-stage')&&(bj.includes('BLACKJACK PAYS 3:2')||bj.includes('BLACKJACK PAYS 3 TO 2')));
 assert('blackjack supports hit stand double split',bj.includes("bjAction('HIT')")&&bj.includes("bjAction('STAND')")&&bj.includes("bjAction('DOUBLE')")&&bj.includes("bjAction('SPLIT')"));
 assert('blackjack CSS is independent',css.includes('.bj-stage')&&css.includes('.bj-dealer')&&css.includes('.bj-player-bottom'));
 assert('index loads blackjack CSS',index.includes('games/blackjack/blackjack.css'));

@@ -1,14 +1,14 @@
-# DEPLOY — TDB JOGOS v5.6 BLACKJACK
+# DEPLOY — TDB JOGOS v5.7 BLACKJACK PREMIUM
 
 ## Supabase
 
-A v5.6 não adiciona tabelas ou colunas novas.
+A v5.7 não adiciona tabelas ou colunas novas.
 
 Se o schema da v5.5 já está aplicado e `/api/health` retorna `schemaReady:true`, não precisa executar SQL novamente.
 
 ## Atualizar o projeto
 
-1. extraia `TDB-JOGOS-v5.6-BLACKJACK.zip`;
+1. extraia `TDB-JOGOS-v5.7-BLACKJACK-PREMIUM.zip`;
 2. copie todo o conteúdo por cima da pasta clonada `tdb-jogos`;
 3. confirme que `api/` continua contendo apenas `router.js`;
 4. abra o GitHub Desktop;
@@ -71,3 +71,24 @@ Esperado:
 ### privacidade
 
 Antes da fase do dealer, nenhum navegador deve receber a face da carta fechada do dealer.
+
+
+# Atualização v5.7
+
+A v5.7 não exige SQL novo.
+
+1. Substitua os arquivos do projeto pelos da v5.7.
+2. Commit sugerido:
+   `TDB JOGOS v5.7 Blackjack Premium UI`
+3. Push origin.
+4. Aguarde a Vercel concluir o deploy.
+5. Confirme em `/api/health` que a versão é `5.7.0`.
+
+Teste recomendado:
+- abrir Blackjack em resolução 1366x768 ou maior;
+- confirmar que mesa + controles aparecem sem rolagem vertical;
+- entrar com 2 ou 3 contas;
+- confirmar que todos veem as cartas públicas dos colegas;
+- confirmar aposta e observar fichas indo para a mesa;
+- testar Double e Split;
+- terminar a rodada e observar retorno das fichas quando houver pagamento.
