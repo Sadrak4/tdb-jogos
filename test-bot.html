@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TDB JOGOS</title>
+  <meta name="theme-color" content="#080808" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="games/chess/chess.css" />
+</head>
+<body>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+
+  <main id="app"></main>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="core/runtime.js"></script>
+  <script src="core/game-registry.js"></script>
+  <script src="app.js"></script>
+  <script src="games/chess/chess-engine.js"></script>
+  <script src="games/chess/chess-ui.js"></script>
+<script>
+try {
+ const u={username:'Teste',id:'TBD-TEST',avatar:'T'};
+ localStorage.setItem('tbd_current_user',JSON.stringify(u));
+ localStorage.setItem('tbd_users',JSON.stringify([u]));
+ const room={code:'XDR-TEST',game:'chess',name:'Teste',owner:'Teste',ownerId:'TBD-TEST',privacy:'public',password:'',status:'open',chessClock:600,chessColor:'white',players:[u],createdAt:Date.now()};
+ localStorage.setItem('tbd_active_room',JSON.stringify(room));
+ if(window.startChessWithBot){ window.startChessWithBot(); document.body.setAttribute('data-bot-started','yes'); } else {document.body.setAttribute('data-bot-started','missing');}
+ setTimeout(()=>{document.body.setAttribute('data-chess-root',document.getElementById('chessRoot')?'yes':'no');},100);
+} catch(e){ document.body.setAttribute('data-error',String(e)); console.error(e);}
+</script>
+</body>
+</html>

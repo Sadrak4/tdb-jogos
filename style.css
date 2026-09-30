@@ -1,0 +1,3011 @@
+
+:root {
+  --bg: #070707;
+  --panel: rgba(15, 15, 15, .92);
+  --panel-soft: rgba(24, 24, 24, .88);
+  --line: rgba(228, 187, 83, .24);
+  --gold: #d9ad45;
+  --gold-2: #f6df9c;
+  --gold-dark: #8b6620;
+  --text: #f7f2e6;
+  --muted: #a8a8a8;
+  --success: #33d17a;
+  --danger: #ef6262;
+  --shadow: 0 18px 60px rgba(0,0,0,.45);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(217,173,69,.08), transparent 28%),
+    radial-gradient(circle at 85% 80%, rgba(217,173,69,.06), transparent 24%),
+    linear-gradient(135deg, #050505, #0b0b0b 55%, #080808);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+button, input, select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.bg-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: .12;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.orb-1 {
+  width: 360px;
+  height: 360px;
+  background: #d9ad45;
+  top: -120px;
+  right: 5%;
+}
+
+.orb-2 {
+  width: 320px;
+  height: 320px;
+  background: #7c5b1d;
+  bottom: -100px;
+  left: 2%;
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(420px, 1.05fr) minmax(420px, .95fr);
+}
+
+.auth-visual {
+  position: relative;
+  min-height: 100vh;
+  padding: 52px;
+  overflow: hidden;
+  border-right: 1px solid var(--line);
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.65)),
+    radial-gradient(circle at 20% 20%, rgba(217,173,69,.16), transparent 34%),
+    linear-gradient(140deg, #111 0%, #050505 70%);
+}
+
+.auth-visual:before,
+.auth-visual:after {
+  content: "";
+  position: absolute;
+  width: 310px;
+  height: 450px;
+  border: 1px solid rgba(217,173,69,.2);
+  border-radius: 26px;
+  transform: rotate(18deg);
+  background:
+    linear-gradient(135deg, rgba(217,173,69,.05), rgba(255,255,255,.01));
+}
+
+.auth-visual:before {
+  left: -130px;
+  bottom: -190px;
+}
+
+.auth-visual:after {
+  right: -120px;
+  top: -160px;
+  transform: rotate(-18deg);
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.brand-lockup img {
+  width: 74px;
+  height: 74px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 18px rgba(217,173,69,.18));
+}
+
+.brand-name {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 28px;
+  letter-spacing: 4px;
+  color: var(--gold-2);
+}
+
+.brand-sub {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+
+.auth-copy {
+  max-width: 560px;
+  margin-top: 19vh;
+}
+
+.auth-copy h1,
+.auth-card h1,
+.page-title,
+.game-head h1 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 600;
+  margin: 0;
+}
+
+.auth-copy h1 {
+  font-size: clamp(46px, 6vw, 88px);
+  line-height: .95;
+  max-width: 760px;
+}
+
+.auth-copy p {
+  margin-top: 24px;
+  color: #c4c4c4;
+  font-size: 18px;
+  line-height: 1.65;
+  max-width: 560px;
+}
+
+.pill-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+
+.pill {
+  border: 1px solid var(--line);
+  background: rgba(0,0,0,.28);
+  color: var(--gold-2);
+  padding: 9px 13px;
+  border-radius: 999px;
+  font-size: 13px;
+}
+
+.auth-panel {
+  display: grid;
+  place-items: center;
+  padding: 40px;
+}
+
+.auth-card {
+  width: min(520px, 100%);
+  padding: 34px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(22,22,22,.96), rgba(10,10,10,.95));
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.auth-card h1 {
+  font-size: 42px;
+}
+
+.auth-card .lead {
+  color: var(--muted);
+  margin: 10px 0 26px;
+  line-height: 1.5;
+}
+
+.form-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 13px;
+  color: #d7d7d7;
+}
+
+.field input {
+  width: 100%;
+  border: 1px solid rgba(255,255,255,.1);
+  outline: none;
+  background: #111;
+  color: white;
+  padding: 14px 15px;
+  border-radius: 13px;
+  transition: .2s ease;
+}
+
+.field input:focus {
+  border-color: rgba(217,173,69,.65);
+  box-shadow: 0 0 0 4px rgba(217,173,69,.07);
+}
+
+.btn {
+  border: 1px solid transparent;
+  border-radius: 13px;
+  padding: 13px 18px;
+  font-weight: 700;
+  transition: transform .16s ease, opacity .16s ease, border-color .16s ease, background .16s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.btn-primary {
+  color: #14100a;
+  background: linear-gradient(135deg, #f4dc90, #c18d2a);
+  box-shadow: 0 10px 30px rgba(217,173,69,.15);
+}
+
+.btn-secondary {
+  color: var(--text);
+  background: transparent;
+  border-color: var(--line);
+}
+
+.btn-dark {
+  color: var(--text);
+  background: #111;
+  border-color: rgba(255,255,255,.1);
+}
+
+.btn-danger {
+  color: #ffdede;
+  background: rgba(150,40,40,.16);
+  border-color: rgba(239,98,98,.25);
+}
+
+.full { width: 100%; }
+
+.auth-switch {
+  margin-top: 20px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 14px;
+}
+
+.link-btn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--gold-2);
+  font-weight: 700;
+}
+
+.mini-note {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(217,173,69,.15);
+  color: #bdb6a4;
+  background: rgba(217,173,69,.035);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.topbar {
+  height: 78px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(6,6,6,.86);
+  backdrop-filter: blur(18px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 34px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.topbar-left,
+.topbar-right,
+.profile-mini,
+.nav-links {
+  display: flex;
+  align-items: center;
+}
+
+.topbar-left {
+  gap: 32px;
+}
+
+.top-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.top-brand img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+.top-brand strong {
+  font-family: Georgia, "Times New Roman", serif;
+  color: var(--gold-2);
+  letter-spacing: 2px;
+}
+
+.nav-links {
+  gap: 8px;
+}
+
+.nav-link {
+  border: 1px solid transparent;
+  background: transparent;
+  color: #bdbdbd;
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.nav-link.active,
+.nav-link:hover {
+  color: #1c1406;
+  background: linear-gradient(135deg, #f6df9c, #bf8d2d);
+}
+
+.topbar-right {
+  gap: 14px;
+}
+
+.profile-mini {
+  gap: 10px;
+  padding-left: 10px;
+}
+
+.avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3a3021, #131313);
+  border: 1px solid rgba(217,173,69,.5);
+  display: grid;
+  place-items: center;
+  color: var(--gold-2);
+  font-weight: 800;
+}
+
+.profile-lines {
+  line-height: 1.2;
+}
+
+.profile-lines strong {
+  display: block;
+}
+
+.profile-lines small {
+  color: var(--muted);
+}
+
+.dashboard {
+  width: min(1400px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 42px 0 70px;
+}
+
+.hero-strip {
+  padding: 34px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background:
+    linear-gradient(90deg, rgba(217,173,69,.08), transparent 40%),
+    linear-gradient(180deg, rgba(20,20,20,.98), rgba(8,8,8,.95));
+  box-shadow: var(--shadow);
+}
+
+.hero-strip h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(40px, 5vw, 62px);
+}
+
+.hero-strip p {
+  color: var(--muted);
+  max-width: 720px;
+  margin: 12px 0 0;
+  font-size: 17px;
+  line-height: 1.6;
+}
+
+.section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  margin: 36px 0 16px;
+}
+
+.section-title h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 30px;
+}
+
+.section-title p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+.game-card {
+  position: relative;
+  min-height: 330px;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #0e0e0e;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform .2s ease, border-color .2s ease;
+}
+
+.game-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(246,223,156,.7);
+}
+
+.game-art {
+  position: absolute;
+  inset: 0;
+  opacity: .95;
+}
+
+.art-truco {
+  background:
+    radial-gradient(circle at 75% 18%, rgba(217,173,69,.42), transparent 28%),
+    linear-gradient(145deg, #261c0b, #0a0908 58%, #050505);
+}
+
+.art-blackjack {
+  background:
+    radial-gradient(circle at 20% 15%, rgba(112,92,31,.42), transparent 32%),
+    linear-gradient(145deg, #171407, #090909 58%, #040404);
+}
+
+.art-chess {
+  background:
+    radial-gradient(circle at 60% 28%, rgba(217,173,69,.25), transparent 30%),
+    linear-gradient(145deg, #151515, #070707 58%, #040404);
+}
+
+.game-symbol {
+  position: absolute;
+  right: 24px;
+  top: 24px;
+  font-size: 84px;
+  filter: drop-shadow(0 0 20px rgba(217,173,69,.2));
+}
+
+.game-content {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 26px;
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,.92) 42%);
+}
+
+.game-content h3 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 38px;
+}
+
+.game-content p {
+  color: #c2c2c2;
+  margin: 8px 0 18px;
+}
+
+.game-content .btn {
+  min-width: 140px;
+}
+
+.friends-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.friend-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(16,16,16,.86);
+}
+
+.friend-meta {
+  flex: 1;
+}
+
+.friend-meta strong {
+  display: block;
+}
+
+.friend-meta span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.dot.online { background: var(--success); }
+.dot.busy { background: var(--gold); }
+
+.game-page {
+  width: min(1400px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 34px 0 70px;
+}
+
+.back-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.game-head {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.game-head .big-symbol {
+  width: 76px;
+  height: 76px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 40px;
+  background: linear-gradient(135deg, rgba(217,173,69,.14), rgba(0,0,0,.35));
+  border: 1px solid var(--line);
+}
+
+.game-head h1 {
+  font-size: 44px;
+}
+
+.game-head p {
+  color: var(--muted);
+  margin: 6px 0 0;
+}
+
+.room-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rooms-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(12,12,12,.9);
+  box-shadow: var(--shadow);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.panel-body {
+  padding: 16px;
+}
+
+.room-list {
+  display: grid;
+  gap: 10px;
+}
+
+.room-row {
+  display: grid;
+  grid-template-columns: 1.4fr .8fr .7fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 15px;
+  border-radius: 14px;
+  background: #111;
+  border: 1px solid rgba(255,255,255,.06);
+}
+
+.room-name strong {
+  display: block;
+}
+
+.room-name span,
+.room-stat span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.badge {
+  width: max-content;
+  padding: 6px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.08);
+  font-size: 12px;
+}
+
+.badge.open {
+  color: #98efbd;
+  background: rgba(51,209,122,.08);
+  border-color: rgba(51,209,122,.2);
+}
+
+.badge.playing {
+  color: #f1d99e;
+  background: rgba(217,173,69,.08);
+  border-color: rgba(217,173,69,.2);
+}
+
+.side-info h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+
+.side-info p,
+.side-info li {
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.side-info ul {
+  padding-left: 18px;
+  margin: 8px 0 0;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,.72);
+  backdrop-filter: blur(7px);
+  padding: 24px;
+}
+
+.modal {
+  width: min(520px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: #0d0d0d;
+  box-shadow: 0 30px 90px rgba(0,0,0,.55);
+}
+
+.modal-head,
+.modal-foot {
+  padding: 18px 20px;
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
+.modal-head h3 {
+  margin: 0;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+
+.icon-btn {
+  border: 0;
+  background: transparent;
+  color: white;
+  font-size: 20px;
+}
+
+.waiting-room {
+  width: min(1040px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 50px 0;
+}
+
+.waiting-card {
+  border-radius: 24px;
+  border: 1px solid var(--line);
+  background: rgba(12,12,12,.94);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.waiting-hero {
+  padding: 28px;
+  background: linear-gradient(120deg, rgba(217,173,69,.10), transparent);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+
+.waiting-hero h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 38px;
+}
+
+.code-box {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 12px;
+  border: 1px dashed rgba(217,173,69,.45);
+  padding: 10px 12px;
+  color: var(--gold-2);
+  background: rgba(217,173,69,.04);
+}
+
+.player-list {
+  padding: 22px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.player-slot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(255,255,255,.07);
+  background: #111;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.player-slot.empty {
+  color: #777;
+  border-style: dashed;
+}
+
+.waiting-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 22px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+
+.toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 100;
+  padding: 13px 16px;
+  border-radius: 12px;
+  background: #111;
+  border: 1px solid var(--line);
+  color: white;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: .2s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (max-width: 980px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+  .auth-visual {
+    min-height: 380px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .auth-copy {
+    margin-top: 70px;
+  }
+  .game-grid,
+  .friends-grid {
+    grid-template-columns: 1fr;
+  }
+  .rooms-layout {
+    grid-template-columns: 1fr;
+  }
+  .nav-links {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    padding: 0 16px;
+  }
+  .dashboard,
+  .game-page,
+  .waiting-room {
+    width: min(100% - 24px, 100%);
+  }
+  .room-row {
+    grid-template-columns: 1fr;
+  }
+  .player-list {
+    grid-template-columns: 1fr;
+  }
+  .profile-lines {
+    display: none;
+  }
+}
+
+
+/* v0.2 additions */
+.fade-in { animation: fadeIn .28s ease both; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+
+.eyebrow {
+  display: inline-block;
+  margin-bottom: 9px;
+  color: var(--gold-2);
+  font-size: 12px;
+  letter-spacing: 3px;
+  font-weight: 800;
+}
+
+.game-count {
+  display: inline-block;
+  color: var(--gold-2);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+
+.select {
+  width: 100%;
+  background: #111;
+  color: white;
+  border: 1px solid rgba(255,255,255,.1);
+  padding: 14px;
+  border-radius: 13px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 9px;
+  margin: 0 0 18px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  border: 1px solid rgba(255,255,255,.08);
+  color: #cfcfcf;
+  background: #101010;
+  border-radius: 999px;
+  padding: 8px 13px;
+}
+.filter-chip.active {
+  color: #151008;
+  border-color: var(--gold);
+  background: linear-gradient(135deg,#f6df9c,#c08e2d);
+}
+
+.empty-state {
+  text-align: center;
+  color: var(--muted);
+  padding: 44px 10px;
+}
+
+.room-tools {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 16px 22px 0;
+}
+
+.slot-main { flex: 1; }
+
+.host-tag {
+  font-size: 10px;
+  border: 1px solid rgba(217,173,69,.28);
+  color: var(--gold-2);
+  padding: 3px 6px;
+  border-radius: 999px;
+  margin-left: 6px;
+}
+
+.btn-sm { padding: 8px 10px; font-size: 12px; }
+
+.page-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  margin-bottom: 20px;
+}
+.page-title { font-size: 46px; }
+
+.two-col {
+  display: grid;
+  grid-template-columns: minmax(0,1.4fr) minmax(300px,.6fr);
+  gap: 20px;
+}
+.friend-list { display: grid; gap: 10px; }
+.friend-meta small {
+  display: block;
+  margin-top: 2px;
+  color: #6f6f6f;
+  font-size: 11px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 20px;
+}
+.profile-card {
+  padding: 30px;
+  text-align: center;
+}
+.profile-avatar-xl {
+  width: 110px;
+  height: 110px;
+  margin: 0 auto 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--gold-2);
+  border: 1px solid rgba(217,173,69,.48);
+  background: radial-gradient(circle at 30% 20%,rgba(217,173,69,.18),#111 65%);
+}
+.profile-card h2 { font-family: Georgia,serif; font-size: 30px; margin: 0 0 12px; }
+
+.settings-stack { display: grid; gap: 12px; max-width: 920px; }
+.setting-row {
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.setting-row h3 { margin: 0 0 5px; }
+.setting-row p { margin: 0; color: var(--muted); }
+
+.switch { position: relative; width: 52px; height: 30px; flex: 0 0 auto; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; inset: 0;
+  background: #222; border: 1px solid rgba(255,255,255,.1);
+  border-radius: 999px; transition: .2s;
+}
+.slider:before {
+  content: ""; position: absolute;
+  width: 22px; height: 22px; left: 3px; top: 3px;
+  background: #999; border-radius: 50%; transition: .2s;
+}
+.switch input:checked + .slider {
+  background: rgba(217,173,69,.2);
+  border-color: rgba(217,173,69,.45);
+}
+.switch input:checked + .slider:before {
+  transform: translateX(22px);
+  background: var(--gold-2);
+}
+
+@media (max-width: 900px) {
+  .two-col, .profile-grid { grid-template-columns: 1fr; }
+}
+
+
+/* ==============================
+   TDB JOGOS v0.3 - TRUCO TABLE
+   ============================== */
+
+.truco-screen {
+  min-height: calc(100vh - 78px);
+  padding: 18px;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(217,173,69,.09), transparent 32%),
+    linear-gradient(180deg,#090909,#050505);
+}
+
+.truco-table-wrap {
+  width: min(1500px, 100%);
+  margin: 0 auto;
+}
+
+.truco-hud {
+  display: grid;
+  grid-template-columns: 250px 1fr 260px;
+  gap: 14px;
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+
+.score-panel, .hand-panel, .turn-panel {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(12,12,12,.92);
+  box-shadow: var(--shadow);
+  padding: 14px 16px;
+}
+
+.score-title {
+  color: var(--gold-2);
+  font-family: Georgia,serif;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.score-line {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:7px 0;
+  border-top:1px solid rgba(255,255,255,.05);
+}
+.score-line:first-of-type { border-top:0; }
+
+.score-num {
+  color:var(--gold-2);
+  font-size:24px;
+  font-weight:800;
+}
+
+.hand-panel {
+  display:flex;
+  gap:18px;
+  align-items:center;
+  justify-content:center;
+  flex-wrap:wrap;
+}
+
+.hand-chip {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:8px 11px;
+  border:1px solid rgba(217,173,69,.18);
+  background:rgba(217,173,69,.04);
+  border-radius:999px;
+}
+.hand-chip strong { color:var(--gold-2); }
+
+.turn-panel {
+  text-align:right;
+}
+.turn-panel .turn-name { color:var(--gold-2); font-weight:800; font-size:18px; }
+.turn-panel .turn-sub { color:var(--muted); font-size:12px; margin-top:3px; }
+
+.table-shell {
+  position:relative;
+  aspect-ratio: 16 / 8.7;
+  min-height: 620px;
+  border-radius: 46% / 19%;
+  overflow:hidden;
+  border: 14px solid #16110a;
+  box-shadow:
+    inset 0 0 0 4px #c19337,
+    inset 0 0 0 9px #2a1e0c,
+    0 30px 100px rgba(0,0,0,.56);
+  background:
+    radial-gradient(circle at 50% 44%, rgba(217,173,69,.07), transparent 30%),
+    radial-gradient(circle at 50% 50%, #171717, #0d0d0d 72%);
+}
+
+.table-shell:before {
+  content:"";
+  position:absolute;
+  inset:18px;
+  border-radius:46% / 19%;
+  border:1px solid rgba(217,173,69,.35);
+  pointer-events:none;
+}
+
+.table-logo {
+  position:absolute;
+  width:27%;
+  left:50%;
+  top:43%;
+  transform:translate(-50%,-50%);
+  opacity:.20;
+  filter: saturate(.9) drop-shadow(0 0 12px rgba(217,173,69,.18));
+  pointer-events:none;
+}
+
+.player-seat {
+  position:absolute;
+  z-index:5;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:7px;
+}
+
+.seat-top { top:2.5%; left:50%; transform:translateX(-50%); }
+.seat-left { left:2%; top:50%; transform:translateY(-50%); }
+.seat-right { right:2%; top:50%; transform:translateY(-50%); }
+.seat-bottom { bottom:1.5%; left:50%; transform:translateX(-50%); }
+
+.seat-badge {
+  display:flex;
+  align-items:center;
+  gap:9px;
+  background:rgba(5,5,5,.93);
+  border:1px solid rgba(217,173,69,.44);
+  border-radius:999px;
+  padding:7px 12px;
+  min-width:150px;
+  box-shadow:0 8px 24px rgba(0,0,0,.3);
+}
+
+.seat-badge.current {
+  box-shadow:0 0 0 2px rgba(246,223,156,.25), 0 0 26px rgba(217,173,69,.20);
+}
+
+.seat-avatar {
+  width:34px;height:34px;border-radius:50%;
+  display:grid;place-items:center;
+  background:#161616;
+  border:1px solid rgba(217,173,69,.42);
+  color:var(--gold-2);font-weight:800;
+}
+
+.seat-name { flex:1; }
+.seat-name strong { display:block; font-size:14px; }
+.seat-name small { color:var(--muted); font-size:10px; }
+.seat-team { font-size:10px; color:var(--gold-2); }
+
+.enemy-hand, .side-hand {
+  display:flex;
+  gap:-4px;
+}
+.side-hand { flex-direction:column; }
+
+.card-back-mini {
+  width:58px;height:82px;
+  border-radius:8px;
+  border:2px solid #eee4cf;
+  background:
+    linear-gradient(135deg,rgba(217,173,69,.14),transparent 42%),
+    repeating-linear-gradient(45deg,#101010,#101010 5px,#17120a 5px,#17120a 10px);
+  box-shadow:0 6px 16px rgba(0,0,0,.35);
+  display:grid;place-items:center;
+}
+.card-back-mini img { width:70%; height:70%; object-fit:contain; }
+
+.play-zone {
+  position:absolute;
+  left:50%;
+  top:51%;
+  transform:translate(-50%,-50%);
+  width:36%;
+  height:43%;
+  z-index:4;
+}
+
+.play-card {
+  position:absolute;
+  width:86px;
+  height:122px;
+  transform-origin:center;
+}
+.play-card.p0 { bottom:0; left:50%; transform:translateX(-50%) rotate(2deg); }
+.play-card.p1 { left:2%; top:50%; transform:translateY(-50%) rotate(-8deg); }
+.play-card.p2 { top:0; left:50%; transform:translateX(-50%) rotate(-2deg); }
+.play-card.p3 { right:2%; top:50%; transform:translateY(-50%) rotate(8deg); }
+
+.vira-zone {
+  position:absolute;
+  left:50%;
+  top:17%;
+  transform:translateX(-50%);
+  z-index:4;
+  text-align:center;
+}
+.vira-zone span {
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+  margin-bottom:4px;
+}
+
+.truco-card {
+  width:86px;height:122px;
+  border-radius:10px;
+  background:#f6f0e4;
+  border:2px solid #fff;
+  color:#111;
+  box-shadow:0 8px 20px rgba(0,0,0,.35);
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  padding:7px;
+  font-family:Georgia,serif;
+  user-select:none;
+}
+
+.truco-card.red { color:#b11f1f; }
+.truco-card.hidden {
+  background:
+    linear-gradient(135deg,rgba(217,173,69,.12),transparent 45%),
+    repeating-linear-gradient(45deg,#0b0b0b,#0b0b0b 5px,#17120a 5px,#17120a 10px);
+  border-color:#e9dfc9;
+  color:transparent;
+}
+.truco-card .rank { font-size:21px; font-weight:800; line-height:1; }
+.truco-card .suit { font-size:23px; align-self:flex-end; }
+
+.my-hand {
+  position:absolute;
+  bottom:6%;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  gap:12px;
+  z-index:8;
+}
+
+.my-card {
+  width:105px;
+  height:148px;
+  transition:transform .16s ease, filter .16s ease;
+  cursor:pointer;
+}
+.my-card:hover { transform:translateY(-10px); }
+.my-card.selected {
+  transform:translateY(-18px);
+  filter:drop-shadow(0 0 12px rgba(246,223,156,.35));
+}
+.my-card.locked { cursor:not-allowed; opacity:.62; }
+.my-card.locked:hover { transform:none; }
+
+.truco-actions {
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  flex-wrap:wrap;
+  padding:14px 0 4px;
+}
+
+.action-main {
+  min-width:130px;
+}
+
+.round-dots {
+  display:flex;gap:6px;align-items:center;
+}
+.round-dot {
+  width:10px;height:10px;border-radius:50%;
+  background:#333;border:1px solid rgba(255,255,255,.08);
+}
+.round-dot.us { background:#d9ad45; }
+.round-dot.them { background:#9f5555; }
+.round-dot.tie { background:#bdbdbd; }
+
+.game-message {
+  position:absolute;
+  z-index:18;
+  left:50%;top:42%;
+  transform:translate(-50%,-50%);
+  min-width:300px;
+  max-width:520px;
+  background:rgba(6,6,6,.95);
+  border:1px solid rgba(217,173,69,.5);
+  box-shadow:0 20px 70px rgba(0,0,0,.55);
+  border-radius:18px;
+  padding:20px;
+  text-align:center;
+}
+.game-message h2 {
+  font-family:Georgia,serif;
+  color:var(--gold-2);
+  font-size:34px;
+  margin:0 0 8px;
+}
+.game-message p { color:#c5c5c5; line-height:1.5; }
+.game-message .choices { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px; }
+
+.timer-ring {
+  width:36px;height:36px;border-radius:50%;
+  border:3px solid rgba(217,173,69,.24);
+  display:grid;place-items:center;
+  color:var(--gold-2);
+  font-size:11px;font-weight:800;
+}
+
+.truco-log {
+  margin-top:12px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:rgba(12,12,12,.92);
+  padding:12px 14px;
+  max-height:110px;
+  overflow:auto;
+  font-size:12px;
+  color:#bcbcbc;
+}
+.truco-log div + div { margin-top:5px; }
+
+@media (max-width: 1100px){
+  .truco-hud { grid-template-columns:1fr; }
+  .turn-panel { text-align:left; }
+  .table-shell { min-height:560px; }
+  .my-card { width:90px; height:128px; }
+  .play-card,.truco-card { width:74px; height:105px; }
+}
+
+
+/* =========================================
+   v0.4 — TRUCO POLIDO / POSICIONAMENTO FIXO
+   ========================================= */
+
+.table-shell {
+  contain: layout paint;
+  background:
+    radial-gradient(circle at 50% 52%, rgba(217,173,69,.055), transparent 24%),
+    linear-gradient(180deg,#111,#0a0a0a 62%,#080808);
+}
+
+.table-logo {
+  width: 23%;
+  left: 50%;
+  top: 59%;
+  transform: translate(-50%,-50%);
+  opacity: .12;
+  filter: none;
+  z-index: 1;
+}
+
+/* Vira stays truly fixed in the center */
+.vira-zone {
+  left: 50%;
+  top: 47%;
+  transform: translate(-50%,-50%);
+  z-index: 7;
+}
+.vira-zone:before {
+  content: "VIRA";
+  position: absolute;
+  left: 50%;
+  top: -24px;
+  transform: translateX(-50%);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--gold-2);
+  opacity: .78;
+}
+.vira-zone > span { display:none; }
+
+/* Played cards use four dedicated quadrants around the vira */
+.play-zone {
+  left: 50%;
+  top: 47%;
+  transform: translate(-50%,-50%);
+  width: 42%;
+  height: 48%;
+  pointer-events:none;
+  z-index:6;
+}
+.play-card {
+  position:absolute;
+  width:86px;
+  height:122px;
+  animation: cardLand .24s cubic-bezier(.2,.8,.2,1) both;
+}
+.play-card.p0 { bottom: -2%; left: 50%; transform: translateX(-50%) rotate(1deg); }
+.play-card.p1 { left: 4%; top: 50%; transform: translateY(-50%) rotate(-8deg); }
+.play-card.p2 { top: -2%; left: 50%; transform: translateX(-50%) rotate(-1deg); }
+.play-card.p3 { right: 4%; top: 50%; transform: translateY(-50%) rotate(8deg); }
+
+@keyframes cardLand {
+  from { opacity:0; scale:.88; filter:blur(1.5px); }
+  to   { opacity:1; scale:1; filter:none; }
+}
+
+/* Own hand in a subtle fan */
+.my-hand {
+  gap: 0;
+  bottom: 4.8%;
+}
+.my-hand .my-card:nth-child(1) { transform: rotate(-7deg) translateY(2px); margin-right:-10px; }
+.my-hand .my-card:nth-child(2) { transform: translateY(-5px); z-index:2; }
+.my-hand .my-card:nth-child(3) { transform: rotate(7deg) translateY(2px); margin-left:-10px; }
+.my-hand .my-card:nth-child(1):hover { transform:rotate(-7deg) translateY(-15px); }
+.my-hand .my-card:nth-child(2):hover { transform:translateY(-20px); }
+.my-hand .my-card:nth-child(3):hover { transform:rotate(7deg) translateY(-15px); }
+.my-hand .my-card.selected:nth-child(1) { transform:rotate(-7deg) translateY(-23px); }
+.my-hand .my-card.selected:nth-child(2) { transform:translateY(-28px); }
+.my-hand .my-card.selected:nth-child(3) { transform:rotate(7deg) translateY(-23px); }
+
+.seat-badge.current {
+  animation: turnGlow 1.4s ease-in-out infinite alternate;
+}
+@keyframes turnGlow {
+  from { box-shadow:0 0 0 1px rgba(246,223,156,.12),0 0 10px rgba(217,173,69,.10); }
+  to   { box-shadow:0 0 0 2px rgba(246,223,156,.28),0 0 26px rgba(217,173,69,.30); }
+}
+
+.game-message {
+  animation: overlayPop .18s ease-out both;
+}
+@keyframes overlayPop {
+  from { opacity:0; transform:translate(-50%,-50%) scale(.92); }
+  to   { opacity:1; transform:translate(-50%,-50%) scale(1); }
+}
+
+.game-message.truco-call h2 {
+  animation: trucoPulse .52s ease-out;
+}
+@keyframes trucoPulse {
+  0% { transform:scale(.55); opacity:0; }
+  60% { transform:scale(1.16); opacity:1; }
+  100% { transform:scale(1); }
+}
+
+.round-flash {
+  position:absolute;
+  left:50%;
+  top:25%;
+  transform:translateX(-50%);
+  z-index:20;
+  padding:10px 18px;
+  border:1px solid rgba(217,173,69,.38);
+  border-radius:999px;
+  background:rgba(4,4,4,.92);
+  color:var(--gold-2);
+  font-weight:800;
+  animation: roundFlash .9s ease both;
+  pointer-events:none;
+}
+@keyframes roundFlash {
+  0% { opacity:0; transform:translate(-50%,-10px) scale(.94); }
+  20%,75% { opacity:1; transform:translate(-50%,0) scale(1); }
+  100% { opacity:0; transform:translate(-50%,-8px) scale(.98); }
+}
+
+.manilha-badge {
+  position:absolute;
+  top:14%;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:8;
+  padding:6px 10px;
+  border:1px solid rgba(217,173,69,.22);
+  border-radius:999px;
+  background:rgba(0,0,0,.60);
+  color:#d7c488;
+  font-size:11px;
+  letter-spacing:.5px;
+}
+
+/* Optional highlight only for the local player's manilhas */
+.my-card.is-manilha {
+  box-shadow:0 0 0 2px rgba(217,173,69,.42),0 0 22px rgba(217,173,69,.16);
+}
+
+/* reduce layout jumps */
+#trucoPlayZone, #trucoMyHand, #trucoOverlay, #trucoActions,
+#trucoScoreUs, #trucoScoreThem, #trucoHandValue, #trucoRound,
+#trucoManilha, #trucoTurnName, #trucoTurnSub, #trucoRoundDots {
+  transition: opacity .12s ease, transform .12s ease;
+}
+
+
+/* =====================================
+   v0.5 — mesa melhorada / baralho visível
+   ===================================== */
+
+.manilha-badge { display:none !important; }
+
+.vira-zone {
+  left: 50%;
+  top: 47%;
+  transform: translate(-50%, -50%);
+  z-index: 9;
+}
+
+.play-zone {
+  left: 50%;
+  top: 47%;
+  transform: translate(-50%, -50%);
+  width: 58%;
+  height: 62%;
+  z-index: 6;
+}
+
+.play-card {
+  width: 72px;
+  height: 102px;
+}
+
+.play-card.p0 { bottom: 1%; left: 50%; transform: translateX(-50%) rotate(1deg); }
+.play-card.p1 { left: 2%; top: 50%; transform: translateY(-50%) rotate(-9deg); }
+.play-card.p2 { top: 1%; left: 50%; transform: translateX(-50%) rotate(-1deg); }
+.play-card.p3 { right: 2%; top: 50%; transform: translateY(-50%) rotate(9deg); }
+
+.my-hand {
+  bottom: 2.4%;
+}
+
+#trucoDeckWrap {
+  position: absolute;
+  left: 38%;
+  top: 49%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+}
+
+.deck-stack {
+  position: relative;
+  width: 72px;
+  height: 102px;
+}
+.deck-stack .deck-card {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  border: 2px solid #eee4cf;
+  background:
+    linear-gradient(135deg, rgba(217,173,69,.18), transparent 42%),
+    repeating-linear-gradient(45deg, #0c0c0c, #0c0c0c 6px, #181209 6px, #181209 11px);
+  box-shadow: 0 8px 20px rgba(0,0,0,.32);
+  display: grid;
+  place-items: center;
+}
+.deck-stack .deck-card:nth-child(1) { transform: translate(0px, 0px) rotate(-2deg); opacity:.96; }
+.deck-stack .deck-card:nth-child(2) { transform: translate(3px, -3px) rotate(1deg); opacity:.96; }
+.deck-stack .deck-card:nth-child(3) { transform: translate(6px, -6px) rotate(4deg); opacity:.93; }
+.deck-stack .deck-card img { width: 70%; height: 70%; object-fit: contain; }
+
+#trucoDealAnim {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+}
+.deal-fly {
+  position: absolute;
+  left: 38%;
+  top: 49%;
+  width: 72px;
+  height: 102px;
+  transform: translate(-50%, -50%);
+  animation: dealFly 0.56s cubic-bezier(.18,.76,.21,1) both;
+  animation-delay: var(--delay, 0s);
+}
+.deal-fly .deck-card {
+  inset: 0;
+}
+.deal-fly.to-bottom { --tx: 10vw; --ty: 31vh; }
+.deal-fly.to-left { --tx: -24vw; --ty: 4vh; }
+.deal-fly.to-top { --tx: 10vw; --ty: -28vh; }
+.deal-fly.to-right { --tx: 44vw; --ty: 4vh; }
+.deal-fly.to-vira { --tx: 10vw; --ty: -2vh; }
+
+@keyframes dealFly {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1);
+  }
+}
+
+#trucoDiscard {
+  position: absolute;
+  right: 17%;
+  bottom: 14%;
+  z-index: 5;
+  pointer-events: none;
+}
+.discard-pile {
+  position: relative;
+  width: 60px;
+  height: 84px;
+}
+.discard-pile .deck-card {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  border: 2px solid rgba(238,228,207,.9);
+  background:
+    linear-gradient(135deg, rgba(217,173,69,.14), transparent 42%),
+    repeating-linear-gradient(45deg, #0d0d0d, #0d0d0d 6px, #181209 6px, #181209 11px);
+  display: grid;
+  place-items: center;
+}
+.discard-pile .deck-card:nth-child(1) { transform: rotate(-2deg); opacity:.74; }
+.discard-pile .deck-card:nth-child(2) { transform: translate(2px,-2px) rotate(2deg); opacity:.78; }
+.discard-pile .deck-card:nth-child(3) { transform: translate(4px,-4px) rotate(-1deg); opacity:.82; }
+.discard-count {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--gold-2);
+  font-size: 11px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.raise-status {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+  text-align: left;
+}
+.raise-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(217,173,69,.18);
+  border-radius: 12px;
+  background: rgba(217,173,69,.05);
+}
+.raise-row strong { color: var(--text); }
+.raise-row span { color: var(--gold-2); font-size: 12px; }
+.player-prompt {
+  margin-top: 8px;
+  color: var(--gold-2);
+  font-size: 12px;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+
+/* v0.6 fixes */
+.deal-fly .deck-card{
+  position:absolute;
+  inset:0;
+  border-radius:10px;
+  border:2px solid #eee4cf;
+  background:
+    linear-gradient(135deg, rgba(217,173,69,.18), transparent 42%),
+    repeating-linear-gradient(45deg, #0c0c0c, #0c0c0c 6px, #181209 6px, #181209 11px);
+  box-shadow: 0 8px 20px rgba(0,0,0,.32);
+  display:grid;
+  place-items:center;
+}
+.deal-fly .deck-card img{
+  width:70%;
+  height:70%;
+  object-fit:contain;
+}
+
+
+/* v0.7 — dealing reveal + online-ready visual state */
+.deal-fly.to-bottom { --tx: 10vw; --ty: 31vh; }
+.deal-fly.to-left   { --tx: -24vw; --ty: 4vh; }
+.deal-fly.to-top    { --tx: 10vw; --ty: -28vh; }
+.deal-fly.to-right  { --tx: 44vw; --ty: 4vh; }
+
+.my-hand.is-dealing .my-card,
+.enemy-hand.is-dealing .card-back-mini,
+.side-hand.is-dealing .card-back-mini {
+  opacity: 0;
+}
+
+.card-reveal {
+  animation: revealIn .16s ease-out both;
+}
+@keyframes revealIn {
+  from { opacity:0; transform:translateY(8px) scale(.96); }
+  to   { opacity:1; transform:none; }
+}
+
+.connection-ready {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:#9bd8ac;
+  font-size:11px;
+}
+.connection-ready:before {
+  content:"";
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#48d681;
+}
+
+
+/* v0.8 stability */
+#trucoDiscard { display:none !important; }
+
+/* Never allow a logo inside a visual card/deck to escape its bounds */
+.deck-card,
+.card-back-mini {
+  overflow:hidden;
+}
+.deck-card img,
+.card-back-mini img,
+.deal-fly .deck-card img,
+.deck-stack .deck-card img {
+  width:68% !important;
+  height:68% !important;
+  max-width:68% !important;
+  max-height:68% !important;
+  object-fit:contain !important;
+  display:block;
+}
+
+/* Keep the central logo purely on the cloth */
+.table-logo {
+  pointer-events:none;
+  max-width:23%;
+  max-height:34%;
+  object-fit:contain;
+}
+
+
+/* ==================================
+   v0.9 — compact desktop Truco layout
+   ================================== */
+
+.truco-screen{
+  min-height: calc(100vh - 62px);
+  padding: 6px 10px 8px;
+  overflow: hidden;
+}
+
+.truco-table-wrap{
+  width: min(1380px, 100%);
+  height: calc(100vh - 76px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 5px;
+}
+
+.truco-hud{
+  grid-template-columns: 210px 1fr 220px;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.score-panel,.hand-panel,.turn-panel{
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+
+.score-title{
+  margin-bottom: 3px;
+  font-size: 13px;
+  line-height: 1.1;
+}
+.connection-ready{
+  display:none;
+}
+.score-line{
+  padding: 3px 0;
+  font-size: 12px;
+}
+.score-num{
+  font-size: 18px;
+}
+
+.hand-panel{
+  gap: 7px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.hand-chip{
+  padding: 5px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.round-dot{
+  width:8px;
+  height:8px;
+}
+
+.turn-panel .turn-name{
+  font-size: 14px;
+}
+.turn-panel .turn-sub{
+  font-size: 10px;
+}
+.timer-ring{
+  width:29px;
+  height:29px;
+  font-size:10px;
+  border-width:2px;
+}
+
+.table-shell{
+  min-height: 0 !important;
+  height: 100%;
+  aspect-ratio: auto;
+  border-width: 9px;
+  border-radius: 42% / 15%;
+  box-shadow:
+    inset 0 0 0 3px #c19337,
+    inset 0 0 0 6px #2a1e0c,
+    0 16px 50px rgba(0,0,0,.45);
+}
+
+.table-shell:before{
+  inset: 12px;
+  border-radius: 42% / 15%;
+}
+
+.seat-badge{
+  min-width: 125px;
+  padding: 4px 8px;
+  gap: 6px;
+}
+.seat-avatar{
+  width: 27px;
+  height: 27px;
+  font-size: 12px;
+}
+.seat-name strong{
+  font-size: 12px;
+}
+.seat-name small,.seat-team{
+  font-size: 9px;
+}
+.player-seat{
+  gap: 4px;
+}
+.seat-top{ top:1.2%; }
+.seat-bottom{ bottom:.8%; }
+
+.card-back-mini{
+  width: 45px;
+  height: 64px;
+  border-width: 1px;
+}
+.side-hand{
+  gap: 0;
+}
+.enemy-hand{
+  gap: 1px;
+}
+
+.truco-card{
+  width: 68px;
+  height: 96px;
+  padding: 5px;
+  border-width: 1px;
+}
+.truco-card .rank{
+  font-size: 16px;
+}
+.truco-card .suit{
+  font-size: 18px;
+}
+.my-card{
+  width: 78px;
+  height: 110px;
+}
+
+.my-hand{
+  bottom: 1%;
+}
+.play-card{
+  width: 60px;
+  height: 85px;
+}
+.vira-zone .truco-card{
+  width: 62px;
+  height: 88px;
+}
+
+#trucoDeckWrap{
+  transform: translate(-50%,-50%) scale(.78);
+}
+.deck-stack{
+  width: 62px;
+  height: 88px;
+}
+
+.play-zone{
+  width: 54%;
+  height: 55%;
+}
+
+.truco-actions{
+  padding: 4px 0 0;
+  gap: 6px;
+  flex-wrap: nowrap;
+  min-height: 38px;
+}
+.truco-actions .btn{
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.action-main{
+  min-width: 105px;
+}
+.player-prompt{
+  margin: 0 8px 0 0;
+  align-self:center;
+  font-size:10px;
+}
+
+.truco-log{
+  margin-top: 0;
+  max-height: 52px;
+  min-height: 0;
+  padding: 5px 8px;
+  font-size: 10px;
+  border-radius: 9px;
+  overflow-y:auto;
+}
+
+.game-message{
+  min-width: 280px;
+  max-width: 440px;
+  padding: 14px;
+}
+.game-message h2{
+  font-size: 28px;
+  margin-bottom: 5px;
+}
+.game-message p{
+  margin: 5px 0;
+  font-size: 13px;
+}
+.raise-status{
+  gap: 5px;
+  margin: 8px 0;
+}
+.raise-row{
+  padding: 7px 9px;
+}
+.game-message .choices{
+  margin-top: 8px;
+}
+
+@media (max-height: 780px) and (min-width: 900px){
+  .truco-screen{ padding-top:3px; }
+  .truco-table-wrap{ height:calc(100vh - 70px); }
+  .truco-log{ display:none; }
+  .my-card{ width:72px; height:101px; }
+  .card-back-mini{ width:41px; height:58px; }
+}
+
+@media (max-height: 680px) and (min-width: 900px){
+  .score-panel,.turn-panel{ display:none; }
+  .truco-hud{ grid-template-columns:1fr; }
+  .hand-panel{ padding:5px; }
+}
+
+
+/* ===================================================
+   v1.0 core alignment — readable hand, no card overlap
+   =================================================== */
+
+/* Override the old negative-margin fan.
+   Every rank/suit in the top-left corner remains readable. */
+.my-hand{
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  gap:8px !important;
+  min-width:max-content;
+}
+
+.my-hand .my-card:nth-child(1),
+.my-hand .my-card:nth-child(2),
+.my-hand .my-card:nth-child(3){
+  margin-left:0 !important;
+  margin-right:0 !important;
+}
+
+.my-hand .my-card:nth-child(1){
+  transform:rotate(-4deg) translateY(1px);
+}
+.my-hand .my-card:nth-child(2){
+  transform:translateY(-3px);
+  z-index:2;
+}
+.my-hand .my-card:nth-child(3){
+  transform:rotate(4deg) translateY(1px);
+}
+
+.my-hand .my-card:nth-child(1):hover{
+  transform:rotate(-4deg) translateY(-12px);
+}
+.my-hand .my-card:nth-child(2):hover{
+  transform:translateY(-16px);
+}
+.my-hand .my-card:nth-child(3):hover{
+  transform:rotate(4deg) translateY(-12px);
+}
+
+.my-hand .my-card.selected:nth-child(1){
+  transform:rotate(-4deg) translateY(-18px);
+}
+.my-hand .my-card.selected:nth-child(2){
+  transform:translateY(-21px);
+}
+.my-hand .my-card.selected:nth-child(3){
+  transform:rotate(4deg) translateY(-18px);
+}
+
+/* Partner cards shown during Mão de 11 also stay readable. */
+.game-message .truco-card{
+  flex:0 0 auto;
+}
+
+/* Desktop fit alignment */
+@media (min-width:900px){
+  .dashboard,
+  .game-page{
+    width:min(1360px, calc(100% - 32px));
+  }
+
+  .topbar{
+    padding-left:24px;
+    padding-right:24px;
+  }
+}
+
+.live-section{width:min(1360px,calc(100% - 32px));margin:18px auto 8px}.live-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.live-card,.live-empty{border:1px solid rgba(211,163,59,.22);background:linear-gradient(180deg,#111,#0b0b0b);border-radius:16px;padding:14px}.live-card-top{display:flex;justify-content:space-between;align-items:center;color:#d9c28a;font-size:12px}.live-card h3{margin:10px 0 5px}.live-card p{color:#888;margin:0 0 12px;font-size:12px}.live-dot{color:#7ee091;font-size:10px}.live-empty{color:#777;text-align:center}.spectator-placeholder{min-height:calc(100vh - 78px);display:grid;place-items:center;align-content:center;gap:12px;text-align:center;padding:30px}.spectator-placeholder>img{width:110px;height:110px;object-fit:contain;opacity:.7}.draw-offer-toast{position:fixed;right:18px;bottom:18px;z-index:80;width:min(390px,calc(100% - 36px));border:1px solid rgba(211,163,59,.55);background:#0b0b0b;border-radius:16px;padding:14px;box-shadow:0 18px 60px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:10px}.draw-offer-toast strong{display:block;color:#f0d786}.draw-offer-toast span{display:block;color:#aaa;font-size:12px;margin-top:3px}.draw-offer-toast .choices{display:flex;gap:8px}
+
+
+/* =========================================================
+   v1.6 — adaptive layout for different monitor resolutions
+   ========================================================= */
+:root{
+  --topbar-h:78px;
+}
+
+html,body{
+  max-width:100%;
+  min-width:320px;
+  overflow-x:hidden;
+}
+
+body{
+  min-height:100dvh;
+}
+
+#app{
+  min-height:100dvh;
+}
+
+img,svg,canvas{
+  max-width:100%;
+}
+
+.topbar{
+  min-height:clamp(62px,8dvh,78px);
+  height:auto;
+  padding-inline:clamp(12px,2vw,34px);
+  gap:clamp(10px,2vw,24px);
+}
+
+.topbar-left{
+  gap:clamp(12px,2vw,32px);
+  min-width:0;
+}
+
+.nav-links{
+  gap:clamp(2px,.6vw,8px);
+  min-width:0;
+}
+
+.nav-link{
+  padding:clamp(7px,1vh,9px) clamp(8px,1vw,12px);
+  font-size:clamp(12px,.9vw,15px);
+  white-space:nowrap;
+}
+
+.top-brand strong{
+  font-size:clamp(15px,1.25vw,20px);
+  white-space:nowrap;
+}
+
+.top-brand img{
+  width:clamp(34px,3vw,42px);
+  height:clamp(34px,3vw,42px);
+}
+
+.topbar-right{
+  gap:clamp(8px,1vw,14px);
+  min-width:0;
+}
+
+.dashboard,
+.game-page,
+.waiting-room,
+.live-section{
+  width:min(1400px,calc(100% - clamp(20px,3vw,48px)));
+}
+
+.dashboard{
+  padding:clamp(22px,4vh,42px) 0 clamp(36px,6vh,70px);
+}
+
+.hero-strip{
+  padding:clamp(20px,2.8vw,34px);
+}
+
+.hero-strip h1{
+  font-size:clamp(30px,4vw,62px);
+}
+
+.hero-strip p{
+  font-size:clamp(14px,1.1vw,17px);
+}
+
+.game-grid,
+.friends-grid,
+.live-grid{
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr)) !important;
+}
+
+.rooms-layout,
+.two-col,
+.profile-grid{
+  grid-template-columns:minmax(0,1fr) minmax(280px,360px);
+  gap:clamp(12px,2vw,24px);
+}
+
+.panel,
+.room-card,
+.game-card,
+.friend-card{
+  min-width:0;
+}
+
+.waiting-card{
+  width:min(100%,1100px);
+  margin-inline:auto;
+}
+
+.modal-card{
+  width:min(560px,calc(100vw - 24px));
+  max-height:calc(100dvh - 24px);
+  overflow:auto;
+}
+
+input,select,button{
+  max-width:100%;
+}
+
+/* Truco: fit to viewport instead of forcing page scroll. */
+.truco-screen{
+  height:calc(100dvh - var(--topbar-h));
+  min-height:0 !important;
+  overflow:hidden;
+  padding:clamp(3px,.7vh,8px) clamp(6px,1vw,12px) !important;
+}
+
+.truco-table-wrap{
+  width:min(1440px,100%);
+  height:100% !important;
+  min-height:0;
+  grid-template-rows:auto minmax(0,1fr) auto auto;
+}
+
+.table-shell{
+  min-height:0 !important;
+  height:100% !important;
+}
+
+.truco-hud{
+  grid-template-columns:minmax(170px,210px) minmax(0,1fr) minmax(180px,220px);
+}
+
+/* Medium desktop / notebook */
+@media (max-width:1180px){
+  .profile-lines small{display:none}
+  .topbar-left{gap:10px}
+  .topbar-right{gap:8px}
+  .rooms-layout,
+  .two-col,
+  .profile-grid{
+    grid-template-columns:1fr;
+  }
+}
+
+/* Small notebook */
+@media (max-width:920px){
+  .topbar{
+    flex-wrap:wrap;
+    align-items:center;
+    padding-block:8px;
+  }
+  .topbar-left{
+    width:100%;
+    justify-content:space-between;
+  }
+  .nav-links{
+    overflow-x:auto;
+    scrollbar-width:none;
+  }
+  .nav-links::-webkit-scrollbar{display:none}
+  .topbar-right{
+    margin-left:auto;
+  }
+  .truco-hud{
+    grid-template-columns:1fr;
+  }
+  .score-panel,.turn-panel{
+    display:none;
+  }
+}
+
+/* Mobile */
+@media (max-width:700px){
+  .top-brand strong{display:none}
+  .profile-lines{display:none}
+  .topbar-right .btn{padding:8px 10px}
+  .dashboard,
+  .game-page,
+  .waiting-room,
+  .live-section{
+    width:calc(100% - 16px);
+  }
+  .hero-strip{border-radius:16px}
+  .section-title{
+    align-items:flex-start;
+    gap:10px;
+    flex-direction:column;
+  }
+}
+
+
+/* =========================================================
+   v1.7 — Modal scrolling / create-room fix
+   ========================================================= */
+
+/* The application uses .modal, not .modal-card.
+   Keep the backdrop scrollable on short monitors. */
+.modal-backdrop{
+  overflow-y:auto !important;
+  overflow-x:hidden;
+  align-items:flex-start;
+  justify-items:center;
+  place-items:initial !important;
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+}
+
+/* Every modal fits inside the real viewport. */
+.modal{
+  width:min(780px, calc(100vw - 24px)) !important;
+  max-width:100%;
+  max-height:calc(100dvh - 24px) !important;
+  margin:auto 0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+/* Header and footer never disappear while scrolling the fields. */
+.modal-head,
+.modal-foot{
+  flex:0 0 auto;
+  background:#0d0d0d;
+  position:relative;
+  z-index:2;
+}
+
+.modal-head{
+  padding:clamp(14px,2vh,18px) clamp(16px,2vw,20px);
+}
+
+.modal-body{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto !important;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:clamp(14px,2vh,20px) clamp(16px,2vw,20px);
+  scrollbar-gutter:stable;
+}
+
+.modal-foot{
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+  border-top:1px solid rgba(255,255,255,.06);
+  padding:clamp(12px,1.7vh,18px) clamp(16px,2vw,20px);
+}
+
+/* Create-room forms adapt to available width without becoming excessively tall. */
+.modal .form-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:clamp(12px,1.5vw,18px);
+}
+
+.modal .field{
+  min-width:0;
+}
+
+/* Room name and password are easier to read full-width. */
+.modal .field:first-child{
+  grid-column:1/-1;
+}
+
+/* Inputs/selects shrink correctly instead of forcing overflow. */
+.modal input,
+.modal select,
+.modal .select{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+}
+
+/* Short-height desktop/laptop: make fields more compact. */
+@media (max-height:760px) and (min-width:701px){
+  .modal{
+    max-height:calc(100dvh - 16px) !important;
+  }
+
+  .modal-head{
+    padding:11px 16px;
+  }
+
+  .modal-head h3{
+    font-size:20px;
+  }
+
+  .modal-body{
+    padding:12px 16px;
+  }
+
+  .modal-foot{
+    padding:10px 16px;
+  }
+
+  .modal .form-grid{
+    gap:10px 14px;
+  }
+
+  .modal .field label{
+    margin-bottom:6px;
+  }
+
+  .modal input,
+  .modal select,
+  .modal .select{
+    min-height:46px;
+    padding-block:10px;
+  }
+}
+
+/* Mobile: stack fields and keep the footer visible. */
+@media (max-width:700px){
+  .modal-backdrop{
+    padding:8px;
+  }
+
+  .modal{
+    width:100% !important;
+    max-height:calc(100dvh - 16px) !important;
+    border-radius:16px;
+  }
+
+  .modal .form-grid{
+    grid-template-columns:1fr;
+  }
+
+  .modal .field,
+  .modal .field:first-child{
+    grid-column:1;
+  }
+
+  .modal-foot{
+    position:sticky;
+    bottom:0;
+  }
+
+  .modal-foot .btn{
+    flex:1;
+  }
+}
+
+
+/* =========================================================
+   v1.8 — Truco truly adaptive by monitor width AND height
+   ========================================================= */
+.truco-screen{
+  height:calc(100dvh - var(--topbar-h));
+  min-height:0 !important;
+  overflow:hidden !important;
+  box-sizing:border-box;
+  padding:clamp(3px,.55dvh,7px) clamp(6px,.8vw,12px) !important;
+}
+
+.truco-table-wrap{
+  width:min(1480px,100%) !important;
+  max-width:100%;
+  height:100% !important;
+  min-height:0;
+  margin:0 auto !important;
+  overflow:hidden;
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto auto;
+  gap:clamp(2px,.45dvh,5px);
+}
+
+.truco-hud{
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  grid-template-columns:
+    minmax(160px,clamp(170px,14vw,210px))
+    minmax(0,1fr)
+    minmax(165px,clamp(175px,15vw,220px)) !important;
+  gap:clamp(5px,.7vw,9px) !important;
+  margin:0 !important;
+}
+
+.score-panel,.hand-panel,.turn-panel{
+  min-width:0;
+  padding:clamp(5px,.8dvh,8px) clamp(7px,.8vw,10px) !important;
+  border-radius:clamp(9px,1vw,12px);
+}
+
+.score-title{
+  font-size:clamp(10px,.75vw,13px) !important;
+  line-height:1.05;
+  margin-bottom:2px !important;
+}
+
+.score-line{
+  padding:clamp(2px,.35dvh,4px) 0 !important;
+  font-size:clamp(10px,.72vw,12px) !important;
+}
+
+.score-num{
+  font-size:clamp(15px,1.15vw,19px) !important;
+}
+
+.hand-panel{
+  min-width:0;
+  gap:clamp(4px,.55vw,8px) !important;
+  flex-wrap:nowrap !important;
+  overflow:hidden;
+}
+
+.hand-chip{
+  flex:0 1 auto;
+  min-width:0;
+  padding:clamp(4px,.55dvh,6px) clamp(6px,.65vw,9px) !important;
+  font-size:clamp(10px,.78vw,12px) !important;
+  white-space:nowrap;
+}
+
+.round-dots{ gap:4px !important; }
+.round-dot{
+  width:clamp(6px,.5vw,8px) !important;
+  height:clamp(6px,.5vw,8px) !important;
+}
+
+.turn-panel .turn-name{
+  font-size:clamp(11px,.85vw,14px) !important;
+}
+.turn-panel .turn-sub{
+  font-size:clamp(9px,.65vw,10px) !important;
+}
+
+.table-shell{
+  --truco-play-h:clamp(70px,10.4dvh,92px);
+  --truco-play-w:calc(var(--truco-play-h) * .705);
+  --truco-own-h:clamp(88px,13dvh,112px);
+  --truco-own-w:calc(var(--truco-own-h) * .71);
+  --truco-back-h:clamp(48px,7.2dvh,64px);
+  --truco-back-w:calc(var(--truco-back-h) * .70);
+
+  width:100%;
+  max-width:100%;
+  height:100% !important;
+  min-height:0 !important;
+  box-sizing:border-box;
+  border-width:clamp(6px,.65vw,9px) !important;
+  border-radius:42% / 15% !important;
+  overflow:hidden !important;
+}
+
+.table-shell:before{
+  inset:clamp(7px,.8vw,12px) !important;
+}
+
+/* Keep all player seats inside a protected outer ring. */
+.seat-top{
+  top:clamp(1px,.45dvh,5px) !important;
+}
+.seat-bottom{
+  bottom:clamp(1px,.35dvh,4px) !important;
+}
+.seat-left{
+  left:clamp(5px,1.2vw,18px) !important;
+}
+.seat-right{
+  right:clamp(5px,1.2vw,18px) !important;
+}
+
+.seat-badge{
+  min-width:clamp(105px,8.5vw,130px) !important;
+  padding:clamp(3px,.5dvh,5px) clamp(6px,.7vw,9px) !important;
+  gap:clamp(4px,.5vw,7px) !important;
+}
+.seat-avatar{
+  width:clamp(23px,3.3dvh,29px) !important;
+  height:clamp(23px,3.3dvh,29px) !important;
+  font-size:clamp(9px,.7vw,12px) !important;
+}
+.seat-name strong{ font-size:clamp(10px,.72vw,12px) !important; }
+.seat-name small,.seat-team{ font-size:clamp(8px,.58vw,9px) !important; }
+
+.card-back-mini{
+  width:var(--truco-back-w) !important;
+  height:var(--truco-back-h) !important;
+  border-width:1px !important;
+}
+.enemy-hand{ gap:2px !important; }
+.side-hand{ gap:2px !important; }
+
+/* Dedicated public-card field. Larger field = more distance from the vira. */
+.play-zone{
+  left:50% !important;
+  top:49% !important;
+  transform:translate(-50%,-50%) !important;
+  width:clamp(380px,48%,720px) !important;
+  height:58% !important;
+  max-width:62%;
+  pointer-events:none;
+}
+
+.play-card{
+  width:var(--truco-play-w) !important;
+  height:var(--truco-play-h) !important;
+}
+
+/* Four independent landing positions, leaving the center empty for the vira. */
+.play-card.p0{
+  bottom:0 !important;
+  left:50% !important;
+  transform:translateX(-50%) rotate(1deg) !important;
+}
+.play-card.p2{
+  top:0 !important;
+  left:50% !important;
+  transform:translateX(-50%) rotate(-1deg) !important;
+}
+.play-card.p1{
+  left:0 !important;
+  top:50% !important;
+  transform:translateY(-50%) rotate(-8deg) !important;
+}
+.play-card.p3{
+  right:0 !important;
+  top:50% !important;
+  transform:translateY(-50%) rotate(8deg) !important;
+}
+
+/* Vira owns the exact center and never shares its slot with played cards. */
+.vira-zone{
+  left:50% !important;
+  top:49% !important;
+  transform:translate(-50%,-50%) !important;
+  z-index:9 !important;
+}
+.vira-zone .truco-card{
+  width:calc(var(--truco-play-w) * .92) !important;
+  height:calc(var(--truco-play-h) * .92) !important;
+}
+.vira-zone:before{
+  top:clamp(-19px,-2.2dvh,-14px) !important;
+  font-size:clamp(8px,.58vw,10px) !important;
+}
+
+/* Deck gets its own slot left of the central vira. */
+#trucoDeckWrap{
+  left:39% !important;
+  top:49% !important;
+  transform:translate(-50%,-50%) scale(.72) !important;
+}
+.deck-stack{
+  width:var(--truco-play-w) !important;
+  height:var(--truco-play-h) !important;
+}
+
+/* Local hand always stays above the lower rail and no card covers another rank. */
+.my-hand{
+  left:50% !important;
+  bottom:clamp(2px,.6dvh,7px) !important;
+  transform:translateX(-50%) !important;
+  gap:clamp(5px,.55vw,9px) !important;
+  min-width:0 !important;
+  max-width:46%;
+}
+
+.my-card{
+  width:var(--truco-own-w) !important;
+  height:var(--truco-own-h) !important;
+  flex:0 0 auto;
+}
+
+.my-hand .my-card:nth-child(1){
+  transform:rotate(-2.5deg) translateY(1px) !important;
+}
+.my-hand .my-card:nth-child(2){
+  transform:translateY(-2px) !important;
+}
+.my-hand .my-card:nth-child(3){
+  transform:rotate(2.5deg) translateY(1px) !important;
+}
+.my-hand .my-card:nth-child(1):hover{
+  transform:rotate(-2.5deg) translateY(-9px) !important;
+}
+.my-hand .my-card:nth-child(2):hover{
+  transform:translateY(-11px) !important;
+}
+.my-hand .my-card:nth-child(3):hover{
+  transform:rotate(2.5deg) translateY(-9px) !important;
+}
+.my-hand .my-card.selected:nth-child(1){
+  transform:rotate(-2.5deg) translateY(-13px) !important;
+}
+.my-hand .my-card.selected:nth-child(2){
+  transform:translateY(-15px) !important;
+}
+.my-hand .my-card.selected:nth-child(3){
+  transform:rotate(2.5deg) translateY(-13px) !important;
+}
+
+.truco-card{
+  padding:clamp(4px,.55dvh,6px) !important;
+  border-radius:clamp(7px,.7vw,10px) !important;
+}
+.truco-card .rank{
+  font-size:clamp(13px,1.3dvh + .25vw,18px) !important;
+}
+.truco-card .suit{
+  font-size:clamp(14px,1.5dvh + .25vw,20px) !important;
+}
+
+.table-logo{
+  width:clamp(110px,18%,230px) !important;
+  max-height:28% !important;
+  left:50% !important;
+  top:55% !important;
+}
+
+/* Actions use one compact row when the viewport permits it. */
+.truco-actions{
+  min-height:0 !important;
+  padding:clamp(2px,.4dvh,5px) 0 0 !important;
+  gap:clamp(4px,.55vw,8px) !important;
+  flex-wrap:nowrap !important;
+  overflow-x:auto;
+  overflow-y:hidden;
+  scrollbar-width:none;
+}
+.truco-actions::-webkit-scrollbar{ display:none; }
+
+.truco-actions .btn{
+  flex:0 1 auto;
+  min-width:0 !important;
+  padding:clamp(6px,.75dvh,9px) clamp(9px,.8vw,13px) !important;
+  font-size:clamp(10px,.72vw,12px) !important;
+  white-space:nowrap;
+}
+.player-prompt{
+  flex:0 1 auto;
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* Log is secondary information: don't let it steal the playable area. */
+.truco-log{
+  max-height:clamp(28px,4dvh,42px) !important;
+  padding:clamp(4px,.5dvh,6px) 8px !important;
+  font-size:clamp(8px,.58vw,10px) !important;
+}
+
+/* Typical notebook heights (768–900): prioritize the board. */
+@media (max-height:900px) and (min-width:921px){
+  .connection-ready{ display:none !important; }
+  .truco-log{ display:none !important; }
+
+  .score-title{ margin:0 !important; }
+  .score-line{ padding:2px 0 !important; }
+
+  .table-shell{
+    --truco-play-h:clamp(66px,9.7dvh,84px);
+    --truco-own-h:clamp(82px,12dvh,104px);
+    --truco-back-h:clamp(44px,6.6dvh,57px);
+  }
+}
+
+/* Short desktop: HUD becomes one compact information strip. */
+@media (max-height:760px) and (min-width:921px){
+  .truco-hud{
+    grid-template-columns:1fr !important;
+  }
+  .score-panel,.turn-panel{
+    display:none !important;
+  }
+  .hand-panel{
+    padding:3px 5px !important;
+  }
+  .table-shell{
+    --truco-play-h:clamp(60px,9dvh,72px);
+    --truco-own-h:clamp(72px,11dvh,88px);
+    --truco-back-h:clamp(40px,6dvh,50px);
+  }
+}
+
+/* Narrow screens: preserve playability before aesthetics. */
+@media (max-width:920px){
+  .truco-screen{
+    height:auto !important;
+    min-height:calc(100dvh - var(--topbar-h)) !important;
+    overflow:visible !important;
+  }
+
+  .truco-table-wrap{
+    height:auto !important;
+    overflow:visible;
+  }
+
+  .truco-hud{
+    grid-template-columns:1fr !important;
+  }
+
+  .score-panel,.turn-panel{
+    display:none !important;
+  }
+
+  .hand-panel{
+    flex-wrap:wrap !important;
+  }
+
+  .table-shell{
+    height:min(66dvh,620px) !important;
+    min-height:430px !important;
+  }
+
+  .play-zone{
+    width:52% !important;
+    height:55% !important;
+  }
+
+  .seat-left{ left:4px !important; }
+  .seat-right{ right:4px !important; }
+
+  .seat-badge{
+    min-width:96px !important;
+  }
+
+  .my-hand{
+    max-width:58%;
+  }
+
+  .truco-actions{
+    flex-wrap:wrap !important;
+    overflow:visible;
+  }
+}
+
+
+/* =========================================================
+   v1.9 — central alignment across all games
+   ========================================================= */
+
+/* All normal game/lobby pages remain centered regardless of monitor width. */
+.dashboard,
+.game-page,
+.waiting-room,
+.live-section{
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+
+/* Create/join modals: true center whenever the viewport has enough height. */
+.modal-backdrop{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  overflow:auto !important;
+  box-sizing:border-box;
+  padding:
+    max(12px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right))
+    max(12px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left)) !important;
+}
+
+.modal{
+  margin:auto !important;
+  flex:0 0 auto;
+  max-width:calc(100vw - 24px) !important;
+  max-height:calc(100dvh - 24px) !important;
+}
+
+/* On very short monitors, top-align so scrolling can always reach every control. */
+@media (max-height:640px){
+  .modal-backdrop{
+    align-items:flex-start !important;
+  }
+  .modal{
+    margin:0 auto !important;
+  }
+}
+
+/* Generic future game canvas / placeholder alignment. */
+.game-stage,
+.blackjack-screen,
+.chess-screen,
+.truco-screen{
+  margin-left:auto !important;
+  margin-right:auto !important;
+}
+
+/* =========================================================
+   v2.1 — stable viewport-centered modals
+   ========================================================= */
+.modal-backdrop{
+  position:fixed !important;
+  inset:0 !important;
+  width:100vw !important;
+  height:100dvh !important;
+  min-height:100dvh !important;
+  display:grid !important;
+  place-items:center !important;
+  align-items:center !important;
+  justify-items:center !important;
+  overflow:hidden !important;
+  box-sizing:border-box !important;
+  padding:clamp(8px,2dvh,20px) clamp(8px,2vw,20px) !important;
+}
+
+.modal{
+  width:min(780px,calc(100vw - 24px)) !important;
+  max-width:calc(100vw - 24px) !important;
+  max-height:calc(100dvh - 24px) !important;
+  margin:0 !important;
+  align-self:center !important;
+  justify-self:center !important;
+  display:flex !important;
+  flex-direction:column !important;
+  overflow:hidden !important;
+}
+
+.modal-body{
+  min-height:0 !important;
+  flex:1 1 auto !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+}
+
+/* Even on short viewports the dialog stays centered; only its body scrolls. */
+@media (max-height:640px){
+  .modal-backdrop{
+    align-items:center !important;
+    place-items:center !important;
+  }
+  .modal{
+    margin:0 !important;
+    max-height:calc(100dvh - 12px) !important;
+  }
+}
+
+
+/* =========================================================
+   v2.3 — flicker-free Truco DOM updates
+   ========================================================= */
+
+/* Existing cards stay visually stable. Only a genuinely new DOM card gets
+   a very short entrance animation. */
+.card-enter{
+  animation:tdbCardEnter .12s ease-out both;
+}
+
+@keyframes tdbCardEnter{
+  from{
+    opacity:.7;
+    transform:scale(.97);
+  }
+  to{
+    opacity:1;
+  }
+}
+
+/* Do not animate every card just because some state changed. */
+.my-card,
+.card-back-mini,
+.play-card .truco-card{
+  will-change:auto;
+}
+
+
+/* v3.0 online status */
+.online-status-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding:5px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.08);
+  color:#888;
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.08em;
+}
+.online-status-pill:before{
+  content:'';
+  width:6px;height:6px;border-radius:50%;
+  background:#777;
+}
+.online-status-pill.online{
+  color:#9de0ac;
+  border-color:rgba(72,190,102,.25);
+  background:rgba(72,190,102,.06);
+}
+.online-status-pill.online:before{background:#59d779}
+
+.spectator-badge{
+  display:inline-flex;padding:5px 9px;border-radius:999px;
+  border:1px solid rgba(214,175,67,.3);color:#d9bd72;font-size:10px;
+}
