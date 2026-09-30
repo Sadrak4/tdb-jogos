@@ -1,20 +1,13 @@
-TDB JOGOS v5.2 — Estabilidade Online + Competitivo
+TDB JOGOS v5.3 — Renderização e Navegação Fix
 
-- reconexão automática com 90s
-- estados Conectando/Reconectando/Offline
-- host migratório
-- pedidos de amizade
-- convites de sala
-- busca por nome e ID
-- proteção contra clique duplo
-- estado autoritativo com versionamento
-- abandono
-- histórico somente contra jogadores reais
-- ranking global por jogo/modo
-- limpeza automática
-- rate limit
-- logs de erro
-- TDB Music melhorado
-- Truco online reforçado
-- Xadrez com relógio server-side, promoção e PGN
-- sem empate automático por repetição
+- corrige pisca-pisca no lobby e nas demais abas
+- Realtime/polling não recriam mais #app em segundo plano
+- lobby/salas usam atualização incremental
+- Truco/Xadrez online não alternam mais entre sala e partida
+- Xadrez não remonta o tabuleiro em cada polling
+- partidas contra bots ficam isoladas do sincronizador online
+- ao sair do teste com bot, a sala real é restaurada
+- convite de amigo abre modal sem tirar o host da sala
+- quem recebe convite ganha notificação flutuante por 10 segundos
+- convite permanece disponível na aba Amigos após o aviso fechar
+- sem mudança de schema em relação à v5.2

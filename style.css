@@ -3037,3 +3037,19 @@ input,select,button{
 .player-slot .small{line-height:1.35}.host-tag{margin-left:6px}.music-last-action{display:block;min-height:18px;color:#d8b75d;margin:3px 0 10px}.music-queue-actions{display:flex;gap:5px;align-items:center}.music-queue-actions .icon-btn{width:34px;height:34px;min-width:34px}.music-permissions .btn{grid-column:1/-1;margin-top:8px}
 .promotion-options{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.chess-promotion-modal{max-width:460px}
 @media(max-width:760px){.ranking-row{grid-template-columns:34px 40px 1fr}.social-row{align-items:flex-start;flex-wrap:wrap}.history-row{align-items:flex-start;flex-direction:column}.invite-banner{align-items:flex-start}.promotion-options{grid-template-columns:1fr}}
+
+
+/* =========================================================
+   v5.3 — render/navigation stability
+   ========================================================= */
+.invite-friends-modal{width:min(560px,92vw);max-height:min(680px,86vh)}
+.invite-friend-list{display:grid;gap:4px;max-height:480px;overflow:auto}
+.room-invite-toast{position:fixed;right:22px;bottom:22px;z-index:10050;width:min(410px,calc(100vw - 32px));padding:16px;border-radius:18px;border:1px solid rgba(218,169,57,.42);background:#151515;box-shadow:0 22px 70px rgba(0,0,0,.55);display:grid;gap:12px;animation:tdbInviteIn .18s ease-out}
+.room-invite-copy strong{display:block;color:#f1d27a;font-size:16px;margin-bottom:5px}
+.room-invite-copy span{display:block;color:#e2e2e2;line-height:1.4}
+.room-invite-copy small{display:block;color:#909090;margin-top:6px;line-height:1.35}
+.room-invite-actions{display:flex;gap:8px}
+.invite-progress{height:3px;border-radius:999px;background:linear-gradient(90deg,#d9a93a,#f4d879);transform-origin:left;animation:tdbInviteCountdown 10s linear forwards}
+@keyframes tdbInviteCountdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@keyframes tdbInviteIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@media(max-width:640px){.room-invite-toast{right:16px;bottom:16px}.room-invite-actions{flex-wrap:wrap}}

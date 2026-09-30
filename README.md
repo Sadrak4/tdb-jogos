@@ -1,4 +1,4 @@
-# TDB JOGOS v5.2 — Estabilidade Online + Competitivo
+# TDB JOGOS v5.3 — Renderização e Navegação Fix
 
 A v5.2 consolida a base online do TDB JOGOS antes da adição de novos jogos.
 
@@ -134,3 +134,21 @@ Os testes v5.2 verificam:
 - Mão de Ferro;
 - timer server-side do Truco;
 - privacidade do espectador.
+
+
+## v5.3 — correções de produção
+
+A v5.3 corrige os problemas de interface encontrados depois da v5.2:
+
+- nenhuma sincronização de fundo chama mais `renderLobby()`, `drawGamePage()` ou `renderWaitingRoom()`;
+- lobby, amigos e lista de salas recebem somente patches nos blocos que mudaram;
+- Xadrez online reaproveita o tabuleiro montado e atualiza as peças sem recriar a tela inteira;
+- Truco/Xadrez passam a ter estados `playing-truco` e `playing-chess`, separados de `waiting`;
+- testes com bots desligam o sincronizador online e usam `bot-truco` / `bot-chess`;
+- ao voltar do teste com bot, a sala online original é restaurada;
+- convidar amigos abre um modal por cima da sala, sem navegar para Amigos;
+- convite recebido aparece em um aviso flutuante por 10 segundos e continua salvo em Amigos.
+
+### Banco
+
+A v5.3 não adiciona tabelas novas. Se o `SUPABASE-SCHEMA.sql` da v5.2 já foi executado, não é necessário rodá-lo novamente apenas por causa desta correção.

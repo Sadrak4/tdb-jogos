@@ -49,6 +49,8 @@ function chooseColors(room,players){
 
 function startChessWithBot(){
   try{
+    state.view='bot-chess';
+    window.OnlineGameBridge?.stop?.();
     const active=state?.activeRoom;
     if(!active || active.game!=='chess'){
       if(typeof toast==='function') toast('Nenhuma sala de Xadrez ativa.');
@@ -96,13 +98,14 @@ function applyOnlineChessState(serverState,activeRoom,role='player'){
   chess.spectatorMode=role==='spectator';
   if(activeRoom) chess.room=structuredClone(activeRoom);
   window.__TDB_CHESS_STATE__=chess;
-  renderChessScreen(true);
+  renderChessScreen(!document.getElementById('chessRoot'));
   startClock();
 }
 window.applyOnlineChessState=applyOnlineChessState;
 
 function startChessGame(room,localBot=false){
   clearInterval(chessClockTimer);
+  state.view=localBot?'bot-chess':'playing-chess';
   const players=room.players.slice(0,2);
   const colors=chooseColors(room,players);
   chess=E.createState({
