@@ -1,133 +1,155 @@
-# TDB JOGOS v5.5 — Admin + Áudio/UX
+# TDB JOGOS v5.6 — BLACKJACK TDB
 
-TDB JOGOS é uma plataforma browser-first com Truco Paulista, Xadrez e TDB Music, usando Vercel + Supabase para multiplayer e persistência.
+A v5.6 adiciona um módulo de Blackjack completo e independente da interface/engine do Truco.
 
-## v5.5
+## Conceito da mesa
 
-### Painel administrativo
+- 1 a 3 jogadores humanos contra um único dealer automático;
+- a mesa pode começar com apenas 1 jogador;
+- um segundo ou terceiro jogador pode entrar com a rodada em andamento;
+- quem entra no meio da rodada aparece como **Aguardando próxima rodada** e começa automaticamente quando a rodada seguinte abrir;
+- a sala permanece aberta/joinable enquanto houver vaga.
 
-A v5.5 adiciona um painel administrativo separado do login normal do jogador.
+## Regras implementadas
 
-A autenticação do administrador é validada no servidor. A senha não fica exposta no JavaScript do navegador; o código do servidor guarda somente um hash derivado.
+- Ás vale 1 ou 11 automaticamente;
+- J, Q e K valem 10;
+- Blackjack natural = Ás + carta de valor 10 nas duas cartas originais;
+- Blackjack natural paga 3:2;
+- vitória normal paga 1:1;
+- empate devolve a aposta;
+- dealer para em qualquer 17, inclusive soft 17;
+- Pedir (Hit);
+- Parar (Stand);
+- Dobrar (Double Down): dobra a aposta, compra exatamente 1 carta e encerra a mão;
+- Separar (Split): cartas de mesmo valor podem ser separadas;
+- cartas de valor 10 (10/J/Q/K) são compatíveis para split;
+- até 3 mãos por jogador;
+- split de ases recebe somente uma carta adicional por mão e para automaticamente;
+- 1, 2 ou 4 baralhos no shoe;
+- reshuffle automático quando o shoe fica baixo.
 
-O painel permite:
+## Fichas virtuais
 
-- visualizar quantidade de contas;
-- buscar conta por nome ou `TDB-ID`;
-- recuperar conta redefinindo a senha;
-- gerar senha temporária;
-- trocar a senha manualmente;
-- encerrar todas as sessões de uma conta;
-- banir e desbanir IDs;
-- visualizar logs de erro de cliente/servidor;
-- visualizar auditoria das ações administrativas;
-- receber e tratar reportes de bugs/erros enviados pelos jogadores.
+As fichas são apenas da própria mesa e não representam dinheiro real.
 
-> A senha antiga de um jogador nunca pode ser visualizada porque as senhas são armazenadas com hash. Recuperação significa redefinir a senha.
+Ao criar uma sala, o host escolhe:
 
-O acesso pode ser aberto pela opção **Administração** na tela de login ou diretamente com `#admin` no endereço do site.
+- aposta mínima: 10 / 25 / 50;
+- fichas iniciais: 500 / 1.000 / 2.000;
+- tempo por decisão: 15 / 20 / 30 segundos ou sem limite;
+- shoe: 1 / 2 / 4 baralhos.
 
-### Reportes
+Se um jogador ficar sem fichas suficientes, pode fazer uma recarga gratuita para o valor inicial da mesa entre rodadas.
 
-Todos os jogadores logados têm em **Configurações** um bloco **Reportar bug ou erro**.
+## Multiplayer autoritativo
 
-O reporte envia ao painel ADM:
+O navegador não embaralha nem decide cartas.
 
-- jogador/ID;
-- categoria;
-- descrição;
-- tela atual;
-- jogo e sala, quando houver;
-- versão do app;
-- estado da conexão e latência;
-- identificação técnica do navegador.
+O servidor controla:
 
-Nenhuma senha, token ou carta privada é enviada no reporte.
+- shoe e embaralhamento;
+- cartas;
+- carta fechada do dealer;
+- apostas;
+- ordem dos turnos;
+- timer;
+- Hit / Stand / Double / Split;
+- dealer;
+- pagamentos;
+- passagem para a rodada seguinte.
 
-### Banimento
+O cliente apenas solicita a ação e desenha a resposta oficial.
 
-Contas banidas:
+## Privacidade
 
-- não conseguem realizar um novo login;
-- têm as sessões existentes revogadas ao serem banidas;
-- perdem acesso às APIs protegidas quando a sessão é invalidada.
+Antes da vez do dealer, a carta fechada é redigida no `viewFor()` do servidor. O navegador recebe `null` no lugar da carta real, então não é apenas um efeito visual.
 
-### Áudio
+As mãos dos jogadores são públicas como em uma mesa física de Blackjack.
 
-O áudio foi centralizado em um único `AudioContext`, evitando criar um contexto novo a cada clique.
+## Entrada durante a rodada
 
-Há efeitos de baixo volume para:
+Quando um usuário entra enquanto `playerTurns`, `dealerTurn` ou `roundEnd` está em andamento:
 
-- botões e navegação;
-- confirmar/voltar/erro/sucesso;
-- criar/entrar em sala;
-- iniciar partida;
-- distribuição e jogada de cartas;
-- carta escondida;
-- Truco/6/9/12;
-- rodada vencida/perdida;
-- vitória/derrota;
-- seleção, movimento, captura e xeque no Xadrez;
-- adicionar/remover faixa no TDB Music.
+1. ele entra na sala normalmente;
+2. recebe o estado público da rodada atual;
+3. fica marcado como `waitingNextRound`;
+4. não recebe cartas nem interfere na rodada atual;
+5. quando a próxima fase de apostas abre, passa automaticamente a ser elegível.
 
-Em **Configurações** existem controles separados para:
+## Reconexão
 
-- volume geral;
-- interface;
-- jogos;
-- alertas sonoros.
+A mesa usa o sistema de presença/reconexão já existente no TDB JOGOS.
 
-Os volumes padrão são intencionalmente baixos.
+- assento fica reservado durante a tolerância;
+- se o jogador desconectar na vez dele, o timer pode encerrar a decisão com Stand automático;
+- após expirar a tolerância global, o usuário é removido da sala sem encerrar a mesa dos demais.
 
-### Ping
+## Design
 
-A barra superior agora exibe a latência aproximada da API em milissegundos. O valor é atualizado durante os heartbeats da sessão.
+O Blackjack possui arquivos próprios:
 
-### Ranking global removido
+```text
+games/blackjack/
+├── blackjack.js
+└── blackjack.css
 
-O sistema de TOP global/ranking foi removido completamente da interface e da API.
+server/
+└── blackjack-engine.js
+```
 
-Foram preservados:
+Visual:
 
-- histórico individual do perfil;
-- vitórias/derrotas/empates do próprio jogador;
-- resultados das partidas reais;
-- regra de que partidas contra bots não contam para o histórico competitivo.
+- feltro verde profundo;
+- preto/grafite;
+- dourado metálico;
+- cartas próprias em CSS;
+- dealer centralizado no topo;
+- usuário local sempre destacado na parte inferior;
+- outros jogadores posicionados nas laterais;
+- painel de regras e atividade separado;
+- interface de aposta própria;
+- destaque dourado na mão ativa.
 
-### Notificações
+## Áudio
 
-O sistema de notificações existente não foi alterado nesta atualização.
+Foram adicionados presets discretos ao SoundManager:
 
-## Multiplayer
+- distribuição;
+- compra de carta;
+- Stand;
+- Double;
+- Split;
+- flip do dealer;
+- estouro;
+- vitória;
+- derrota.
 
-A v5.5 mantém as correções da v5.4:
-
-- Truco 1x1 e 2x2 com mão privada por jogador;
-- você sempre aparece embaixo na própria tela do Truco;
-- servidor autoritativo para Truco/Xadrez;
-- Xadrez com seleção estável e movimento otimista;
-- reconexão de 90 segundos;
-- host migratório;
-- ciclo Sala → Partida → Resultado → Sala → Nova partida;
-- TDB Music compartilhado sem usar o lifecycle competitivo.
+Os sons continuam respeitando os controles de volume da v5.5.
 
 ## Banco de dados
 
-A v5.5 adiciona estruturas novas. É obrigatório executar a seção **MIGRAÇÃO v5.5** do `SUPABASE-SCHEMA.sql` antes de publicar o código v5.5.
+A v5.6 não cria tabelas novas.
 
-Novidades no banco:
+Se o `SUPABASE-SCHEMA.sql` da v5.5 já foi executado, **não execute uma migração nova apenas por causa do Blackjack**.
 
-- campos de banimento em `tdb_users`;
-- `tdb_admin_sessions`;
-- `tdb_reports`;
-- `tdb_admin_audit_logs`.
+## Testes adicionados
 
-As contas e históricos existentes são preservados.
+- `tests/v5.6-blackjack-engine-smoke.mjs`
+- `tests/v5.6-blackjack-service-smoke.mjs`
+- `tests/v5.6-blackjack-static-smoke.mjs`
 
-## Produção
+Eles cobrem, entre outros casos:
 
-Depois da migração e do deploy, confira:
-
-`https://tdb-jogos.vercel.app/api/health`
-
-Esperado: `version: "5.5.0"`, `supabase: true`, `schemaReady: true` e `readyForMultiplayer: true`.
+- uma pessoa iniciando a mesa;
+- Ás/soft hand;
+- reserva da aposta;
+- carta fechada do dealer;
+- entrada durante rodada;
+- Split;
+- Double;
+- Split de ases;
+- dealer em soft 17;
+- pagamento 3:2;
+- ativação do jogador novo na rodada seguinte;
+- integração com `game-service`.

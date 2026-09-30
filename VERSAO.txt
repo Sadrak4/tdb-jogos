@@ -1,18 +1,32 @@
-TDB JOGOS v5.5 — Admin + Áudio/UX
+TDB JOGOS v5.6 — BLACKJACK TDB
 
-- painel administrativo protegido no servidor
-- gerenciamento e busca de contas
-- recuperação/troca de senha por reset
-- senha temporária
-- banir/desbanir ID
-- revogar sessões
-- logs de erro e auditoria ADM
-- reportes de bugs/erros enviados pelos jogadores
-- sistema de áudio centralizado com volumes baixos
-- sons em botões e ações dos jogos
-- controles separados de volume
-- indicador de ping
-- ranking global/TOP removido
-- histórico individual mantido
-- notificações existentes não alteradas
-- exige MIGRAÇÃO v5.5 do SUPABASE-SCHEMA.sql
+NOVO JOGO: BLACKJACK
+- módulo visual próprio, sem reaproveitar a mesa do Truco
+- engine server-side própria
+- 1 a 3 jogadores reais contra dealer automático
+- jogador pode entrar durante uma rodada e aguarda a próxima
+- Pedir / Parar / Dobrar / Separar
+- split por mesmo valor, até 3 mãos
+- split de ases recebe uma carta por mão e para
+- Blackjack natural paga 3:2
+- dealer para em qualquer 17, incluindo soft 17
+- 1 / 2 / 4 baralhos no shoe
+- fichas virtuais da sala e recarga gratuita quando acabam
+- apostas configuráveis
+- timer server-side por decisão
+- dealer revela e compra cartas em etapas
+- reconexão existente de 90s compatível com a mesa
+- espectadores suportados
+- sons discretos próprios do Blackjack
+- design premium preto, verde profundo e dourado
+
+MULTIPLAYER
+- baralho, apostas, turnos, split, double e dealer controlados pelo servidor
+- todos os clientes recebem o mesmo estado público
+- carta fechada do dealer nunca é enviada aberta antes da hora
+- sala comporta no máximo 3 jogadores
+- mesa pode começar com 1, 2 ou 3 jogadores
+
+SUPABASE
+- nenhuma tabela nova na v5.6
+- mantém o schema v5.5 já instalado

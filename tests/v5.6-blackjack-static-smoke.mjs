@@ -1,0 +1,34 @@
+import fs from 'fs';
+function assert(name,condition){if(!condition)throw new Error(`FAIL: ${name}`);console.log('OK',name)}
+const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
+const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const registry=fs.readFileSync(new URL('../core/game-registry.js',import.meta.url),'utf8');
+const service=fs.readFileSync(new URL('../server/game-service.js',import.meta.url),'utf8');
+const join=fs.readFileSync(new URL('../server/http-handlers/rooms/join.js',import.meta.url),'utf8');
+const upsert=fs.readFileSync(new URL('../server/http-handlers/rooms/upsert.js',import.meta.url),'utf8');
+const bj=fs.readFileSync(new URL('../games/blackjack/blackjack.js',import.meta.url),'utf8');
+const css=fs.readFileSync(new URL('../games/blackjack/blackjack.css',import.meta.url),'utf8');
+const sound=fs.readFileSync(new URL('../core/sound-manager.js',import.meta.url),'utf8');
+const social=fs.readFileSync(new URL('../server/social-service.js',import.meta.url),'utf8');
+
+assert('blackjack registry is playable',/blackjack:[\s\S]*status: 'playable'/.test(registry));
+assert('blackjack registry max players is 3',/blackjack:[\s\S]*maxPlayers: 3/.test(registry));
+assert('app lobby advertises max 3 players',app.includes("players: 3, minPlayers: 1, prefix: 'BLJ'"));
+assert('app room capacity is 3',app.includes("if(room.game==='blackjack') return 3"));
+assert('blackjack room can be joined while playing',app.includes("const joinable=['music','blackjack'].includes(room.game)"));
+assert('server join capacity is 3',join.includes("if(room.game==='blackjack')return 3"));
+assert('server permits blackjack mid-round join',join.includes("!['music','blackjack'].includes(room.game)"));
+assert('social invite capacity is 3',social.includes("room.game==='blackjack'?3"));
+assert('server game service imports independent blackjack engine',service.includes("import * as Blackjack from './blackjack-engine.js'"));
+assert('server creates blackjack independently',service.includes("room.game==='blackjack')state=Blackjack.createState(room)"));
+assert('server applies blackjack actions independently',service.includes("Blackjack.applyAction"));
+assert('room creation has blackjack configuration',upsert.includes('blackjackTurnTimer')&&upsert.includes('blackjackMinBet')&&upsert.includes('blackjackStartingChips')&&upsert.includes('blackjackDecks'));
+assert('app handles blackjack realtime state',app.includes("gameState.game==='blackjack'"));
+assert('blackjack has its own JS module',bj.includes('window.applyOnlineBlackjackState'));
+assert('blackjack has its own professional table layout',bj.includes('bj-stage')&&bj.includes('BLACKJACK PAYS 3:2'));
+assert('blackjack supports hit stand double split',bj.includes("bjAction('HIT')")&&bj.includes("bjAction('STAND')")&&bj.includes("bjAction('DOUBLE')")&&bj.includes("bjAction('SPLIT')"));
+assert('blackjack CSS is independent',css.includes('.bj-stage')&&css.includes('.bj-dealer')&&css.includes('.bj-player-bottom'));
+assert('index loads blackjack CSS',index.includes('games/blackjack/blackjack.css'));
+assert('index loads blackjack JS',index.includes('games/blackjack/blackjack.js'));
+assert('blackjack sounds are low centralized presets',sound.includes('blackjackDeal')&&sound.includes('blackjackSplit')&&sound.includes('blackjackWin'));
+console.log('ALL V5.6 BLACKJACK STATIC TESTS PASSED');

@@ -13,11 +13,11 @@
     blackjack: {
       key: 'blackjack',
       name: 'Blackjack',
-      status: 'planned',
+      status: 'playable',
       prefix: 'BLJ',
       minPlayers: 1,
-      maxPlayers: 5,
-      modes: [1, 2, 3, 4, 5]
+      maxPlayers: 3,
+      modes: [1, 2, 3]
     },
     chess: {
       key: 'chess',

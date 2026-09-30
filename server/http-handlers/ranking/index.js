@@ -1,2 +1,0 @@
-import { ranking } from '../../stats-service.js';
-export default async function handler(req,res){if(req.method!=='GET')return res.status(405).json({error:'Método inválido'});try{const game=String(req.query?.game||'').toLowerCase();if(!['truco','chess','blackjack'].includes(game))return res.json({ok:true,ranking:[]});const mode=req.query?.mode?String(req.query.mode):null;res.setHeader('Cache-Control','public, max-age=10, s-maxage=10');res.json({ok:true,game,mode,ranking:await ranking(game,mode,20)})}catch(err){res.status(500).json({ok:false,error:err.message})}}

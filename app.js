@@ -54,7 +54,7 @@ window.addEventListener('tdb-online-sync',event=>{
       if(state.view==='waiting'){
         patchWaitingRoom(previousOwner!==latest.ownerId);
 
-        if(latest.status==='playing' && ['truco','chess'].includes(latest.game) && OnlineGameBridge.roomCode!==latest.code){
+        if(latest.status==='playing' && ['truco','chess','blackjack'].includes(latest.game) && OnlineGameBridge.roomCode!==latest.code){
           OnlineGameBridge.start(latest,'player');
         }
       }
@@ -128,12 +128,15 @@ window.addEventListener('tdb-game-state',event=>{
   }else if(gameState.game==='truco'){
     state.view='playing-truco';
     applyOnlineTrucoState(gameState,OnlineGameBridge.role);
+  }else if(gameState.game==='blackjack'){
+    state.view='playing-blackjack';
+    window.applyOnlineBlackjackState?.(gameState,state.activeRoom,OnlineGameBridge.role);
   }
 });
 
 const games = {
   truco: { name: 'Truco', symbol: '🃏', subtitle: 'Blefe, parceria e resenha.', players: 4, minPlayers: 2, prefix: 'TRC' },
-  blackjack: { name: 'Blackjack', symbol: '♠️', subtitle: 'Mesa casual com dealer automático.', players: 5, minPlayers: 1, prefix: 'BLJ' },
+  blackjack: { name: 'Blackjack', symbol: '♠️', subtitle: 'Mesa premium contra dealer automático.', players: 3, minPlayers: 1, prefix: 'BLJ' },
   chess: { name: 'Xadrez', symbol: '♟️', subtitle: 'Partidas rápidas 1x1 entre amigos.', players: 2, minPlayers: 2, prefix: 'XDR' },
   music: { name: 'TDB Music', symbol: '🎵', subtitle: 'Ouça YouTube em uma fila compartilhada.', players: 20, minPlayers: 1, prefix: 'MUS' }
 };
@@ -278,7 +281,7 @@ async function watchRoom(code){
   if(!room) return toast('Sala não encontrada.');
   if(room.status!=='playing') return toast('Essa partida ainda não começou.');
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess'].includes(room.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess','blackjack'].includes(room.game)){
     if(!ensureOnlineMultiplayerReady()) return;
 
     const remoteRoom=await window.TDBOnline.watchRoom(code);
@@ -384,6 +387,7 @@ function getAllRooms(gameKey){
 function roomCapacity(room){
   if(!room) return 0;
   if(room.game==='truco') return Number(room.trucoSeats||4);
+  if(room.game==='blackjack') return 3;
   if(room.game==='music') return Number(room.musicCapacity||20);
   return games[room.game].players;
 }
@@ -630,6 +634,9 @@ function waitingHostActions(room){
     return `<button class="btn btn-secondary" onclick="launchChessBot()">Testar com bot</button>
       <button class="btn btn-primary" onclick="startGame()">Iniciar partida</button>`;
   }
+  if(room.game==='blackjack'){
+    return `<button class="btn btn-primary" onclick="startGame()">Abrir mesa de Blackjack</button>`;
+  }
   if(room.game==='music'){
     return `<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Music</button>`;
   }
@@ -804,7 +811,7 @@ function drawGamePage(){
       </div>
       <aside class="panel side-info"><div class="panel-header"><h2>Como funciona</h2></div><div class="panel-body">
         <h3>Salas abertas</h3><p>Você pode entrar enquanto houver vaga. Sala privada pode pedir senha.</p>
-        <h3 style="margin-top:22px;">${key==='chess'?'Xadrez Tradicional':key==='music'?'Sala compartilhada':'Em andamento'}</h3><p>${key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='music'?'Todos adicionam vídeos do YouTube na fila e compartilham os controles da sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
+        <h3 style="margin-top:22px;">${key==='chess'?'Xadrez Tradicional':key==='blackjack'?'Blackjack TDB':key==='music'?'Sala compartilhada':'Em andamento'}</h3><p>${key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='blackjack'?'Até 3 jogadores contra o dealer. Pedir, parar, dobrar e separar, com entrada durante a rodada para jogar na próxima.':key==='music'?'Todos adicionam vídeos do YouTube na fila e compartilham os controles da sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
         <h3 style="margin-top:22px;">Seu jogo</h3><ul><li>Crie uma sala.</li><li>Compartilhe o código.</li><li>Convide amigos.</li></ul>
       </div></aside>
     </div>
@@ -813,11 +820,11 @@ function drawGamePage(){
 function setRoomFilter(filter){ state.roomFilter=filter; drawGamePage(); }
 function roomRow(room){
   const g=games[room.game], cap=roomCapacity(room), open=room.status==='open', full=(room.players?.length||0)>=cap;
-  const joinable=room.game==='music' ? !full : (open&&!full);
+  const joinable=['music','blackjack'].includes(room.game) ? !full : (open&&!full);
   return `<div class="room-row">
-    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • Host: ${escapeHtml(room.owner)} ${room.privacy==='private'?'🔒':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='music'?' • 🎵 compartilhada':''}</span></div>
+    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • Host: ${escapeHtml(room.owner)} ${room.privacy==='private'?'🔒':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='music'?' • 🎵 compartilhada':room.game==='blackjack'?' • até 3 vs dealer':''}</span></div>
     <div class="room-stat"><strong>${room.players?.length||0}/${cap}</strong><span>${room.game==='music'?'Ouvintes':'Jogadores'}</span></div>
-    <div><span class="badge ${open?'open':'playing'}">${room.game==='music'?(open?'Aberta':'Tocando'):open?'Aberta':'Em andamento'}</span></div>
+    <div><span class="badge ${open?'open':'playing'}">${room.game==='music'?(open?'Aberta':'Tocando'):room.game==='blackjack'?(open?'Aberta':'Rodada em andamento'):open?'Aberta':'Em andamento'}</span></div>
     <button class="btn ${joinable?'btn-primary':'btn-dark'}" ${joinable?`onclick="requestJoinRoom('${room.code}')"`:'disabled'}>${joinable?'Entrar':full?'Cheia':'Jogando'}</button>
   </div>`;
 }
@@ -849,6 +856,12 @@ function openCreateRoom(){
             <option value="black">Pretas</option>
           </select>
         </div>`:''}
+      ${state.selectedGame==='blackjack'?`
+        <div class="field"><label>Tempo por decisão</label><select id="blackjackTurnTimer" class="select"><option value="15">15 segundos</option><option value="20" selected>20 segundos</option><option value="30">30 segundos</option><option value="0">Sem limite</option></select></div>
+        <div class="field"><label>Aposta mínima</label><select id="blackjackMinBet" class="select"><option value="10">10 fichas</option><option value="25" selected>25 fichas</option><option value="50">50 fichas</option></select></div>
+        <div class="field"><label>Fichas iniciais</label><select id="blackjackStartingChips" class="select"><option value="500">500</option><option value="1000" selected>1.000</option><option value="2000">2.000</option></select></div>
+        <div class="field"><label>Baralhos no shoe</label><select id="blackjackDecks" class="select"><option value="1">1 baralho</option><option value="2">2 baralhos</option><option value="4" selected>4 baralhos</option></select></div>
+        <div class="mini-note">Dealer para em qualquer 17 • Blackjack paga 3:2 • até 3 jogadores.</div>`:''}
       ${state.selectedGame==='music'?`
         <div class="field"><label>Quem controla o player</label>
           <select id="musicControl" class="select">
@@ -920,11 +933,15 @@ async function createRoom(){
     const musicControl=state.selectedGame==='music' ? (document.getElementById('musicControl')?.value||'everyone') : null;
     const musicSkipMode=state.selectedGame==='music' ? (document.getElementById('musicSkipMode')?.value||'vote') : null;
     const musicQueueLimit=state.selectedGame==='music' ? Number(document.getElementById('musicQueueLimit')?.value||5) : null;
+    const blackjackTurnTimer=state.selectedGame==='blackjack' ? Number(document.getElementById('blackjackTurnTimer')?.value||20) : null;
+    const blackjackMinBet=state.selectedGame==='blackjack' ? Number(document.getElementById('blackjackMinBet')?.value||25) : null;
+    const blackjackStartingChips=state.selectedGame==='blackjack' ? Number(document.getElementById('blackjackStartingChips')?.value||1000) : null;
+    const blackjackDecks=state.selectedGame==='blackjack' ? Number(document.getElementById('blackjackDecks')?.value||4) : null;
 
     const candidate={
       code:genRoomCode(state.selectedGame),game:state.selectedGame,name,
       owner:state.user.username,ownerId:state.user.id,privacy,password,status:'open',
-      turnTimer,trucoSeats,chessClock,chessColor,musicControl,musicSkipMode,musicQueueLimit,
+      turnTimer,trucoSeats,chessClock,chessColor,musicControl,musicSkipMode,musicQueueLimit,blackjackTurnTimer,blackjackMinBet,blackjackStartingChips,blackjackDecks,
       players:[{username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online'}],
       spectators:[],createdAt:Date.now()
     };
@@ -968,9 +985,10 @@ window.addEventListener('tdb-room-join-result',event=>{
   closeModal();
 
   // Set the destination before realtime room updates can redraw the room list.
-  state.view=room.game==='music'?'music':'waiting';
+  state.view=room.game==='music'?'music':room.game==='blackjack'&&room.status==='playing'?'playing-blackjack':'waiting';
 
   if(room.game==='music') return openMusicRoom();
+  if(room.game==='blackjack'&&room.status==='playing'){OnlineGameBridge.start(room,'player');return;}
   renderWaitingRoom();
 });
 
@@ -1007,7 +1025,7 @@ function joinRoom(code,password=''){
   const source=typeof code==='object' ? code : getRoomByCode(code);
   const room=structuredClone(source);
   if(!room) return toast('Sala não encontrada.');
-  if(room.status!=='open' && room.game!=='music') return toast('Essa partida já está em andamento.');
+  if(room.status!=='open' && !['music','blackjack'].includes(room.game)) return toast('Essa partida já está em andamento.');
   if(room.password && room.password!==password) return toast('Senha incorreta.');
 
   if(!room.players.some(p=>p.id===state.user.id)){
@@ -1086,7 +1104,7 @@ function renderWaitingRoom(){
   if(!state.activeRoom) return renderLobby();
   state.view='waiting';
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && !state.activeRoom.simulation && state.activeRoom.status==='playing' && ['truco','chess'].includes(state.activeRoom.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && !state.activeRoom.simulation && state.activeRoom.status==='playing' && ['truco','chess','blackjack'].includes(state.activeRoom.game)){
     OnlineGameBridge.start(state.activeRoom,'player');
   }
 
@@ -1098,6 +1116,7 @@ function renderWaitingRoom(){
   const meta=
     room.game==='truco' ? ` • ${cap===2?'1x1':'2x2'}` :
     room.game==='chess' ? ` • 1x1 • ${room.chessClock?Math.floor(room.chessClock/60)+' min':'Sem relógio'}` :
+    room.game==='blackjack' ? ` • até 3 jogadores • dealer automático` :
     room.game==='music' ? ` • fila compartilhada` : '';
 
   const hostActions=waitingHostActions(room);
@@ -1184,16 +1203,16 @@ async function startGame(){
 
   if(room.game==='music') return openMusicRoom();
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess'].includes(room.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess','blackjack'].includes(room.game)){
     if(!ensureOnlineMultiplayerReady()) return;
 
-    const required=room.game==='truco'?roomCapacity(room):2;
+    const required=room.game==='truco'?roomCapacity(room):room.game==='chess'?2:1;
     if((room.players?.length||0)<required){
       return toast(`${g.name} precisa de ${required} jogador${required>1?'es':''}.`);
     }
 
     room.status='playing';
-    state.view=room.game==='truco'?'playing-truco':'playing-chess';
+    state.view=room.game==='truco'?'playing-truco':room.game==='chess'?'playing-chess':'playing-blackjack';
     updateStoredRoom(room);
     setPresence('playing',{roomCode:room.code,game:room.game});
     // Prepare the bridge identity, but do not start polling yet.
@@ -1240,6 +1259,8 @@ async function startGame(){
     window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
     return window.startChessGame?.(room,false);
   }
+
+  if(room.game==='blackjack') return toast('O Blackjack usa o servidor online para manter o dealer e o baralho sincronizados.');
 
   if((room.players?.length||0)<g.minPlayers) return toast(`Aguarde pelo menos ${g.minPlayers} jogador${g.minPlayers>1?'es':''}.`);
   room.status='playing';
@@ -1331,6 +1352,7 @@ async function acceptRoomInviteToast(inviteId){
     saveActiveRoom(room);
     toast('Convite aceito.');
     if(room.game==='music') return openMusicRoom();
+    if(room.game==='blackjack'&&room.status==='playing'){state.view='playing-blackjack';OnlineGameBridge.start(room,'player');return;}
     state.view='waiting';
     return renderWaitingRoom();
   }
@@ -1385,7 +1407,7 @@ async function respondRoomInvite(inviteId,accept){
   await refreshSocialData(false);
   if(accept&&r.room){
     const room=r.room;const i=state.rooms.findIndex(x=>x.code===room.code);if(i>=0)state.rooms[i]=room;else state.rooms.push(room);
-    state.selectedGame=room.game;saveActiveRoom(room);toast('Convite aceito.');if(room.game==='music')return openMusicRoom();return renderWaitingRoom();
+    state.selectedGame=room.game;saveActiveRoom(room);toast('Convite aceito.');if(room.game==='music')return openMusicRoom();if(room.game==='blackjack'&&room.status==='playing'){state.view='playing-blackjack';OnlineGameBridge.start(room,'player');return;}return renderWaitingRoom();
   }
   if(accept&&r.roomCode){toast('Convite aceito. Entrando na sala…');return requestJoinRoom(r.roomCode)}
   toast('Convite recusado.');
@@ -1498,7 +1520,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'5.5.0',
+      version:'5.6.0',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)
@@ -1582,8 +1604,8 @@ async function bootAuthenticatedApp(){
       state.activeRoom=reconnect.room;state.selectedGame=reconnect.room.game;Core.rooms.setActive(reconnect.room);
       __tdbSessionBooting=false;
       if(reconnect.room.game==='music') return openMusicRoom();
-      if(reconnect.room.status==='playing'&&['chess','truco'].includes(reconnect.room.game)){
-        state.view=reconnect.room.game==='truco'?'playing-truco':'playing-chess';
+      if(reconnect.room.status==='playing'&&['chess','truco','blackjack'].includes(reconnect.room.game)){
+        state.view=reconnect.room.game==='truco'?'playing-truco':reconnect.room.game==='chess'?'playing-chess':'playing-blackjack';
         OnlineGameBridge.start(reconnect.room,reconnect.role||'player');
         if(reconnect.state){
           window.dispatchEvent(new CustomEvent('tdb-game-state',{detail:{roomCode:reconnect.room.code,state:reconnect.state}}));
@@ -1599,7 +1621,7 @@ async function bootAuthenticatedApp(){
 
   __tdbSessionBooting=false;
   if(state.user){
-    if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===state.user.id)) return renderWaitingRoom();
+    if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===state.user.id)){if(state.activeRoom.game==='blackjack'&&state.activeRoom.status==='playing'){state.view='playing-blackjack';OnlineGameBridge.start(state.activeRoom,'player');return;}return renderWaitingRoom();}
     return renderLobby();
   }
   renderAuth('login');

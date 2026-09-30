@@ -80,6 +80,15 @@ const presets={
   chessCapture:()=>{tone({frequency:190,duration:.065,volume:.52,type:'triangle',category:'game'});noise({duration:.055,volume:.38,category:'game',highpass:500})},
   chessCheck:()=>sequence([{frequency:540},{frequency:430}],{duration:.065,volume:.58,type:'square',category:'game'}),
   chessInvalid:()=>tone({frequency:175,duration:.07,volume:.46,type:'square',category:'game'}),
+  blackjackDeal:()=>{noise({duration:.035,volume:.34,category:'game',highpass:920});tone({frequency:170,duration:.035,volume:.25,type:'triangle',category:'game'})},
+  blackjackCard:()=>{noise({duration:.04,volume:.36,category:'game',highpass:760});tone({frequency:155,duration:.035,volume:.24,type:'triangle',category:'game'})},
+  blackjackStand:()=>tone({frequency:205,duration:.05,volume:.30,type:'triangle',category:'game'}),
+  blackjackDouble:()=>sequence([{frequency:210},{frequency:310}],{duration:.055,volume:.38,type:'triangle',category:'game'}),
+  blackjackSplit:()=>sequence([{frequency:300,delay:0},{frequency:420,delay:.04}],{duration:.05,volume:.34,type:'sine',category:'game'}),
+  dealerFlip:()=>{noise({duration:.035,volume:.28,category:'game',highpass:1000});tone({frequency:265,duration:.045,volume:.28,type:'triangle',category:'game'})},
+  blackjackBust:()=>sequence([{frequency:210},{frequency:165}],{duration:.07,volume:.38,type:'triangle',category:'game'}),
+  blackjackWin:()=>sequence([{frequency:410},{frequency:540},{frequency:680}],{duration:.08,volume:.42,type:'triangle',category:'game'}),
+  blackjackLose:()=>sequence([{frequency:285},{frequency:225}],{duration:.08,volume:.32,type:'triangle',category:'game'}),
   musicAdd:()=>sequence([{frequency:500},{frequency:670}],{duration:.05,volume:.38,type:'sine',category:'ui'}),
   musicRemove:()=>tone({frequency:250,duration:.055,volume:.35,type:'triangle',category:'ui'})
 };

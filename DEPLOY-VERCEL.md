@@ -1,85 +1,73 @@
-# DEPLOY — TDB JOGOS v5.5
+# DEPLOY — TDB JOGOS v5.6 BLACKJACK
 
-## IMPORTANTE: faça o SQL antes do deploy
+## Supabase
 
-A v5.5 adiciona tabelas e colunas necessárias para o painel ADM. Para evitar que o site entre em `schemaReady:false`, faça nesta ordem:
+A v5.6 não adiciona tabelas ou colunas novas.
 
-1. abra o projeto do TDB JOGOS no Supabase;
-2. abra **SQL Editor**;
-3. abra o arquivo `SUPABASE-SCHEMA.sql` da v5.5;
-4. execute o arquivo completo novamente (ele usa `if not exists` / `add column if not exists`);
-5. confirme que a execução terminou sem erro;
-6. somente depois envie a v5.5 para GitHub/Vercel.
+Se o schema da v5.5 já está aplicado e `/api/health` retorna `schemaReady:true`, não precisa executar SQL novamente.
 
-A migração preserva as contas existentes.
+## Atualizar o projeto
 
-## Tabelas/colunas novas
+1. extraia `TDB-JOGOS-v5.6-BLACKJACK.zip`;
+2. copie todo o conteúdo por cima da pasta clonada `tdb-jogos`;
+3. confirme que `api/` continua contendo apenas `router.js`;
+4. abra o GitHub Desktop;
+5. faça o commit:
 
-- `tdb_users.banned`
-- `tdb_users.banned_reason`
-- `tdb_users.banned_at`
-- `tdb_admin_sessions`
-- `tdb_reports`
-- `tdb_admin_audit_logs`
+```text
+TDB JOGOS v5.6 Blackjack
+```
 
-## Atualizar projeto
+6. `Commit to main`;
+7. `Push origin`;
+8. aguarde o deploy automático da Vercel.
 
-1. extraia `TDB-JOGOS-v5.5-ADMIN-AUDIO-UX.zip`;
-2. copie todos os arquivos para a pasta clonada `tdb-jogos`;
-3. substitua os arquivos antigos;
-4. confirme que `api/` contém apenas `router.js`.
-
-No GitHub Desktop:
-
-**Summary**
-
-`TDB JOGOS v5.5 Admin Audio UX`
-
-Depois:
-
-`Commit to main` → `Push origin`
-
-## Verificar
+## Health
 
 Abra:
 
-`https://tdb-jogos.vercel.app/api/health`
+```text
+https://tdb-jogos.vercel.app/api/health
+```
 
 Esperado:
 
 ```json
 {
   "ok": true,
-  "version": "5.5.0",
+  "version": "5.6.0",
   "supabase": true,
   "schemaReady": true,
   "readyForMultiplayer": true
 }
 ```
 
-## Painel ADM
-
-Na tela de login existe a opção **Administração**. Também é possível acessar adicionando `#admin` ao endereço do site.
-
-O login administrativo é independente das contas normais. A validação é feita exclusivamente no servidor e a senha em texto puro não fica no código do navegador.
-
 ## Teste recomendado
 
-1. entrar como jogador e enviar um reporte em Configurações;
-2. entrar no painel ADM e confirmar que o reporte chegou;
-3. buscar uma conta pelo nome e pelo ID;
-4. testar geração de senha temporária em uma conta de teste;
-5. confirmar que a senha antiga deixa de funcionar;
-6. banir uma conta de teste e confirmar que as sessões são encerradas;
-7. desbanir e testar login novamente;
-8. abrir Logs e Auditoria;
-9. testar volumes e botões;
-10. testar Truco, Xadrez e Music com dois PCs.
+### 1 jogador
 
-## Segurança
+1. crie uma sala de Blackjack;
+2. abra a mesa;
+3. confirme uma aposta;
+4. teste Pedir e Parar;
+5. complete algumas rodadas.
 
-Nunca envie ao GitHub:
+### entrada durante a rodada
 
-- `SUPABASE_SECRET_KEY`;
-- `.env.local`;
-- tokens de sessão.
+1. PC A começa sozinho;
+2. enquanto PC A está com cartas, PC B entra;
+3. PC B deve ver `Aguardando próxima rodada`;
+4. a rodada de A termina;
+5. quando as apostas abrirem, B deve poder apostar e participar.
+
+### 3 jogadores
+
+1. entre com três contas;
+2. confirme apostas;
+3. valide que os turnos passam em sequência;
+4. teste Double e Split;
+5. confira que o dealer joga apenas depois de todos terminarem.
+
+### privacidade
+
+Antes da fase do dealer, nenhum navegador deve receber a face da carta fechada do dealer.
