@@ -3053,3 +3053,22 @@ input,select,button{
 @keyframes tdbInviteCountdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 @keyframes tdbInviteIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 @media(max-width:640px){.room-invite-toast{right:16px;bottom:16px}.room-invite-actions{flex-wrap:wrap}}
+
+
+/* v5.4 — Truco relative table positions */
+.play-card.visual-bottom{
+  bottom:1% !important; left:50% !important; top:auto !important; right:auto !important;
+  transform:translateX(-50%) rotate(1deg) !important;
+}
+.play-card.visual-top{
+  top:1% !important; left:50% !important; bottom:auto !important; right:auto !important;
+  transform:translateX(-50%) rotate(-1deg) !important;
+}
+.play-card.visual-left{
+  left:2% !important; top:50% !important; right:auto !important; bottom:auto !important;
+  transform:translateY(-50%) rotate(-9deg) !important;
+}
+.play-card.visual-right{
+  right:2% !important; top:50% !important; left:auto !important; bottom:auto !important;
+  transform:translateY(-50%) rotate(9deg) !important;
+}

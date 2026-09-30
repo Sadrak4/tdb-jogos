@@ -79,6 +79,14 @@
       "destination": "/api/router?route=games/start"
     },
     {
+      "source": "/api/games/return",
+      "destination": "/api/router?route=games/return"
+    },
+    {
+      "source": "/api/games/rematch",
+      "destination": "/api/router?route=games/rematch"
+    },
+    {
       "source": "/api/games/state",
       "destination": "/api/router?route=games/state"
     },

@@ -1,4 +1,4 @@
-# TDB JOGOS v5.3 — Renderização e Navegação Fix
+# TDB JOGOS v5.4 — Gameplay + Lifecycle Fix
 
 A v5.2 consolida a base online do TDB JOGOS antes da adição de novos jogos.
 
@@ -152,3 +152,41 @@ A v5.3 corrige os problemas de interface encontrados depois da v5.2:
 ### Banco
 
 A v5.3 não adiciona tabelas novas. Se o `SUPABASE-SCHEMA.sql` da v5.2 já foi executado, não é necessário rodá-lo novamente apenas por causa desta correção.
+
+
+## v5.4 — revisão de Truco, Xadrez, Music e ciclo de partidas
+
+### Truco
+A interface não usa mais o host/seat 0 como referência visual para todos. O servidor mantém seats reais, mas cada navegador rotaciona apenas a apresentação:
+
+- você embaixo;
+- 1x1: rival em cima;
+- 2x2: parceiro em cima e adversários nas laterais.
+
+O 1x1 também teve um erro estrutural corrigido: seats 0 e 2 eram opostos visualmente, mas o cálculo antigo podia colocá-los na mesma equipe.
+
+Cada resposta do servidor contém `localSeat` individualmente. Fora da Mão de 11, cada jogador recebe somente sua própria mão. Cartas escondidas já jogadas também não carregam a face real para os clientes.
+
+### Xadrez
+A seleção da peça agora é estado local da interface. Atualizações que só mudam relógio não apagam a seleção e não recriam o tabuleiro inteiro.
+
+Jogadas online usam atualização otimista:
+1. a peça se move imediatamente;
+2. a API valida;
+3. o estado oficial confirma;
+4. em rejeição, o cliente faz rollback e busca o estado correto.
+
+### Ciclo de partida
+O fluxo é:
+
+`Sala -> Partida -> Resultado -> Voltar à sala -> Nova partida`
+
+`Voltar à sala` interrompe o polling daquele jogo no navegador e reabre a sala.
+
+`Nova partida` cria um `matchId` novo. O cliente distingue um rematch realmente mais novo de uma resposta atrasada do jogo antigo.
+
+### TDB Music
+Music permanece uma sala compartilhada aberta e não entra no fluxo competitivo `open -> playing -> finished`.
+
+### Banco
+Nenhuma tabela nova foi adicionada na v5.4. O schema Supabase da v5.2 continua válido.

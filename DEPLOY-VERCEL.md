@@ -1,67 +1,51 @@
-# DEPLOY — TDB JOGOS v5.2
+# DEPLOY — TDB JOGOS v5.4
 
-## 1. Copiar a v5.2 para o repositório
+## 1. Atualizar os arquivos
 
-No computador novo:
+No computador onde está o repositório `Sadrak4/tdb-jogos`:
 
-1. clone `Sadrak4/tdb-jogos` pelo GitHub Desktop;
-2. extraia o ZIP da v5.2;
-3. copie todo o conteúdo da pasta extraída para a pasta clonada `tdb-jogos`;
-4. substitua os arquivos existentes.
+1. extraia `TDB-JOGOS-v5.4-GAMEPLAY-LIFECYCLE-FIX.zip`;
+2. abra a pasta clonada `tdb-jogos`;
+3. substitua os arquivos antigos pelos da v5.4.
 
-A pasta `api` deve continuar contendo somente:
+A pasta `api` deve conter somente:
 
 ```text
 api/
 └── router.js
 ```
 
-## 2. Atualizar o banco Supabase — OBRIGATÓRIO
+## 2. Supabase
 
-A v5.2 cria tabelas para:
-- pedidos de amizade;
-- convites;
-- histórico competitivo;
-- ranking;
-- rate limit;
-- logs.
+A v5.4 **não cria tabelas novas**.
 
-Abra:
+Se você já executou com sucesso o `SUPABASE-SCHEMA.sql` da v5.2, não precisa executar SQL novamente.
 
-**Supabase → SQL Editor → New query**
+Não apague nem recrie `tdb_users`, `tdb_sessions`, `tdb_friends` ou outras tabelas existentes.
 
-Depois:
-1. abra `SUPABASE-SCHEMA.sql` da v5.2;
-2. copie TODO o arquivo;
-3. cole no SQL Editor;
-4. clique em **Run**.
+## 3. GitHub / Vercel
 
-Pode executar o arquivo inteiro novamente. Ele foi preparado para preservar o schema existente e acrescentar a migração v5.2.
+No GitHub Desktop use:
 
-Não apague as tabelas antigas.
-
-## 3. GitHub
-
-No GitHub Desktop:
-
-**Summary**
 ```text
-TDB JOGOS v5.2 Estabilidade Online Competitivo
+TDB JOGOS v5.4 Gameplay Lifecycle Fix
 ```
 
 Depois:
 
 `Commit to main` → `Push origin`
 
-Se preferir usar a CLI e a pasta já estiver ligada ao projeto Vercel:
+Como a Vercel está ligada ao repositório, o novo deploy deve iniciar automaticamente.
+
+Também é possível usar:
 
 ```bash
 npx vercel --prod
 ```
 
-## 4. Health
+## 4. Verificar o backend
 
-Depois do deploy:
+Abra:
 
 ```text
 https://tdb-jogos.vercel.app/api/health
@@ -72,46 +56,64 @@ Esperado:
 ```json
 {
   "ok": true,
-  "version": "5.2.0",
+  "version": "5.4.0",
   "supabase": true,
   "schemaReady": true,
   "readyForMultiplayer": true
 }
 ```
 
-Se aparecer `schemaReady:false`, normalmente faltou executar o `SUPABASE-SCHEMA.sql` da v5.2.
+## 5. Teste multiplayer recomendado
 
-## 5. Teste recomendado
+### Truco 1x1
 
-Use dois navegadores/PCs com contas diferentes:
+- PC 1 cria a sala.
+- PC 2 entra.
+- cada computador deve mostrar sua própria mão embaixo;
+- o outro jogador aparece em cima;
+- somente o dono de cada mão enxerga suas cartas;
+- os dois precisam conseguir jogar quando chegar sua vez.
 
-1. buscar usuário pelo nome;
-2. enviar e aceitar pedido de amizade;
-3. criar sala;
-4. convidar amigo;
-5. aceitar convite;
-6. atualizar uma página dentro da sala e confirmar reconexão;
-7. testar Xadrez;
-8. testar Truco 1x1;
-9. testar TDB Music;
-10. conferir histórico e ranking depois de uma partida real.
+### Truco 2x2
 
-### Reconexão
-Feche/recarregue uma aba durante uma partida e volte antes de 90 segundos.
+Com quatro contas:
 
-O esperado:
-- jogador aparece como Reconectando;
-- ao voltar, recebe a mesma sala/partida;
-- não ganha/perde por abandono antes de 90s.
+- cada jogador se vê embaixo;
+- parceiro fica em cima;
+- adversários ficam nas laterais;
+- mãos adversárias ficam ocultas;
+- Mão de 11 e Mão de Ferro devem respeitar suas regras.
 
-### Ranking
-Partidas contra bot não devem alterar ranking/histórico competitivo.
+### Xadrez
+
+- cada lado deve mover sem a seleção desaparecer por atualização de relógio;
+- a peça deve responder imediatamente ao clique;
+- o servidor confirma a jogada;
+- pretas devem enxergar seu próprio lado embaixo.
+
+### Final da partida
+
+Em Truco e Xadrez:
+
+1. termine uma partida;
+2. clique `Voltar à sala`;
+3. confirme que o resultado antigo não reabre;
+4. host inicia `Nova partida`;
+5. confirme que um novo jogo começa para todos.
+
+### TDB Music
+
+- crie uma sala Music;
+- outro jogador entra;
+- ambos devem ver a mesma fila;
+- a sala continua disponível/joinable enquanto o player está aberto.
 
 ## 6. Segurança
 
-Nunca envie para GitHub:
+Nunca envie ao GitHub:
+
 - `SUPABASE_SECRET_KEY`;
 - `.env.local`;
-- chaves privadas.
+- tokens privados.
 
-As credenciais continuam nas Environment Variables da Vercel.
+Esses valores continuam nas Environment Variables da Vercel.

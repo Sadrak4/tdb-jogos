@@ -339,9 +339,18 @@ function trucoDispatch(action,payload={}){
       ELEVEN_DECISION:{type:'ELEVEN_DECISION',play:!!payload.play}
     };
     if(map[action]) return OnlineGameBridge.action(map[action]);
+    return false;
   }
 
-  return Core.actions.dispatch('truco', action, payload);
+  switch(action){
+    case 'PLAY_CARD': return applyPlayCard(payload);
+    case 'REQUEST_RAISE': return applyRequestRaise(payload);
+    case 'RESPOND_RAISE': return applyRespondRaise(payload);
+    case 'ELEVEN_DECISION': return applyLocalElevenDecision(payload);
+    default:
+      console.warn('[TDB Truco] Ação local desconhecida:',action);
+      return false;
+  }
 }
 
 function cleanupEmptyLocalRooms(){
@@ -1186,19 +1195,26 @@ function leaveRoom(){
 
 function openMusicRoom(){
   const room=state.activeRoom;
-  state.view='music';
   if(!room || room.game!=='music') return toast('Entre em uma sala TDB Music primeiro.');
+  if(typeof window.startMusicRoom!=='function') return toast('Módulo TDB Music não carregou.');
 
-  room.status='playing';
-  if(Core.mode==='online'&&window.TDBOnline?.connected){
-    if(room.ownerId===state.user.id) window.TDBOnline.upsertRoom({...room,status:'playing'});
-  }else{
+  state.view='music';
+
+  // TDB Music is a persistent shared room, not a competitive match.
+  // Do not flip it between open/playing or re-upsert it just to open the player.
+  if(Core.mode!=='online'){
     updateStoredRoom(room);
   }
 
   setPresence('listening',{roomCode:room.code,game:'music'});
-  if(typeof window.startMusicRoom!=='function') return toast('Módulo TDB Music não carregou.');
-  window.startMusicRoom(room);
+
+  try{
+    window.startMusicRoom(structuredClone(room));
+  }catch(err){
+    console.error('[TDB Music] Falha ao abrir sala:',err);
+    state.view='game';
+    toast('Não foi possível abrir o TDB Music. Tente novamente.');
+  }
 }
 window.openMusicRoom=openMusicRoom;
 
@@ -1222,12 +1238,25 @@ async function startGame(){
     state.view=room.game==='truco'?'playing-truco':'playing-chess';
     updateStoredRoom(room);
     setPresence('playing',{roomCode:room.code,game:room.game});
-    OnlineGameBridge.start(room,'player');
+    // Prepare the bridge identity, but do not start polling yet.
+    // Polling before /games/start could fetch the previous terminal match and reopen its result.
+    OnlineGameBridge.stop();
+    OnlineGameBridge.roomCode=room.code;
+    OnlineGameBridge.role='player';
     playUiSound(700,.09);
 
-    window.TDBOnline.startGame(room.code).then(ok=>{
-      if(!ok) room.status='open';
-    });
+    const ok=await window.TDBOnline.startGame(room.code);
+    if(!ok){
+      OnlineGameBridge.stop();
+      room.status='open';
+      state.view='waiting';
+      updateStoredRoom(room);
+      renderWaitingRoom();
+      return;
+    }
+
+    // The fresh state was already returned by /games/start. Now enable recovery polling.
+    window.TDBOnline.joinGame(room.code,state.user.id,'player');
     return;
   }
 
@@ -1711,26 +1740,46 @@ function startTrucoWithBots(){
 
 function applyOnlineTrucoState(serverState,role='player'){
   const previousSelected=truco?.selectedCard ?? null;
+  const previousVersion=Number(truco?.version||0);
+
   truco=structuredClone(serverState);
   truco.onlineMode=true;
   truco.spectatorMode=role==='spectator';
-  truco.selectedCard=previousSelected;
   truco.room=state.activeRoom||{};
+
+  // localSeat is supplied privately by the server for each authenticated player.
+  truco.localSeat=Number.isInteger(serverState.localSeat)?serverState.localSeat:null;
+
+  // Keep a selected card only while the exact same server version is still active.
+  truco.selectedCard=Number(serverState.version||0)===previousVersion?previousSelected:null;
+
+  // Normalize server field names to the UI model.
   truco.roundWinners=truco.trickResults||[];
-  truco.handOfEleven=truco.eleven?{team:truco.eleven.team,pending:truco.eleven.pending}:null;
+  truco.handOfEleven=truco.eleven
+    ? {team:truco.eleven.team,pending:truco.eleven.pending,responses:truco.eleven.responses||{}}
+    : null;
+
+  if(truco.phase==='eleven') truco.phase='eleven-decision';
+
+  truco.trickCards=(truco.trickCards||[]).map(tc=>({
+    ...tc,
+    player:tc.player ?? tc.seat
+  }));
+
   truco.ironRevealed=false;
   truco.discardCount=0;
-  truco.timerLeft=truco.turnDeadlineAt?Math.max(0,Math.ceil((truco.turnDeadlineAt-Date.now())/1000)):Number(truco.room?.turnTimer||truco.turnTimer||0);
+  truco.timerLeft=truco.turnDeadlineAt
+    ? Math.max(0,Math.ceil((truco.turnDeadlineAt-Date.now())/1000))
+    : Number(truco.room?.turnTimer||truco.turnTimer||0);
   truco.raiseLevel=truco.handValue;
   truco.starter=truco.activeSeats?.[0]??0;
 
-  // Server state already represents fully dealt hands; no fake deal animation.
+  // Server state is already fully dealt. Hidden opponent cards are null placeholders.
   truco.revealCounts=truco.revealCounts||{};
   for(const seat of truco.activeSeats||[]){
     truco.revealCounts[seat]=(truco.hands?.[seat]||[]).length;
   }
 
-  // Server uses bySeat; local UI historically used byPlayer.
   if(truco.pendingRaise && truco.pendingRaise.bySeat!==undefined){
     truco.pendingRaise.byPlayer=truco.pendingRaise.bySeat;
     truco.pendingRaise.votes=truco.pendingRaise.responses||{};
@@ -1851,7 +1900,7 @@ function dealNewHand(){
   truco.ironRevealed=false;
 
   const elevenTeam = truco.scores[0]===11 ? 0 : truco.scores[1]===11 ? 1 : null;
-  truco.handOfEleven = elevenTeam!==null && !truco.ironHand ? {team:elevenTeam,decision:null} : null;
+  truco.handOfEleven = elevenTeam!==null && !truco.ironHand ? {team:elevenTeam,pending:true,responses:{}} : null;
 
   truco.dealerIndex=(truco.dealerIndex+1)%truco.activeSeats.length;
   const starterIndex=(truco.dealerIndex+1)%truco.activeSeats.length;
@@ -1888,6 +1937,52 @@ function nextActiveSeat(seat){
   const order=truco.activeSeats||[0,1,2,3];
   const idx=order.indexOf(seat);
   return order[(idx+1)%order.length];
+}
+
+function trucoVisualLayout(){
+  const active=truco?.activeSeats||[];
+  if(!active.length) return {bottom:null,top:null,left:null,right:null};
+
+  let me=localTrucoSeat();
+  if(!Number.isInteger(me) || !active.includes(me)) me=active[0];
+
+  if(active.length===2){
+    const opponent=active.find(seat=>seat!==me) ?? null;
+    return {bottom:me,top:opponent,left:null,right:null};
+  }
+
+  const relative=seat=>((seat-me)+4)%4;
+  const layout={bottom:me,top:null,left:null,right:null};
+
+  for(const seat of active){
+    if(seat===me) continue;
+    const offset=relative(seat);
+    if(offset===2) layout.top=seat;
+    else if(offset===1) layout.left=seat;
+    else if(offset===3) layout.right=seat;
+  }
+
+  return layout;
+}
+function trucoVisualPositionForSeat(seat){
+  const layout=trucoVisualLayout();
+  return Object.entries(layout).find(([,realSeat])=>realSeat===seat)?.[0]||'top';
+}
+function syncTrucoSeatsStable(){
+  const layout=trucoVisualLayout();
+  const used=new Set();
+
+  for(const [pos,seat] of Object.entries(layout)){
+    if(!Number.isInteger(seat)) continue;
+    used.add(seat);
+    updateSeatStable(seat,pos);
+  }
+
+  for(const seat of [0,1,2,3]){
+    if(used.has(seat)) continue;
+    const host=document.getElementById(`seat${seat}`);
+    if(host?.childElementCount) host.replaceChildren();
+  }
 }
 
 function animateDealReveal(){
@@ -2019,6 +2114,8 @@ function updateSeatStable(seat,pos){
     return;
   }
 
+  root.className=`player-seat seat-${pos}`;
+
   const current=truco.current===seat && truco.phase==='playing';
   const badge=root.querySelector('.seat-badge');
   if(badge) badge.classList.toggle('current',current);
@@ -2043,7 +2140,10 @@ function updateSeatStable(seat,pos){
   const teamText=`T${player.team+1}`;
   if(team && team.textContent!==teamText) team.textContent=teamText;
 
-  if(seat===localTrucoSeat()) return;
+  if(seat===localTrucoSeat()){
+    root.querySelector('.side-hand,.enemy-hand')?.remove();
+    return;
+  }
 
   const wanted=Math.min(
     (truco.hands[seat]||[]).length,
@@ -2051,10 +2151,13 @@ function updateSeatStable(seat,pos){
   );
 
   let hand=root.querySelector('.side-hand,.enemy-hand');
+  const wantedClass=(pos==='left'||pos==='right')?'side-hand':'enemy-hand';
   if(!hand){
     hand=document.createElement('div');
-    hand.className=(pos==='left'||pos==='right')?'side-hand':'enemy-hand';
+    hand.className=wantedClass;
     root.appendChild(hand);
+  }else if(hand.className!==wantedClass){
+    hand.className=wantedClass;
   }
 
   while(hand.children.length>wanted){
@@ -2154,13 +2257,15 @@ function syncPlayZoneStable(){
   for(const [key,tc] of wanted){
     let el=zone.querySelector(`.play-card[data-player="${key}"]`);
 
+    const visualPos=trucoVisualPositionForSeat(Number(tc.player));
     if(!el){
       el=document.createElement('div');
-      el.className=`play-card p${tc.player} card-enter`;
+      el.className=`play-card visual-${visualPos} card-enter`;
       el.dataset.player=key;
       el.innerHTML=renderCard(tc.card,tc.hidden,false);
       zone.appendChild(el);
     }else{
+      el.className=`play-card visual-${visualPos}`;
       const hiddenNow=!!tc.hidden;
       const child=el.querySelector('.truco-card');
       const isHidden=child?.classList.contains('hidden');
@@ -2190,12 +2295,7 @@ function updateTrucoScreen(){
   set('trucoTimerSlot',room.turnTimer && truco.phase==='playing'
       ? `<div class="timer-ring" style="margin-left:auto;margin-top:8px">${truco.timerLeft||room.turnTimer}</div>` : '');
 
-  updateSeatStable(2,'top');
-  if(truco.activeSeats.includes(1)) updateSeatStable(1,'left');
-  else set('seat1','');
-  if(truco.activeSeats.includes(3)) updateSeatStable(3,'right');
-  else set('seat3','');
-  updateSeatStable(0,'bottom');
+  syncTrucoSeatsStable();
 
   set('trucoManilhaBadge','');
   const deckHost=document.getElementById('trucoDeckWrap');
@@ -2269,9 +2369,10 @@ function statusLabelForVote(v){
   return 'aguardando...';
 }
 function renderRoundDots(){
+  const mine=localTrucoTeam();
   return [0,1,2].map(i=>{
     const w=truco.roundWinners[i];
-    return `<i class="round-dot ${w===0?'us':w===1?'them':w==='tie'?'tie':''}"></i>`;
+    return `<i class="round-dot ${w===mine?'us':w===1-mine?'them':w==='tie'?'tie':''}"></i>`;
   }).join('');
 }
 function renderSeat(idx,pos){
@@ -2280,7 +2381,7 @@ function renderSeat(idx,pos){
   const current=truco.current===idx && truco.phase==='playing';
   const cards=(truco.hands[idx]||[]).slice(0,truco.revealCounts[idx]||0);
   let hand='';
-  if(idx!==0){
+  if(idx!==localTrucoSeat()){
     if(pos==='left'||pos==='right') hand=`<div class="side-hand">${cards.map(()=>cardBackMini()).join('')}</div>`;
     else hand=`<div class="enemy-hand">${cards.map(()=>cardBackMini()).join('')}</div>`;
   }
@@ -2332,16 +2433,21 @@ function renderMyHand(){
 
 function renderOverlay(){
   if(truco.winner!==null){
-    return `<div class="game-message"><h2>${truco.winner===localTrucoTeam()?'VITÓRIA':'DERROTA'}</h2><p>${truco.winner===localTrucoTeam()?'Sua dupla chegou aos 12 pontos.':'A dupla adversária chegou aos 12 pontos.'}</p><div class="choices"><button class="btn btn-primary" onclick="restartTrucoMatch()">Jogar novamente</button><button class="btn btn-dark" onclick="renderWaitingRoom()">Voltar à sala</button></div></div>`;
+    const canRematch=!truco.onlineMode || truco.room?.ownerId===state.user.id;
+    return `<div class="game-message"><h2>${truco.winner===localTrucoTeam()?'VITÓRIA':'DERROTA'}</h2><p>${truco.winner===localTrucoTeam()?'Sua dupla chegou aos 12 pontos.':'A dupla adversária chegou aos 12 pontos.'}</p><div class="choices">${canRematch?`<button class="btn btn-primary" onclick="restartTrucoMatch()">Nova partida</button>`:''}<button class="btn btn-dark" onclick="returnFromTruco()">Voltar à sala</button></div>${truco.onlineMode&&!canRematch?'<small class="muted">O host pode iniciar a próxima partida.</small>':''}</div>`;
   }
   if(truco.phase==='eleven-decision'){
     const t=truco.handOfEleven.team;
-    if(t===0){
+    if(t===localTrucoTeam()){
       const partner=truco.players.find(p=>p.team===localTrucoTeam() && p.seat!==localTrucoSeat());
       const partnerCards=partner ? `<div style="display:flex;gap:8px;justify-content:center;margin:12px 0">${truco.hands[partner.seat].map(c=>renderCard(c,false,false)).join('')}</div>` : '';
-      return `<div class="game-message"><h2>MÃO DE 11</h2><p>${truco.mode==='2v2'?'Sua dupla está com 11. A primeira decisão da dupla vale para os dois.':'Você está com 11. Escolha se quer jogar esta mão.'}</p>
+      const myDecision=truco.handOfEleven?.responses?.[localTrucoSeat()];
+      return `<div class="game-message"><h2>MÃO DE 11</h2><p>${truco.mode==='2v2'?'Sua dupla está com 11. Cada integrante decide. Se um correr, a dupla corre.':'Você está com 11. Escolha se quer jogar esta mão.'}</p>
         ${partnerCards}
-        <div class="choices"><button class="btn btn-primary" onclick="decideEleven(true)">JOGAR • vale 3</button><button class="btn btn-danger" onclick="decideEleven(false)">CORRER</button></div></div>`;
+        ${myDecision===undefined
+          ? `<div class="choices"><button class="btn btn-primary" onclick="decideEleven(true)">JOGAR • vale 3</button><button class="btn btn-danger" onclick="decideEleven(false)">CORRER</button></div>`
+          : `<div class="player-prompt">${myDecision?'Você escolheu JOGAR.':'Você escolheu CORRER.'} ${truco.mode==='2v2'?'Aguardando sua dupla…':''}</div>`}
+      </div>`;
     } else {
       return `<div class="game-message"><h2>MÃO DE 11</h2><p>${truco.mode==='2v2'?'A dupla adversária está decidindo se joga esta mão.':'O adversário está decidindo se joga esta mão.'}</p></div>`;
     }
@@ -2356,13 +2462,17 @@ function renderOverlay(){
     const teamTitle=pr.to===3?'TRUCO!':pr.to===6?'SEIS!':pr.to===9?'NOVE!':'DOZE!';
     const rows=teamPlayers.map(p=>`<div class="raise-row"><strong>${escapeHtml(p.username)}</strong><span>${statusLabelForVote(pr.votes[p.seat])}</span></div>`).join('');
     if(pr.targetTeam===localTrucoTeam()){
+      const myVote=pr.votes?.[localTrucoSeat()];
       return `<div class="game-message truco-call"><h2>${teamTitle}</h2><p>${escapeHtml((truco.players.find(p=>p.seat===pr.byPlayer)||{username:'Jogador'}).username)} aumentou a mão. O pedido só entra se a dupla concordar. Se um correr, a dupla corre.</p>
       <div class="raise-status">${rows}</div>
-      <div class="choices">
-        <button class="btn btn-primary" onclick="respondRaise('accept')">ACEITAR</button>
-        <button class="btn btn-danger" onclick="respondRaise('run')">CORRER</button>
-        ${next?`<button class="btn btn-secondary" onclick="respondRaise('raise')">PEDIR ${next}</button>`:''}
-      </div></div>`;
+      ${myVote
+        ? `<div class="player-prompt">Sua resposta: ${statusLabelForVote(myVote)}. ${truco.mode==='2v2'?'Aguardando sua dupla…':''}</div>`
+        : `<div class="choices">
+            <button class="btn btn-primary" onclick="respondRaise('accept')">ACEITAR</button>
+            <button class="btn btn-danger" onclick="respondRaise('run')">CORRER</button>
+            ${next?`<button class="btn btn-secondary" onclick="respondRaise('raise')">PEDIR ${next}</button>`:''}
+          </div>`}
+      </div>`;
     } else {
       return `<div class="game-message truco-call"><h2>${teamTitle}</h2><p>Aguardando resposta da dupla adversária.</p><div class="raise-status">${rows}</div></div>`;
     }
@@ -2381,12 +2491,21 @@ function renderTrucoActions(){
     <button class="btn btn-primary action-main" ${myTurn&&truco.selectedCard!==null?'':'disabled'} onclick="playSelected(false)">Jogar carta</button>
     <button class="btn btn-secondary action-main" title="${truco.round===0?'Disponível a partir da segunda rodada':'Jogar a carta virada para baixo'}" ${canHide&&truco.selectedCard!==null?'':'disabled'} onclick="playSelected(true)">Esconder</button>
     ${nextRaise?`<button class="btn btn-secondary action-main" ${canTruco?'':'disabled'} onclick="requestRaise()">${nextRaise===3?'TRUCO':nextRaise}</button>`:''}
-    <button class="btn btn-dark" onclick="renderWaitingRoom()">Sair da mesa</button>
+    <button class="btn btn-dark" onclick="leaveTrucoTable()">Sair da partida</button>
   </div>`;
 }
 
 function selectTrucoCard(idx){
-  if(truco.phase!=='playing' || truco.current!==0) return;
+  const seat=localTrucoSeat();
+  if(
+    truco.phase!=='playing' ||
+    truco.spectatorMode ||
+    truco.current!==seat ||
+    !Number.isInteger(idx) ||
+    idx<0 ||
+    idx>=(truco.hands?.[seat]||[]).length
+  ) return;
+
   truco.selectedCard=idx;
   renderTruco();
 }
@@ -2427,14 +2546,16 @@ function resolveTrick(){
     winner=tied?'tie':(playerBySeat(best.player)?.team ?? 'tie');
   }
   truco.roundWinners.push(winner);
-  logTruco(`Rodada ${truco.round+1}: ${winner==='tie'?'empate':winner===0?(truco.mode==='1v1'?'você':'nossa dupla'):(truco.mode==='1v1'?'adversário':'adversários')}.`);
-  showRoundFlash(winner==='tie'?'EMPATE NA RODADA':winner===0?(truco.mode==='1v1'?'VOCÊ VENCEU A RODADA':'NOSSA DUPLA VENCEU A RODADA'):(truco.mode==='1v1'?'ADVERSÁRIO VENCEU A RODADA':'ELES VENCERAM A RODADA'));
+  const localTeam=localTrucoTeam();
+  logTruco(`Rodada ${truco.round+1}: ${winner==='tie'?'empate':winner===localTeam?(truco.mode==='1v1'?'você':'nossa dupla'):(truco.mode==='1v1'?'adversário':'adversários')}.`);
+  showRoundFlash(winner==='tie'?'EMPATE NA RODADA':winner===localTeam?(truco.mode==='1v1'?'VOCÊ VENCEU A RODADA':'NOSSA DUPLA VENCEU A RODADA'):(truco.mode==='1v1'?'ADVERSÁRIO VENCEU A RODADA':'ELES VENCERAM A RODADA'));
   truco.discardCount += truco.activeSeats.length;
   const handWinner=evaluateHandWinner();
   if(handWinner!==null) return awardHand(handWinner);
   truco.round++;
+  const nextStarter = winner==='tie' ? truco.starter : firstPlayerOfWinningTeamFromLastTrick(winner);
   truco.trickCards=[];
-  truco.starter = winner==='tie' ? truco.starter : firstPlayerOfWinningTeamFromLastTrick(winner);
+  truco.starter=nextStarter;
   truco.current=truco.starter;
   truco.phase='playing';
   renderTruco();
@@ -2474,7 +2595,7 @@ function awardHand(team){
     logTruco('As três rodadas empataram. Ninguém pontua.');
   } else {
     truco.scores[team]+=truco.handValue;
-    logTruco(`${team===0?'Nossa dupla':'Adversários'} ganhou ${truco.handValue} ponto(s).`);
+    logTruco(`${team===localTrucoTeam()?(truco.mode==='1v1'?'Você':'Nossa dupla'):(truco.mode==='1v1'?'Adversário':'Adversários')} ganhou ${truco.handValue} ponto(s).`);
   }
   if(truco.scores[0]>=12 || truco.scores[1]>=12){
     truco.winner=truco.scores[0]>=12?0:1;
@@ -2723,7 +2844,7 @@ function applyRespondRaise({action,bot=false,responderIdx=0}){
 }
 function maybeAutoFriendlyVote(){
   const pr=truco?.pendingRaise;
-  if(!pr || pr.targetTeam!==0) return;
+  if(!pr || pr.targetTeam!==localTrucoTeam()) return;
 
   const partner=truco.players.find(
     p=>p.team===localTrucoTeam() && p.seat!==localTrucoSeat() && p.bot
@@ -2737,6 +2858,65 @@ function maybeAutoFriendlyVote(){
     forceBotRaiseResponse(partner,token);
   },480);
 }
+
+function decideEleven(play){
+  if(!truco?.handOfEleven?.pending) return;
+  return trucoDispatch('ELEVEN_DECISION',{
+    play:!!play,
+    playerIdx:localTrucoSeat()
+  });
+}
+function applyLocalElevenDecision({play,playerIdx=localTrucoSeat(),bot=false}={}){
+  const hand11=truco?.handOfEleven;
+  if(!hand11?.pending) return false;
+
+  const player=playerBySeat(playerIdx);
+  if(!player || player.team!==hand11.team) return false;
+
+  hand11.responses=hand11.responses||{};
+  hand11.responses[playerIdx]=!!play;
+
+  if(!play){
+    const other=1-hand11.team;
+    truco.scores[other]+=1;
+    logTruco(`${player.username} correu na Mão de 11.`);
+    truco.handOfEleven=null;
+    if(truco.scores[other]>=12){
+      truco.winner=other;
+      truco.phase='finished';
+      renderTruco();
+      return true;
+    }
+    truco.phase='hand-end';
+    renderTruco();
+    setTimeout(dealNewHand,900);
+    return true;
+  }
+
+  const members=truco.players.filter(p=>p.team===hand11.team);
+
+  // Local bot teammate decides automatically so bot tests cannot deadlock.
+  for(const member of members){
+    if(member.seat===playerIdx || hand11.responses[member.seat]!==undefined) continue;
+    if(member.bot) hand11.responses[member.seat]=true;
+  }
+
+  const waiting=members.some(member=>hand11.responses[member.seat]===undefined);
+  if(waiting){
+    renderTruco();
+    return true;
+  }
+
+  hand11.pending=false;
+  truco.handValue=3;
+  truco.raiseLevel=3;
+  truco.phase='playing';
+  logTruco('Mão de 11 aceita. A mão vale 3 pontos.');
+  renderTruco();
+  maybeBotTurn();
+  return true;
+}
+
 function maybeAutoElevenDecision(){
   if(truco.handOfEleven?.team!==1) return;
 
@@ -2809,12 +2989,72 @@ function autoPlayCurrent(){
   logTruco(`${playerBySeat(p)?.username||'Jogador'} ficou sem tempo. Carta aleatória jogada.`);
   trucoDispatch('PLAY_CARD',{playerIdx:p,cardIdx:idx,hidden:false});
 }
-function restartTrucoMatch(){
-  truco.scores=[0,0];
-  truco.winner=null;
-  truco.dealerIndex=(truco.activeSeats?.length||1)-1;
-  truco.dealer=truco.activeSeats?.[truco.dealerIndex] ?? 0;
-  dealNewHand();
+async function returnFromTruco(){
+  clearInterval(trucoTimerInterval);
+
+  if(truco?.onlineMode && !truco?.room?.simulation){
+    const code=truco.room?.code||state.activeRoom?.code;
+    OnlineGameBridge.stop();
+
+    const room=code?await window.TDBOnline?.returnGameToRoom?.(code):null;
+    if(!room){
+      toast('Não foi possível voltar à sala agora.');
+      return;
+    }
+
+    state.activeRoom=room;
+    Core.rooms.setActive(room);
+    state.view='waiting';
+    setPresence('room',{roomCode:room.code,game:'truco'});
+    renderWaitingRoom();
+    return;
+  }
+
+  state.view='waiting';
+  renderWaitingRoom();
+}
+
+async function restartTrucoMatch(){
+  clearInterval(trucoTimerInterval);
+
+  if(truco?.onlineMode && !truco?.room?.simulation){
+    const code=truco.room?.code||state.activeRoom?.code;
+    if(truco.room?.ownerId!==state.user.id){
+      toast('Somente o host pode iniciar a nova partida.');
+      return returnFromTruco();
+    }
+
+    // Keep the bridge identity so the official new state can be applied immediately.
+    OnlineGameBridge.roomCode=code;
+    OnlineGameBridge.role='player';
+
+    const result=await window.TDBOnline?.rematchGame?.(code);
+    if(!result?.state){
+      toast('Não foi possível iniciar a nova partida.');
+      return;
+    }
+
+    if(result.room){
+      state.activeRoom=result.room;
+      Core.rooms.setActive(result.room);
+    }
+    state.view='playing-truco';
+    setPresence('playing',{roomCode:code,game:'truco'});
+    return;
+  }
+
+  // Bot/local match: build a completely fresh match instead of reusing terminal state.
+  const room=structuredClone(truco.room);
+  state.view=room.simulation?'bot-truco':'playing-truco';
+  startTrucoGame(room,!!room.simulation);
+}
+
+function leaveTrucoTable(){
+  if(truco?.onlineMode && truco?.phase!=='finished'){
+    if(!confirm('Sair agora encerra sua participação nesta partida. Deseja continuar?')) return;
+    return leaveRoom();
+  }
+  return returnFromTruco();
 }
 
 window.startTrucoWithBots=startTrucoWithBots;
@@ -2825,6 +3065,8 @@ window.requestRaise=requestRaise;
 window.respondRaise=respondRaise;
 window.decideEleven=decideEleven;
 window.restartTrucoMatch=restartTrucoMatch;
+window.returnFromTruco=returnFromTruco;
+window.leaveTrucoTable=leaveTrucoTable;
 
 function renderTrucoSpectator(room){
   const t=window.truco||null;

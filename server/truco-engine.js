@@ -29,10 +29,14 @@ function compareCards(a,b,manilha){
 }
 function makePlayers(room){
   const seats=Number(room.trucoSeats||4)===2?[0,2]:[0,1,2,3];
+  const oneVsOne=seats.length===2;
   return seats.map((seat,i)=>{
     const p=room.players?.[i]||{id:`BOT-${seat}`,username:`Bot ${seat}`,avatar:'BOT',bot:true};
-    return {...clone(p),seat,team:teamOfSeat(seat),bot:!!p.bot};
+    return {...clone(p),seat,team:oneVsOne?i:teamOfSeat(seat),bot:!!p.bot};
   });
+}
+function teamForSeat(state,seat){
+  return state.players.find(p=>p.seat===seat)?.team ?? teamOfSeat(seat);
 }
 function createTrucoState(room){
   const players=makePlayers(room);
@@ -89,13 +93,13 @@ function resolveTrick(s){
     if(cmp>0){best=tc;tie=false}
     else if(cmp===0) tie=true;
   }
-  const result=tie?'tie':teamOfSeat(best.seat);
+  const result=tie?'tie':teamForSeat(s,best.seat);
   s.trickResults.push(result);
   const lead=s.current;
   const trickWinnerSeat=tie?lead:best.seat;
   s.round++;
   s.trickCards=[];
-  const forehand=teamOfSeat(nextSeat(s.activeSeats,s.dealer));
+  const forehand=teamForSeat(s,nextSeat(s.activeSeats,s.dealer));
   const hw=handWinnerFromResults(s.trickResults,forehand);
   if(hw!==null || s.round>=3){
     awardHand(s,hw===null?forehand:hw,s.handValue);
@@ -210,6 +214,9 @@ export function viewFor(state,userId,role='player'){
   const s=clone(state);
   const me=s.players.find(p=>p.id===userId);
   const mySeat=me?.seat??null;
+  // Hidden cards already played on the table must stay private too.
+  s.trickCards=(s.trickCards||[]).map(tc=>tc.hidden?{...tc,card:null}:tc);
+
   for(const seat of s.activeSeats){
     let canSee=role!=='spectator' && seat===mySeat;
     if(role!=='spectator' && s.eleven?.pending && me && me.team===s.eleven.team){

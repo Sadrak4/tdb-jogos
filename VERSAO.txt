@@ -1,13 +1,39 @@
-TDB JOGOS v5.3 — Renderização e Navegação Fix
+TDB JOGOS v5.4 — Gameplay + Lifecycle Fix
 
-- corrige pisca-pisca no lobby e nas demais abas
-- Realtime/polling não recriam mais #app em segundo plano
-- lobby/salas usam atualização incremental
-- Truco/Xadrez online não alternam mais entre sala e partida
-- Xadrez não remonta o tabuleiro em cada polling
-- partidas contra bots ficam isoladas do sincronizador online
-- ao sair do teste com bot, a sala real é restaurada
-- convite de amigo abre modal sem tirar o host da sala
-- quem recebe convite ganha notificação flutuante por 10 segundos
-- convite permanece disponível na aba Amigos após o aviso fechar
-- sem mudança de schema em relação à v5.2
+TRUCO
+- cada jogador recebe e vê apenas a própria mão
+- você sempre aparece embaixo da sua própria tela
+- 1x1: adversário em cima
+- 2x2: parceiro em cima e adversários nas laterais
+- equipes 1x1 corrigidas
+- jogadores não-host conseguem jogar normalmente
+- carta escondida também é redigida do estado enviado ao navegador
+- Mão de 11, Mão de Ferro e Truco/6/9/12 revisados
+- vencedor da rodada inicia corretamente a próxima
+- bot/local independente do multiplayer
+
+XADREZ
+- seleção não some com snapshots apenas de relógio
+- snapshots de relógio não recriam as 64 casas
+- movimento online com resposta visual imediata
+- servidor continua autoridade das regras
+- rollback automático em jogada rejeitada
+- jogador de pretas vê suas peças embaixo
+- promoção, PGN, relógio e reconexão preservados
+
+CICLO DE PARTIDA
+- Voltar à sala permanece na sala
+- resultado antigo não reabre automaticamente
+- Nova partida cria estado e matchId novos
+- rematch funciona com jogadores reais e bot/local
+- clientes aceitam rematch novo e ignoram resposta atrasada do match anterior
+- iniciar nova partida pela sala não consulta primeiro o estado terminal antigo
+
+TDB MUSIC
+- abrir/criar sala não usa lifecycle competitivo
+- sala permanece aberta/joinable
+- host e convidados compartilham a mesma fila
+
+SUPABASE
+- nenhuma tabela nova nesta versão
+- schema da v5.2 continua suficiente

@@ -9,6 +9,7 @@ if(!E){
 let chess=null;
 let chessClockTimer=null;
 let lastClockTick=0;
+let pendingOnlineMove=null;
 
 function byColor(color){ return chess.players[color]; }
 function localColor(){
@@ -91,20 +92,70 @@ function startChessWithBot(){
 }
 
 
+function chessBoardFingerprint(board){
+  return (board||[]).flat().map(p=>p?`${p.color}:${p.type}:${p.moved?'1':'0'}`:'--').join('|');
+}
+
 function applyOnlineChessState(serverState,activeRoom,role='player'){
+  const incomingVersion=Number(serverState?.version||0);
+
+  // While our optimistic move is waiting for confirmation, a fallback poll can
+  // still return the previous version. Never let that stale response undo the move.
+  if(pendingOnlineMove && incomingVersion<=pendingOnlineMove.baseVersion){
+    return;
+  }
+
   clearInterval(chessClockTimer);
+
+  const previous=chess;
+  const samePosition=!!previous &&
+    Number(previous.version||0)===incomingVersion &&
+    previous.turn===serverState.turn &&
+    chessBoardFingerprint(previous.board)===chessBoardFingerprint(serverState.board);
+
+  const preservedSelection=samePosition ? previous.selectedSquare : null;
+
   chess=structuredClone(serverState);
   chess.onlineMode=true;
   chess.spectatorMode=role==='spectator';
   if(activeRoom) chess.room=structuredClone(activeRoom);
+
+  if(
+    preservedSelection &&
+    chess.status==='playing' &&
+    chess.turn===chess.localColor
+  ){
+    const piece=chess.board?.[preservedSelection.r]?.[preservedSelection.c];
+    if(piece?.color===chess.localColor){
+      chess.selectedSquare=preservedSelection;
+      chess.legalMoves=E.legalMovesFrom(chess,preservedSelection.r,preservedSelection.c);
+    }
+  }
+
+  if(pendingOnlineMove && incomingVersion>pendingOnlineMove.baseVersion){
+    pendingOnlineMove=null;
+  }
+
   window.__TDB_CHESS_STATE__=chess;
-  renderChessScreen(!document.getElementById('chessRoot'));
+
+  const root=document.getElementById('chessRoot');
+  if(!root){
+    renderChessScreen(true);
+  }else if(samePosition){
+    // Clock-only/fallback snapshots must not rebuild the 64 board buttons.
+    // Replacing the board between mousedown and mouseup was one cause of lost clicks.
+    updateClockDisplays();
+  }else{
+    renderChessScreen(false);
+  }
+
   startClock();
 }
 window.applyOnlineChessState=applyOnlineChessState;
 
 function startChessGame(room,localBot=false){
   clearInterval(chessClockTimer);
+  pendingOnlineMove=null;
   state.view=localBot?'bot-chess':'playing-chess';
   const players=room.players.slice(0,2);
   const colors=chooseColors(room,players);
@@ -258,14 +309,16 @@ function statusText(){
 }
 
 function boardOrientation(){
-  return 'white';
+  const color=localColor();
+  return color==='black'?'black':'white';
 }
 
 function renderBoard(){
   const board=document.getElementById('chessBoard');
   if(!board) return;
-  const rows=[0,1,2,3,4,5,6,7];
-  const cols=[0,1,2,3,4,5,6,7];
+  const orientation=boardOrientation();
+  const rows=orientation==='black'?[7,6,5,4,3,2,1,0]:[0,1,2,3,4,5,6,7];
+  const cols=orientation==='black'?[7,6,5,4,3,2,1,0]:[0,1,2,3,4,5,6,7];
   const legal=new Set(chess.legalMoves.map(m=>`${m.to.r},${m.to.c}`));
   const selected=chess.selectedSquare;
   const last=chess.lastMove;
@@ -294,28 +347,58 @@ function renderBoard(){
 
 async function clickChessSquare(r,c){
   if(!chess || chess.status!=='playing' || chess.spectatorMode) return;
+
   const mine=localColor();
   if(chess.turn!==mine) return toast('Aguarde a vez do adversário.');
+  if(chess.onlineMode && pendingOnlineMove) return;
 
   const p=chess.board[r][c];
 
   if(chess.selectedSquare){
     const move=chess.legalMoves.find(m=>m.to.r===r&&m.to.c===c);
+
     if(move){
       const promotion=move.promotion?await choosePromotionPiece():'queen';
       if(!promotion) return;
+
       if(chess.onlineMode){
-        chess.selectedSquare=null;
-        chess.legalMoves=[];
+        const before=structuredClone(chess);
+        const baseVersion=Number(before.version||0);
+
+        // Immediate local feedback. The server remains authoritative.
+        const optimistic=E.applyMove(structuredClone(chess),move,promotion);
+        optimistic.onlineMode=true;
+        optimistic.spectatorMode=false;
+        optimistic.localColor=before.localColor;
+        optimistic.room=before.room;
+        optimistic.version=baseVersion;
+        optimistic.selectedSquare=null;
+        optimistic.legalMoves=[];
+
+        pendingOnlineMove={baseVersion,before};
+        chess=optimistic;
+        window.__TDB_CHESS_STATE__=chess;
+        chessMoveSound();
         updateChessUI();
-        return OnlineGameBridge.action({
+
+        const ok=await OnlineGameBridge.action({
           type:'MOVE',
           from:move.from,
           to:move.to,
           castle:move.castle||null,
           promotion
         });
+
+        if(!ok && pendingOnlineMove?.baseVersion===baseVersion){
+          chess=before;
+          pendingOnlineMove=null;
+          window.__TDB_CHESS_STATE__=chess;
+          updateChessUI();
+          window.TDBOnline?.syncGame?.(chess.room.code,'player');
+        }
+        return;
       }
+
       return makeChessMove(move,promotion);
     }
   }
@@ -327,9 +410,9 @@ async function clickChessSquare(r,c){
     chess.selectedSquare=null;
     chess.legalMoves=[];
   }
+
   updateChessUI();
 }
-
 
 function choosePromotionPiece(){
   return new Promise(resolve=>{
@@ -482,7 +565,8 @@ function renderOverlay(){
 }
 
 function resultModal(title,text){
-  return `<div class="chess-modal-backdrop"><div class="chess-result-modal">${logoTag()}<h2>${title}</h2><p>${text}</p><div class="choices"><button class="btn btn-primary" onclick="restartChess()">Nova partida</button><button class="btn btn-dark" onclick="returnFromChess()">Voltar à sala</button></div></div></div>`;
+  const canRematch=!chess.onlineMode || chess.room?.ownerId===state.user.id;
+  return `<div class="chess-modal-backdrop"><div class="chess-result-modal">${logoTag()}<h2>${title}</h2><p>${text}</p><div class="choices">${canRematch?'<button class="btn btn-primary" onclick="restartChess()">Nova partida</button>':''}<button class="btn btn-dark" onclick="returnFromChess()">Voltar à sala</button></div>${chess.onlineMode&&!canRematch?'<small class="muted">O host pode iniciar a próxima partida.</small>':''}</div></div>`;
 }
 
 function offerChessDraw(){
@@ -521,12 +605,64 @@ function resignChess(){
   if(chess.onlineMode) return OnlineGameBridge.action({type:'RESIGN'});
   chess.status='resigned'; chess.winner=E.other(localColor()); renderChessScreen(false);
 }
-function restartChess(){
+async function restartChess(){
   clearInterval(chessClockTimer);
-  startChessGame(chess.room,chess.localBot);
+  pendingOnlineMove=null;
+
+  if(chess?.onlineMode && !chess?.room?.simulation){
+    const code=chess.room?.code||state.activeRoom?.code;
+
+    if(chess.room?.ownerId!==state.user.id){
+      toast('Somente o host pode iniciar a nova partida.');
+      return returnFromChess();
+    }
+
+    OnlineGameBridge.roomCode=code;
+    OnlineGameBridge.role='player';
+
+    const result=await window.TDBOnline?.rematchGame?.(code);
+    if(!result?.state){
+      toast('Não foi possível iniciar a nova partida.');
+      return;
+    }
+
+    if(result.room){
+      state.activeRoom=result.room;
+      Core.rooms.setActive(result.room);
+    }
+
+    state.view='playing-chess';
+    setPresence('playing',{roomCode:code,game:'chess'});
+    return;
+  }
+
+  // Bot/local: build a fresh board and reset all match state.
+  startChessGame(structuredClone(chess.room),!!chess.localBot);
 }
-function returnFromChess(){
+
+async function returnFromChess(){
   clearInterval(chessClockTimer);
+  pendingOnlineMove=null;
+
+  if(chess?.onlineMode && !chess?.room?.simulation){
+    const code=chess.room?.code||state.activeRoom?.code;
+    OnlineGameBridge.stop();
+
+    const room=code?await window.TDBOnline?.returnGameToRoom?.(code):null;
+    if(!room){
+      toast('Não foi possível voltar à sala agora.');
+      return;
+    }
+
+    state.activeRoom=room;
+    Core.rooms.setActive(room);
+    state.view='waiting';
+    setPresence('room',{roomCode:room.code,game:'chess'});
+    renderWaitingRoom();
+    return;
+  }
+
+  state.view='waiting';
   renderWaitingRoom();
 }
 

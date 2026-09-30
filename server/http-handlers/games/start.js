@@ -13,6 +13,11 @@ export default async function handler(req,res){
     if(!room) throw new Error('Sala não encontrada.');
     if(room.ownerId!==user.id) throw new Error('Somente o host pode iniciar.');
 
+    const current=await Games.getGame(code);
+    if(current && !Games.isTerminal(current) && room.status==='playing'){
+      throw new Error('Já existe uma partida em andamento nesta sala.');
+    }
+
     const required=room.game==='truco'?Number(room.trucoSeats||4):room.game==='chess'?2:1;
     if((room.players||[]).length<required) throw new Error(`A sala precisa de ${required} jogador(es).`);
     if((room.players||[]).some(p=>p.connection==='reconnecting')) throw new Error('Aguarde todos os jogadores reconectarem antes de iniciar.');

@@ -53,10 +53,82 @@ async function joinRoom(code,password=''){return singleFlight(`join:${code}`,asy
 async function watchRoom(code){return singleFlight(`watch:${code}`,async()=>{try{const r=await api('/api/rooms/watch',{method:'POST',body:JSON.stringify({code})});if(r.room){const i=cache.rooms.findIndex(x=>x.code===r.room.code);if(i>=0)cache.rooms[i]=r.room;else cache.rooms.push(r.room);write(CACHE_KEYS.rooms,cache.rooms);syncEvent('rooms')}return r.room}catch(err){onlineError(err,{action:'watch-room'});return null}},500)}
 async function leaveRoom(code){return singleFlight(`leave:${code}`,async()=>{try{await api('/api/rooms/leave',{method:'POST',body:JSON.stringify({code})});await refreshSnapshot();return true}catch(err){onlineError(err,{action:'leave-room'});return false}},500)}
 async function kickPlayer(code,targetId){return singleFlight(`kick:${code}:${targetId}`,async()=>{const r=await api('/api/rooms/kick',{method:'POST',body:JSON.stringify({code,targetId})});await refreshSnapshot();return r.room},500)}
-function dispatchGameState(roomCode,state){if(currentGame&&currentGame.roomCode===roomCode)currentGame.version=Number(state?.version||0);window.dispatchEvent(new CustomEvent('tdb-game-state',{detail:{roomCode,state}}))}
+function dispatchGameState(roomCode,state){
+  if(currentGame&&currentGame.roomCode===roomCode){
+    const incomingMatchId=state?.matchId||null;
+    const incomingStartedAt=Number(state?.startedAt||0);
+    const currentStartedAt=Number(currentGame.startedAt||0);
+
+    // Different matchId can mean either:
+    // 1) a legitimate newer rematch started by the host; or
+    // 2) a late response from the old match.
+    // Accept only the newer match.
+    if(currentGame.matchId&&incomingMatchId&&currentGame.matchId!==incomingMatchId){
+      if(incomingStartedAt<=currentStartedAt) return false;
+      currentGame.version=0;
+    }
+
+    if(incomingMatchId) currentGame.matchId=incomingMatchId;
+    if(incomingStartedAt) currentGame.startedAt=incomingStartedAt;
+    currentGame.version=Number(state?.version||0);
+  }
+
+  window.dispatchEvent(new CustomEvent('tdb-game-state',{detail:{roomCode,state}}));
+  return true;
+}
 async function startGame(roomCode){return singleFlight(`start:${roomCode}`,async()=>{try{const r=await api('/api/games/start',{method:'POST',body:JSON.stringify({roomCode})});if(r.state)dispatchGameState(roomCode,r.state);await refreshSnapshot();return true}catch(err){onlineError(err,{action:'start-game'});return false}},650)}
+async function returnGameToRoom(roomCode){
+  stopGameSync();
+  return singleFlight(`game-return:${roomCode}`,async()=>{
+    try{
+      const r=await api('/api/games/return',{
+        method:'POST',
+        body:JSON.stringify({roomCode})
+      });
+      if(r.room){
+        const i=cache.rooms.findIndex(x=>x.code===r.room.code);
+        if(i>=0) cache.rooms[i]=r.room; else cache.rooms.push(r.room);
+        write(CACHE_KEYS.rooms,cache.rooms);
+        syncEvent('rooms');
+      }
+      return r.room||null;
+    }catch(err){
+      onlineError(err,{action:'game-return'});
+      return null;
+    }
+  },400);
+}
+async function rematchGame(roomCode){
+  stopGameSync();
+  return singleFlight(`game-rematch:${roomCode}`,async()=>{
+    try{
+      const r=await api('/api/games/rematch',{
+        method:'POST',
+        body:JSON.stringify({roomCode})
+      });
+      if(r.room){
+        const i=cache.rooms.findIndex(x=>x.code===r.room.code);
+        if(i>=0) cache.rooms[i]=r.room; else cache.rooms.push(r.room);
+        write(CACHE_KEYS.rooms,cache.rooms);
+      }
+      if(r.state){
+        currentGame={roomCode,role:'player',version:Number(r.state.version||0),matchId:r.state.matchId||null,startedAt:Number(r.state.startedAt||0)};
+        dispatchGameState(roomCode,r.state);
+        clearInterval(gamePollTimer);
+        gamePollTimer=setInterval(()=>{
+          if(currentGame?.roomCode===roomCode) syncGame(roomCode,'player');
+        },900);
+      }
+      syncEvent('rooms');
+      return r;
+    }catch(err){
+      onlineError(err,{action:'game-rematch'});
+      return null;
+    }
+  },650);
+}
 async function syncGame(roomCode,role='player'){try{const r=await api(`/api/games/state?roomCode=${encodeURIComponent(roomCode)}&role=${encodeURIComponent(role)}&_=${Date.now()}`,{method:'GET'});if(r.state)dispatchGameState(roomCode,r.state);return true}catch(err){if(err.status!==404)console.warn('[TDB game sync]',err.message);return false}}
-function joinGame(roomCode,userId,role='player'){currentGame={roomCode,role,version:0};clearInterval(gamePollTimer);syncGame(roomCode,role);gamePollTimer=setInterval(()=>{if(currentGame?.roomCode===roomCode)syncGame(roomCode,role)},1500);return true}
+function joinGame(roomCode,userId,role='player'){currentGame={roomCode,role,version:0,matchId:null,startedAt:0};clearInterval(gamePollTimer);syncGame(roomCode,role);gamePollTimer=setInterval(()=>{if(currentGame?.roomCode===roomCode)syncGame(roomCode,role)},900);return true}
 async function gameAction(roomCode,userId,action){return singleFlight(`game-action:${roomCode}`,async()=>{try{const enriched={...action,actionId:action.actionId||actionId('GAME'),expectedVersion:currentGame?.version??undefined},r=await api('/api/games/action',{method:'POST',body:JSON.stringify({roomCode,action:enriched})});if(r.state)dispatchGameState(roomCode,r.state);return true}catch(err){if(err.code==='STALE_STATE'||/partida mudou/i.test(err.message)){await syncGame(roomCode,currentGame?.role||'player');if(typeof window.toast==='function')window.toast('A partida foi atualizada. Tente novamente.');return false}onlineError(err,{action:'game-action'});return false}},180)}
 function stopGameSync(){currentGame=null;clearInterval(gamePollTimer);gamePollTimer=null}
 async function refreshShared(key){try{const r=await api(`/api/shared/get?key=${encodeURIComponent(key)}&_=${Date.now()}`,{method:'GET'});cache.shared[key]=r.value;write(CACHE_KEYS.shared,cache.shared);emitLocal(`shared:${key}`,r.value);return r.value}catch{return null}}
@@ -73,6 +145,6 @@ async function respondInvite(inviteId,accept){return singleFlight(`invite-respon
 async function getProfileHistory(){return await api(`/api/profile/history?_=${Date.now()}`,{method:'GET'})}
 async function getRanking(game,mode=null){const q=new URLSearchParams({game});if(mode)q.set('mode',mode);return(await api(`/api/ranking?${q.toString()}&_=${Date.now()}`,{method:'GET'})).ranking||[]}
 async function boot(){setPhase('connecting');await refreshHealth();await refreshSnapshot();scheduleSnapshot();scheduleHeartbeat();await heartbeatNow();await initSupabaseRealtime()}
-window.TDBOnline={connect:boot,refreshSnapshot,refreshHealth,refreshShared,reconnect,heartbeatNow,upsertRoom:upsertRoomOnline,joinRoom,watchRoom,leaveRoom,kickPlayer,joinGame,stopGameSync,startGame,gameAction,musicAction,syncGame,updateProfile,socialSummary,listFriends,searchUsers,addFriend,respondFriend,removeFriend,sendInvite,respondInvite,getProfileHistory,getRanking,send:()=>false,get connected(){return backendConnected},get supabase(){return supabaseBacked},get realtime(){return realtimeConnected},get phase(){return connectionPhase},get production(){return production},get readyForMultiplayer(){return readyForMultiplayer},get cache(){return cache}};
+window.TDBOnline={connect:boot,refreshSnapshot,refreshHealth,refreshShared,reconnect,heartbeatNow,upsertRoom:upsertRoomOnline,joinRoom,watchRoom,leaveRoom,kickPlayer,joinGame,stopGameSync,startGame,returnGameToRoom,rematchGame,gameAction,musicAction,syncGame,updateProfile,socialSummary,listFriends,searchUsers,addFriend,respondFriend,removeFriend,sendInvite,respondInvite,getProfileHistory,getRanking,send:()=>false,get connected(){return backendConnected},get supabase(){return supabaseBacked},get realtime(){return realtimeConnected},get phase(){return connectionPhase},get production(){return production},get readyForMultiplayer(){return readyForMultiplayer},get cache(){return cache}};
 boot();
 })();
