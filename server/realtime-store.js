@@ -52,20 +52,17 @@ export async function initSupabase(){
     try{
       supabaseClient=createClient(url,secret,{
         auth:{persistSession:false,autoRefreshToken:false},
-        global:{headers:{'X-Client-Info':'tdb-jogos-server/5.0'}}
+        global:{headers:{'X-Client-Info':'tdb-jogos-server/5.2'}}
       });
+      const checks=await Promise.all([
+        supabaseClient.from('tdb_rooms').select('code',{head:true,count:'exact'}).limit(1),
+        supabaseClient.from('tdb_game_results').select('match_id',{head:true,count:'exact'}).limit(1),
+        supabaseClient.from('tdb_friend_requests').select('sender_id',{head:true,count:'exact'}).limit(1),
+        supabaseClient.from('tdb_room_invites').select('id',{head:true,count:'exact'}).limit(1)
+      ]);
+      const schemaError=checks.find(x=>x.error)?.error;
+      if(schemaError){supabaseReady=true;schemaReady=false;lastError=`Schema v5.2 pendente: ${schemaError.message}`;return false;}
 
-      const {error}=await supabaseClient
-        .from('tdb_rooms')
-        .select('code',{head:true,count:'exact'})
-        .limit(1);
-
-      if(error){
-        supabaseReady=true;
-        schemaReady=false;
-        lastError=error.message;
-        return false;
-      }
 
       supabaseReady=true;
       schemaReady=true;

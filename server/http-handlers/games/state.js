@@ -1,5 +1,6 @@
 import * as Games from '../../game-service.js';
 import { requireApiUser,sendApiError } from '../../api-auth.js';
+import { heartbeat } from '../../maintenance-service.js';
 
 export default async function handler(req,res){
   if(req.method!=='GET') return res.status(405).json({error:'Método inválido'});
@@ -7,6 +8,7 @@ export default async function handler(req,res){
     const user=await requireApiUser(req);
     const code=String(req.query?.roomCode||'').toUpperCase();
     const role=req.query?.role==='spectator'?'spectator':'player';
+    await heartbeat(user,{status:role==='spectator'?'watching':'playing',roomCode:code});
 
     const state=await Games.refreshGame(code);
     if(!state) return res.status(404).json({ok:false,error:'Partida ainda não iniciada.'});

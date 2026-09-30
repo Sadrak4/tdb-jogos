@@ -43,10 +43,15 @@ function createTrucoState(room){
     players,activeSeats,scores:[0,0],winner:null,phase:'playing',
     dealer:activeSeats[activeSeats.length-1],current:null,round:0,handValue:1,
     trickCards:[],trickResults:[],hands:{},vira:null,manilhaRank:null,
-    pendingRaise:null,eleven:null,ironHand:false,logs:[],version:1
+    pendingRaise:null,eleven:null,ironHand:false,logs:[],version:1,
+    turnTimer:Number(room.turnTimer||0),turnDeadlineAt:null,lastAutoAction:null
   };
   dealHand(s);
   return s;
+}
+function armDeadline(s){
+  const seconds=Number(s.turnTimer||0);
+  s.turnDeadlineAt=seconds>0 && s.phase!=='finished'?Date.now()+seconds*1000:null;
 }
 function dealHand(s){
   const d=shuffle(deck40());
@@ -59,8 +64,9 @@ function dealHand(s){
   s.current=nextSeat(s.activeSeats,s.dealer);
   s.ironHand=s.scores[0]===11&&s.scores[1]===11;
   const elevenTeam=s.ironHand?null:(s.scores[0]===11?0:(s.scores[1]===11?1:null));
-  s.eleven=elevenTeam===null?null:{team:elevenTeam,pending:true};
+  s.eleven=elevenTeam===null?null:{team:elevenTeam,pending:true,responses:{}};
   if(s.eleven) s.phase='eleven'; else s.phase='playing';
+  armDeadline(s);
   s.version++;
 }
 function handWinnerFromResults(results,forehandTeam){
@@ -101,7 +107,7 @@ function awardHand(s,team,points){
   s.scores[team]+=points;
   s.logs.push(`Time ${team+1} ganhou ${points} ponto(s).`);
   if(s.scores[team]>=12){
-    s.winner=team;s.phase='finished';s.version++;return;
+    s.winner=team;s.phase='finished';s.turnDeadlineAt=null;s.version++;return;
   }
   dealHand(s);
 }
@@ -132,12 +138,12 @@ function actionRaiseResponse(s,seat,answer){
   if(!['accept','run','raise'].includes(answer)) throw new Error('Resposta inválida.');
   pr.responses[seat]=answer;
   const members=membersOfTeam(s,pr.targetTeam);
-  if(members.some(x=>!pr.responses[x])) return;
-  const values=members.map(x=>pr.responses[x]);
-  if(values.includes('run')){
+  if(answer==='run'){
     awardHand(s,1-pr.targetTeam,pr.from);
     return;
   }
+  if(members.some(x=>!pr.responses[x])) return;
+  const values=members.map(x=>pr.responses[x]);
   if(values.every(v=>v==='raise')){
     s.handValue=pr.to;
     const to=nextRaise(pr.to);
@@ -151,8 +157,12 @@ function actionRaiseResponse(s,seat,answer){
 function actionEleven(s,seat,play){
   if(!s.eleven?.pending||s.phase!=='eleven') throw new Error('Sem Mão de 11.');
   const p=s.players.find(x=>x.seat===seat);if(!p||p.team!==s.eleven.team) throw new Error('Decisão inválida.');
+  s.eleven.responses=s.eleven.responses||{};
+  s.eleven.responses[seat]=!!play;
+  const members=membersOfTeam(s,s.eleven.team);
   if(!play){awardHand(s,1-s.eleven.team,1);return}
-  s.handValue=3;s.eleven.pending=false;s.phase='playing';
+  if(members.some(member=>s.eleven.responses[member]===undefined)) return;
+  s.handValue=3;s.eleven.pending=false;s.phase='playing';armDeadline(s);
 }
 export function applyTrucoAction(state,seat,action){
   const s=clone(state);
@@ -163,20 +173,51 @@ export function applyTrucoAction(state,seat,action){
     case 'ELEVEN_DECISION':actionEleven(s,seat,!!action.play);break;
     default:throw new Error('Ação de Truco desconhecida.');
   }
+  if(s.phase!=='finished') armDeadline(s);
   s.version=(s.version||0)+1;
   return s;
 }
+export function tick(state,now=Date.now()){
+  let s=clone(state);
+  if(!s.turnTimer||!s.turnDeadlineAt||now<s.turnDeadlineAt||s.phase==='finished') return s;
+  try{
+    if(s.phase==='playing'){
+      const hand=s.hands[s.current]||[];
+      if(hand.length){
+        const idx=Math.floor(Math.random()*hand.length);
+        const player=s.players.find(p=>p.seat===s.current);
+        s.lastAutoAction={type:'timeout-card',seat:s.current,at:now};
+        s.logs.push(`${player?.username||'Jogador'} ficou sem tempo. Carta aleatória aberta jogada.`);
+        actionPlay(s,s.current,{cardIdx:idx,hidden:false});
+      }
+    }else if(s.phase==='raise-response' && s.pendingRaise){
+      const seats=membersOfTeam(s,s.pendingRaise.targetTeam).filter(seat=>!s.pendingRaise.responses?.[seat]);
+      for(const seat of seats){if(s.phase!=='raise-response') break;actionRaiseResponse(s,seat,'accept')}
+      s.lastAutoAction={type:'timeout-raise-accept',at:now};
+    }else if(s.phase==='eleven' && s.eleven?.pending){
+      const seats=membersOfTeam(s,s.eleven.team).filter(seat=>s.eleven.responses?.[seat]===undefined);
+      for(const seat of seats){if(s.phase!=='eleven') break;actionEleven(s,seat,true)}
+      s.lastAutoAction={type:'timeout-eleven-play',at:now};
+    }
+  }catch{}
+  if(s.phase!=='finished') armDeadline(s);
+  s.version=(s.version||0)+1;
+  return s;
+}
+
 export function createState(room){return createTrucoState(room)}
 export function viewFor(state,userId,role='player'){
   const s=clone(state);
   const me=s.players.find(p=>p.id===userId);
   const mySeat=me?.seat??null;
   for(const seat of s.activeSeats){
-    if(role==='spectator'||seat!==mySeat){
-      s.hands[seat]=(s.hands[seat]||[]).map(()=>null);
-    }else if(s.ironHand){
-      s.hands[seat]=(s.hands[seat]||[]).map(()=>null);
+    let canSee=role!=='spectator' && seat===mySeat;
+    if(role!=='spectator' && s.eleven?.pending && me && me.team===s.eleven.team){
+      const partner=s.players.find(p=>p.seat===seat);
+      if(partner?.team===me.team) canSee=true;
     }
+    if(s.ironHand) canSee=false;
+    if(!canSee) s.hands[seat]=(s.hands[seat]||[]).map(()=>null);
   }
   s.localSeat=mySeat;
   s.role=role;

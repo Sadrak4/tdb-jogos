@@ -149,3 +149,98 @@ begin
 end $$;
 
 commit;
+
+-- ============================================================
+-- MIGRAÇÃO v5.2 — social, competitivo, segurança e observabilidade
+-- Pode executar mesmo se o schema v5.0/v5.1 já existir.
+-- ============================================================
+begin;
+
+create table if not exists public.tdb_friend_requests (
+  sender_id text not null references public.tdb_users(id) on delete cascade,
+  receiver_id text not null references public.tdb_users(id) on delete cascade,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  responded_at timestamptz,
+  primary key (sender_id, receiver_id),
+  constraint tdb_friend_request_not_self check (sender_id <> receiver_id)
+);
+create index if not exists tdb_friend_requests_receiver_idx on public.tdb_friend_requests(receiver_id,status);
+
+create table if not exists public.tdb_room_invites (
+  id bigint generated always as identity primary key,
+  room_code text not null,
+  sender_id text not null references public.tdb_users(id) on delete cascade,
+  receiver_id text not null references public.tdb_users(id) on delete cascade,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '10 minutes')
+);
+create index if not exists tdb_room_invites_receiver_idx on public.tdb_room_invites(receiver_id,status,expires_at);
+create index if not exists tdb_room_invites_room_idx on public.tdb_room_invites(room_code);
+
+create table if not exists public.tdb_game_results (
+  match_id text primary key,
+  room_code text,
+  game text not null,
+  mode text not null default 'default',
+  result_type text not null,
+  participant_ids text[] not null default '{}',
+  winner_ids text[] not null default '{}',
+  loser_ids text[] not null default '{}',
+  participants jsonb not null default '[]'::jsonb,
+  metadata jsonb not null default '{}'::jsonb,
+  counted boolean not null default true,
+  started_at timestamptz,
+  finished_at timestamptz not null default now()
+);
+create index if not exists tdb_game_results_game_idx on public.tdb_game_results(game,mode,finished_at desc);
+create index if not exists tdb_game_results_participants_idx on public.tdb_game_results using gin(participant_ids);
+create index if not exists tdb_game_results_winners_idx on public.tdb_game_results using gin(winner_ids);
+
+create table if not exists public.tdb_error_logs (
+  id bigint generated always as identity primary key,
+  level text not null default 'error',
+  source text not null default 'server',
+  route text,
+  user_id text,
+  message text not null,
+  stack text,
+  context jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists tdb_error_logs_created_idx on public.tdb_error_logs(created_at desc);
+
+create table if not exists public.tdb_rate_limits (
+  key text primary key,
+  window_started_at timestamptz not null default now(),
+  count integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+create index if not exists tdb_rate_limits_updated_idx on public.tdb_rate_limits(updated_at);
+
+alter table public.tdb_friend_requests enable row level security;
+alter table public.tdb_room_invites enable row level security;
+alter table public.tdb_game_results enable row level security;
+alter table public.tdb_error_logs enable row level security;
+alter table public.tdb_rate_limits enable row level security;
+
+grant all on table
+  public.tdb_friend_requests,
+  public.tdb_room_invites,
+  public.tdb_game_results,
+  public.tdb_error_logs,
+  public.tdb_rate_limits
+to service_role;
+
+grant usage, select on all sequences in schema public to service_role;
+
+revoke all on table
+  public.tdb_friend_requests,
+  public.tdb_room_invites,
+  public.tdb_game_results,
+  public.tdb_error_logs,
+  public.tdb_rate_limits
+from anon, authenticated;
+
+commit;

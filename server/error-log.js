@@ -1,0 +1,3 @@
+import { initSupabase,isSupabaseReady,getSupabaseClient } from './realtime-store.js';
+function trim(value,max=4000){const text=String(value||'');return text.length>max?text.slice(0,max):text}
+export async function logError({level='error',source='server',route=null,userId=null,message,stack=null,context={}}){try{await initSupabase();if(!isSupabaseReady())return;const db=getSupabaseClient();await db.from('tdb_error_logs').insert({level,source,route,user_id:userId||null,message:trim(message,2000),stack:trim(stack,8000)||null,context:context&&typeof context==='object'?context:{value:trim(context,1000)}})}catch{}}

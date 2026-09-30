@@ -1,11 +1,3 @@
-import * as Auth from '../../auth-service.js';
 import { requireApiUser,sendApiError } from '../../api-auth.js';
-
-export default async function handler(req,res){
-  if(req.method!=='POST') return res.status(405).json({error:'Método inválido'});
-  try{
-    const user=await requireApiUser(req);
-    const friend=await Auth.addFriend(user.id,String(req.body?.friendId||'').trim().toUpperCase());
-    res.json({ok:true,friend:{...friend,status:'Offline'}});
-  }catch(err){sendApiError(res,err)}
-}
+import { sendFriendRequest } from '../../social-service.js';
+export default async function handler(req,res){if(req.method!=='POST')return res.status(405).json({error:'Método inválido'});try{const user=await requireApiUser(req),result=await sendFriendRequest(user.id,req.body?.friendId);res.json({ok:true,...result})}catch(err){sendApiError(res,err)}}

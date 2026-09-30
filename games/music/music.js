@@ -15,6 +15,7 @@ let roomTimer=null;
 let channel=null;
 
 let lastPlayerError=null;
+let lastRemoteSeekAt=0;
 
 function isHttpEnvironment(){
   return location.protocol==='http:' || location.protocol==='https:';
@@ -70,7 +71,10 @@ function makeDefaultState(){
     position:0,
     changedAt:Date.now(),
     updatedAt:Date.now(),
-    updatedBy:state.user.id
+    updatedBy:state.user.id,
+    controlsLocked:false,
+    skipVotes:[],
+    lastAction:null
   };
 }
 
@@ -84,6 +88,17 @@ function readMusicState(){
   }catch{
     return makeDefaultState();
   }
+}
+
+
+function isOnlineMusic(){return window.TDBCore?.mode==='online'&&window.TDBOnline?.connected}
+async function sendOnlineMusic(action){
+  const next=await window.TDBOnline.musicAction(room.code,action);
+  if(!next) return false;
+  musicState=next;
+  renderDynamic();
+  syncPlayer();
+  return true;
 }
 
 function saveMusicState(next){
@@ -105,6 +120,7 @@ function currentTrack(){
 }
 
 function canControl(){
+  if(musicState?.controlsLocked && room.ownerId!==state.user.id) return false;
   return room.musicControl!=='host' || room.ownerId===state.user.id;
 }
 function canSkip(){
@@ -156,6 +172,11 @@ async function addYoutubeLink(){
   if(!videoId) return toast('Cole um link válido do YouTube.');
 
   const meta=await getMeta(videoId);
+  if(isOnlineMusic()){
+    const ok=await sendOnlineMusic({type:'ADD_TRACK',track:meta});
+    if(ok&&input) input.value='';
+    return;
+  }
   const next=structuredClone(musicState);
 
   next.queue.push({
@@ -246,9 +267,18 @@ function decodeEntities(text){
   return el.value;
 }
 
-function addSearchResult(index){
+async function addSearchResult(index){
   const item=window.__TDB_MUSIC_RESULTS__?.[index];
   if(!item) return;
+  if(isOnlineMusic()){
+    return sendOnlineMusic({type:'ADD_TRACK',track:{
+      videoId:item.videoId,
+      title:decodeEntities(item.title),
+      channel:item.channel,
+      thumbnail:item.thumbnail,
+      url:`https://www.youtube.com/watch?v=${item.videoId}`
+    }});
+  }
 
   const next=structuredClone(musicState);
   next.queue.push({
@@ -294,7 +324,8 @@ function toggleMusicPlayback(){
   else playMusic();
 }
 
-function playMusic(){
+async function playMusic(){
+  if(isOnlineMusic()) return sendOnlineMusic({type:'PLAY',position:currentPlayerPosition()});
   if(!canControl()) return toast('Somente o host pode controlar o player.');
   if(!currentTrack()) return toast('Adicione uma música primeiro.');
 
@@ -312,7 +343,11 @@ function playMusic(){
   }
 }
 
-function pauseMusic(){
+async function pauseMusic(){
+  if(isOnlineMusic()){
+    try{if(playerReady&&player?.pauseVideo)player.pauseVideo()}catch{}
+    return sendOnlineMusic({type:'PAUSE',position:currentPlayerPosition()});
+  }
   if(!canControl()) return toast('Somente o host pode controlar o player.');
 
   const next=structuredClone(musicState);
@@ -330,7 +365,8 @@ function pauseMusic(){
   saveMusicState(next);
 }
 
-function nextMusic(){
+async function nextMusic(){
+  if(isOnlineMusic()) return sendOnlineMusic({type:'NEXT',position:currentPlayerPosition(),trackId:currentTrack()?.id||null});
   if(!canSkip()) return toast('Somente o host pode pular nesta sala.');
   if(!musicState.queue.length) return;
 
@@ -348,7 +384,8 @@ function nextMusic(){
   saveMusicState(next);
 }
 
-function previousMusic(){
+async function previousMusic(){
+  if(isOnlineMusic()) return sendOnlineMusic({type:'PREVIOUS',position:currentPlayerPosition()});
   if(!canSkip()) return toast('Somente o host pode voltar nesta sala.');
   const next=structuredClone(musicState);
   if(currentPlayerPosition()>5){
@@ -364,7 +401,8 @@ function previousMusic(){
   saveMusicState(next);
 }
 
-function jumpToMusic(index){
+async function jumpToMusic(index){
+  if(isOnlineMusic()) return sendOnlineMusic({type:'JUMP',index});
   if(!canControl()) return toast('Somente o host pode escolher uma faixa diretamente.');
   if(index<0 || index>=musicState.queue.length) return;
   const next=structuredClone(musicState);
@@ -375,9 +413,10 @@ function jumpToMusic(index){
   saveMusicState(next);
 }
 
-function removeMusic(index){
+async function removeMusic(index){
   const item=musicState.queue[index];
   if(!item) return;
+  if(isOnlineMusic()) return sendOnlineMusic({type:'REMOVE',itemId:item.id});
   if(room.ownerId!==state.user.id && item.addedById!==state.user.id){
     return toast('Só o host ou quem adicionou pode remover.');
   }
@@ -398,6 +437,26 @@ function removeMusic(index){
   }
 
   next.changedAt=Date.now();
+  saveMusicState(next);
+}
+
+
+async function moveMusic(index,direction){
+  const item=musicState.queue[index];
+  if(!item) return;
+  if(isOnlineMusic()) return sendOnlineMusic({type:'MOVE',itemId:item.id,direction});
+  const next=structuredClone(musicState);
+  const to=Math.max(0,Math.min(next.queue.length-1,index+direction));
+  if(to===index) return;
+  const [row]=next.queue.splice(index,1);
+  next.queue.splice(to,0,row);
+  saveMusicState(next);
+}
+async function toggleMusicLock(){
+  if(room.ownerId!==state.user.id) return toast('Somente o host pode bloquear os controles.');
+  if(isOnlineMusic()) return sendOnlineMusic({type:'TOGGLE_LOCK'});
+  const next=structuredClone(musicState);
+  next.controlsLocked=!next.controlsLocked;
   saveMusicState(next);
 }
 
@@ -485,7 +544,7 @@ function syncPlayer(force=false){
       }
     }else{
       const actual=Number(player.getCurrentTime?.()||0);
-      if(Math.abs(actual-expected)>1.75) player.seekTo(expected,true);
+      if(Math.abs(actual-expected)>3.5 && Date.now()-lastRemoteSeekAt>7000){player.seekTo(expected,true);lastRemoteSeekAt=Date.now();}
 
       const stateCode=player.getPlayerState?.();
       if(musicState.status==='playing'){
@@ -530,6 +589,12 @@ function renderDynamic(){
   if(title) title.textContent=track?.title||'Nenhuma música na fila';
   if(meta) meta.textContent=track?`${track.channel||'YouTube'} • adicionado por ${track.addedBy}`:'Cole um link ou use a pesquisa.';
   if(playButton) playButton.textContent=musicState.status==='playing'?'⏸ Pausar':'▶ Tocar';
+  const actionBox=document.getElementById('musicLastAction');
+  if(actionBox){
+    const a=musicState.lastAction;
+    const labels={play:'tocou',pause:'pausou',next:'pulou',previous:'voltou',add:'adicionou música',remove:'removeu música',reorder:'reorganizou a fila',lock:'bloqueou controles',unlock:'liberou controles','skip-vote':'votou para pular',jump:'escolheu uma música'};
+    actionBox.textContent=a?`${a.by||'Alguém'} • ${labels[a.type]||a.type}${a.type==='skip-vote'&&a.needed?` (${a.votes}/${a.needed})`:''}`:'';
+  }
   if(empty) empty.style.display=track?'none':'grid';
 
   if(queue){
@@ -537,9 +602,13 @@ function renderDynamic(){
       <div class="music-queue-item ${index===musicState.currentIndex?'active':''}">
         <button class="music-queue-main" onclick="jumpToMusic(${index})">
           <img src="${escapeHtml(item.thumbnail||`https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`)}" alt="">
-          <span><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.addedBy)}${index===musicState.currentIndex?' • TOCANDO AGORA':''}</small></span>
+          <span><strong>${escapeHtml(item.title)}</strong><small>por ${escapeHtml(item.addedBy)}${index===musicState.currentIndex?' • TOCANDO AGORA':''}</small></span>
         </button>
-        <button class="icon-btn" onclick="removeMusic(${index})">×</button>
+        <div class="music-queue-actions">
+          <button class="icon-btn" title="Subir" onclick="moveMusic(${index},-1)">↑</button>
+          <button class="icon-btn" title="Descer" onclick="moveMusic(${index},1)">↓</button>
+          <button class="icon-btn" title="Remover" onclick="removeMusic(${index})">×</button>
+        </div>
       </div>`).join(''):'<div class="music-message">A fila está vazia.</div>';
   }
 
@@ -579,8 +648,10 @@ function renderMusic(){
       <div class="music-members" id="musicMembers"></div>
 
       <div class="music-permissions">
-        <span>Controle</span><strong>${room.musicControl==='host'?'Host':'Todos'}</strong>
-        <span>Pular</span><strong>${room.musicSkipMode==='host'?'Host':'Todos'}</strong>
+        <span>Controle</span><strong>${musicState.controlsLocked?'Bloqueado pelo host':room.musicControl==='host'?'Host':'Todos'}</strong>
+        <span>Pular</span><strong>${room.musicSkipMode==='host'?'Host':room.musicSkipMode==='vote'?'Votação':'Todos'}</strong>
+        <span>Fila/pessoa</span><strong>${Number(room.musicQueueLimit||5)===0?'∞':Number(room.musicQueueLimit||5)}</strong>
+        ${room.ownerId===state.user.id?`<button class="btn btn-dark full" onclick="toggleMusicLock()">${musicState.controlsLocked?'🔒 Liberar controles':'🔓 Bloquear controles'}</button>`:''}
       </div>
 
       <button class="btn btn-dark full" onclick="leaveMusicRoom()">Sair da sala</button>
@@ -591,6 +662,7 @@ function renderMusic(){
         <span class="eyebrow">TOCANDO AGORA</span>
         <h1 id="musicNowTitle"></h1>
         <p id="musicNowMeta"></p>
+        <small id="musicLastAction" class="music-last-action"></small>
 
         <div id="musicEnvironmentWarning" class="music-env-warning">
           Você abriu o projeto como arquivo local. O YouTube pode retornar erro 153.
@@ -679,7 +751,7 @@ function renderMusic(){
     }else if(musicState.status==='playing'){
       syncPlayer();
     }
-  },750);
+  },1500);
 
   clearInterval(roomTimer);
   roomTimer=setInterval(refreshRoomMembers,1500);
@@ -733,5 +805,7 @@ window.nextMusic=nextMusic;
 window.previousMusic=previousMusic;
 window.jumpToMusic=jumpToMusic;
 window.removeMusic=removeMusic;
+window.moveMusic=moveMusic;
+window.toggleMusicLock=toggleMusicLock;
 window.leaveMusicRoom=leaveMusicRoom;
 })();

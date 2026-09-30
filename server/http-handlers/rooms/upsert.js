@@ -1,50 +1,5 @@
 import { getRoomPrivate,setRoomPrivate,backendStatus } from '../../realtime-store.js';
 import { requireApiUser,sendApiError } from '../../api-auth.js';
-
-function publicRoom(room){
-  const copy=structuredClone(room);
-  copy.hasPassword=!!copy.password;
-  delete copy.password;
-  return copy;
-}
-
-export default async function handler(req,res){
-  if(req.method!=='POST') return res.status(405).json({error:'Método inválido'});
-  try{
-    const [user,status]=await Promise.all([requireApiUser(req),backendStatus()]);
-    if(status.production&&!status.supabase) throw new Error('Supabase não configurado. Conecte o banco e execute SUPABASE-SCHEMA.sql.');
-
-    const room=structuredClone(req.body?.room||null);
-    if(!room?.code) throw new Error('Sala inválida.');
-
-    const previous=await getRoomPrivate(room.code);
-
-    if(!previous){
-      if(room.ownerId!==user.id) throw new Error('Somente o criador pode registrar esta sala.');
-    }else{
-      const isOwner=previous.ownerId===user.id;
-      const isMember=(previous.players||[]).some(p=>p.id===user.id);
-      if(!isOwner&&!isMember) throw new Error('Você não pertence a esta sala.');
-
-      if(!isOwner){
-        // Members may only move a music room into playing/listening state.
-        const memberStatus=(previous.game==='music'&&room.status==='playing')?'playing':previous.status;
-        room.ownerId=previous.ownerId;
-        room.owner=previous.owner;
-        room.name=previous.name;
-        room.players=previous.players;
-        room.spectators=previous.spectators||[];
-        room.privacy=previous.privacy;
-        room.password=previous.password;
-        room.createdAt=previous.createdAt;
-        room.status=memberStatus;
-      }else{
-        if(previous.password&&!room.password) room.password=previous.password;
-        if(previous.privacy==='private') room.privacy='private';
-      }
-    }
-
-    await setRoomPrivate(room);
-    res.json({ok:true,room:publicRoom(room)});
-  }catch(err){sendApiError(res,err)}
-}
+function publicRoom(room){const copy=structuredClone(room);copy.hasPassword=!!copy.password;delete copy.password;return copy}
+function sanitizeCreate(input,user){const game=['truco','chess','music','blackjack'].includes(input.game)?input.game:'truco';return{code:String(input.code||'').toUpperCase(),game,name:String(input.name||`Sala de ${user.username}`).slice(0,30),owner:user.username,ownerId:user.id,privacy:input.privacy==='private'?'private':'public',password:String(input.password||'').slice(0,16),status:'open',turnTimer:[0,30,60].includes(Number(input.turnTimer))?Number(input.turnTimer):0,trucoSeats:Number(input.trucoSeats)===2?2:4,chessClock:Number(input.chessClock||0),chessColor:['white','black','random'].includes(input.chessColor)?input.chessColor:'random',musicControl:input.musicControl==='host'?'host':'everyone',musicSkipMode:['host','everyone','vote'].includes(input.musicSkipMode)?input.musicSkipMode:'vote',musicQueueLimit:[0,3,5,10].includes(Number(input.musicQueueLimit))?Number(input.musicQueueLimit):5,players:[{id:user.id,username:user.username,avatar:user.avatar||null,connection:'online'}],spectators:[],createdAt:Date.now()}}
+export default async function handler(req,res){if(req.method!=='POST')return res.status(405).json({error:'Método inválido'});try{const [user,status]=await Promise.all([requireApiUser(req),backendStatus()]);if(status.production&&!status.supabase)throw new Error('Supabase não configurado.');const input=structuredClone(req.body?.room||null);if(!input?.code)throw new Error('Sala inválida.');const previous=await getRoomPrivate(String(input.code).toUpperCase());let room;if(!previous)room=sanitizeCreate(input,user);else{if(previous.ownerId!==user.id)throw new Error('Somente o host pode alterar a sala.');room=previous;room.name=String(input.name||room.name).slice(0,30);room.privacy=input.privacy==='private'?'private':'public';if(input.password!==undefined)room.password=String(input.password||'').slice(0,16);if(room.game==='music'){room.musicControl=input.musicControl==='host'?'host':'everyone';room.musicSkipMode=['host','everyone','vote'].includes(input.musicSkipMode)?input.musicSkipMode:room.musicSkipMode;if([0,3,5,10].includes(Number(input.musicQueueLimit)))room.musicQueueLimit=Number(input.musicQueueLimit)}}await setRoomPrivate(room);res.json({ok:true,room:publicRoom(room)})}catch(err){sendApiError(res,err)}}

@@ -97,6 +97,7 @@ function applyOnlineChessState(serverState,activeRoom,role='player'){
   if(activeRoom) chess.room=structuredClone(activeRoom);
   window.__TDB_CHESS_STATE__=chess;
   renderChessScreen(true);
+  startClock();
 }
 window.applyOnlineChessState=applyOnlineChessState;
 
@@ -124,6 +125,10 @@ function startClock(){
   lastClockTick=performance.now();
   chessClockTimer=setInterval(()=>{
     if(!chess || chess.status!=='playing') return;
+    if(chess.onlineMode){
+      updateClockDisplays();
+      return;
+    }
     const now=performance.now();
     const delta=(now-lastClockTick)/1000;
     lastClockTick=now;
@@ -143,7 +148,13 @@ function startClock(){
 function updateClockDisplays(){
   for(const color of ['white','black']){
     const el=document.getElementById(`chessClock-${color}`);
-    if(el) el.textContent=chess.clockEnabled?formatClock(chess.clocks[color]):'SEM RELÓGIO';
+    if(el){
+      let value=chess.clocks[color];
+      if(chess.onlineMode&&chess.status==='playing'&&chess.turn===color&&chess.serverClockAt){
+        value=Math.max(0,value-(Date.now()-chess.serverClockAt)/1000);
+      }
+      el.textContent=chess.clockEnabled?formatClock(value):'SEM RELÓGIO';
+    }
   }
 }
 
@@ -201,6 +212,7 @@ function renderChessScreen(first=false){
         <div class="chess-side-actions">
           ${chess.spectatorMode?'':`<button class="btn btn-dark" onclick="offerChessDraw()">🤝 Empate</button>
           <button class="btn btn-danger" onclick="resignChess()">⚑ Desistir</button>`}
+          <button class="btn btn-secondary full" onclick="copyChessPgn()">Copiar PGN</button>
           <button class="btn btn-secondary full" onclick="copyCode('${chess.room.code}')">Copiar código da sala</button>
           <button class="btn btn-dark full" onclick="returnFromChess()">Voltar à sala</button>
         </div>
@@ -238,6 +250,7 @@ function statusText(){
   if(chess.status==='draw') return 'Empate';
   if(chess.status==='resigned') return 'Desistência';
   if(chess.status==='timeout') return 'Tempo esgotado';
+  if(chess.status==='abandoned') return 'Vitória por abandono';
   return chess.status;
 }
 
@@ -276,7 +289,7 @@ function renderBoard(){
   board.innerHTML=html;
 }
 
-function clickChessSquare(r,c){
+async function clickChessSquare(r,c){
   if(!chess || chess.status!=='playing' || chess.spectatorMode) return;
   const mine=localColor();
   if(chess.turn!==mine) return toast('Aguarde a vez do adversário.');
@@ -286,6 +299,8 @@ function clickChessSquare(r,c){
   if(chess.selectedSquare){
     const move=chess.legalMoves.find(m=>m.to.r===r&&m.to.c===c);
     if(move){
+      const promotion=move.promotion?await choosePromotionPiece():'queen';
+      if(!promotion) return;
       if(chess.onlineMode){
         chess.selectedSquare=null;
         chess.legalMoves=[];
@@ -295,10 +310,10 @@ function clickChessSquare(r,c){
           from:move.from,
           to:move.to,
           castle:move.castle||null,
-          promotion:'queen'
+          promotion
         });
       }
-      return makeChessMove(move);
+      return makeChessMove(move,promotion);
     }
   }
 
@@ -310,6 +325,43 @@ function clickChessSquare(r,c){
     chess.legalMoves=[];
   }
   updateChessUI();
+}
+
+
+function choosePromotionPiece(){
+  return new Promise(resolve=>{
+    document.getElementById('chessPromotionModal')?.remove();
+    const wrap=document.createElement('div');
+    wrap.id='chessPromotionModal';
+    wrap.className='modal-backdrop';
+    wrap.innerHTML=`<div class="modal chess-promotion-modal">
+      <div class="modal-head"><h3>Promover peão para</h3></div>
+      <div class="modal-body promotion-options">
+        <button class="btn btn-primary" data-piece="queen">♕ Dama</button>
+        <button class="btn btn-secondary" data-piece="rook">♖ Torre</button>
+        <button class="btn btn-secondary" data-piece="bishop">♗ Bispo</button>
+        <button class="btn btn-secondary" data-piece="knight">♘ Cavalo</button>
+      </div>
+    </div>`;
+    wrap.querySelectorAll('[data-piece]').forEach(btn=>btn.onclick=()=>{
+      const value=btn.dataset.piece;wrap.remove();resolve(value);
+    });
+    wrap.onclick=e=>{if(e.target===wrap){wrap.remove();resolve(null)}};
+    document.body.appendChild(wrap);
+  });
+}
+function chessPgn(){
+  const h=chess?.moveHistory||[];
+  const out=[];
+  for(let i=0;i<h.length;i+=2){
+    out.push(`${Math.floor(i/2)+1}. ${h[i]?.notation||''}${h[i+1]?` ${h[i+1].notation}`:''}`);
+  }
+  return out.join(' ');
+}
+function copyChessPgn(){
+  const pgn=chessPgn();
+  if(!pgn) return toast('Ainda não há jogadas.');
+  navigator.clipboard?.writeText(pgn).then(()=>toast('PGN copiado.'));
 }
 
 function makeChessMove(move,promotion='queen'){
@@ -420,6 +472,9 @@ function renderOverlay(){
   if(chess.status==='timeout'){
     return resultModal('TEMPO ESGOTADO',chess.winner===localColor()?'Você venceu por tempo.':'Você perdeu por tempo.');
   }
+  if(chess.status==='abandoned'){
+    return resultModal('PARTIDA ENCERRADA',chess.winner===localColor()?'Você venceu por abandono.':'A partida terminou por abandono.');
+  }
   return '';
 }
 
@@ -483,6 +538,7 @@ function renderChessSpectator(room){
 window.renderChessSpectator=renderChessSpectator;
 
 window.startChessGame=startChessGame;
+window.copyChessPgn=copyChessPgn;
 window.startChessWithBot=startChessWithBot;
 window.clickChessSquare=clickChessSquare;
 window.offerChessDraw=offerChessDraw;

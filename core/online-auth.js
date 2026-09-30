@@ -23,11 +23,23 @@ async function login(username,password){
 }
 async function session(){
   if(!localStorage.getItem(TOKEN_KEY)) return null;
-  try{return (await request('/api/auth/session')).user}catch{return null}
+  try{
+    return (await request('/api/auth/session')).user;
+  }catch(err){
+    localStorage.removeItem(TOKEN_KEY);
+    return null;
+  }
 }
 async function logout(){
   try{await request('/api/auth/logout',{method:'POST'})}catch{}
   localStorage.removeItem(TOKEN_KEY);
 }
-window.TDBAuthOnline={register,login,session,logout,get token(){return localStorage.getItem(TOKEN_KEY)}};
+window.TDBAuthOnline={
+  register,
+  login,
+  session,
+  logout,
+  get token(){return localStorage.getItem(TOKEN_KEY)},
+  get hasToken(){return !!localStorage.getItem(TOKEN_KEY)}
+};
 })();

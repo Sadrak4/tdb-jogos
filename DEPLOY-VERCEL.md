@@ -1,150 +1,117 @@
-# COMO CONFIGURAR SUPABASE — TDB JOGOS v5.0
+# DEPLOY — TDB JOGOS v5.2
 
-## 1. Vercel > Storage
+## 1. Copiar a v5.2 para o repositório
 
-No projeto `tdb-jogos`:
+No computador novo:
 
-1. Storage
-2. Create Database
-3. Supabase
-4. escolha o plano gratuito
-5. conecte ao projeto `tdb-jogos`
+1. clone `Sadrak4/tdb-jogos` pelo GitHub Desktop;
+2. extraia o ZIP da v5.2;
+3. copie todo o conteúdo da pasta extraída para a pasta clonada `tdb-jogos`;
+4. substitua os arquivos existentes.
 
-A integração oficial Vercel + Supabase sincroniza variáveis de ambiente automaticamente.
-
-Os nomes atuais esperados pelo projeto são:
-
-```text
-SUPABASE_URL
-SUPABASE_PUBLISHABLE_KEY
-SUPABASE_SECRET_KEY
-```
-
-O código também aceita os nomes legacy:
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-
-NUNCA coloque a secret key no GitHub.
-
----
-
-## 2. Criar as tabelas
-
-Abra o banco Supabase criado.
-
-No Dashboard do Supabase:
-
-1. SQL Editor
-2. New query
-3. abra o arquivo `SUPABASE-SCHEMA.sql`
-4. copie todo o conteúdo
-5. cole no SQL Editor
-6. clique em Run
-
-Esse SQL cria:
-- tdb_users
-- tdb_sessions
-- tdb_friends
-- tdb_rooms
-- tdb_matches
-- tdb_presence
-- tdb_shared
-- tdb_events
-
-Também ativa RLS e habilita somente `tdb_events` no Realtime.
-
----
-
-## 3. Publicar v5.0
-
-A pasta `api` deve possuir somente:
+A pasta `api` deve continuar contendo somente:
 
 ```text
 api/
 └── router.js
 ```
 
-Então no GitHub Desktop:
+## 2. Atualizar o banco Supabase — OBRIGATÓRIO
 
-- Commit: `TDB JOGOS v5.0 Supabase Online`
-- Push origin
+A v5.2 cria tabelas para:
+- pedidos de amizade;
+- convites;
+- histórico competitivo;
+- ranking;
+- rate limit;
+- logs.
 
-Ou pela CLI, se a pasta já estiver ligada ao projeto:
+Abra:
+
+**Supabase → SQL Editor → New query**
+
+Depois:
+1. abra `SUPABASE-SCHEMA.sql` da v5.2;
+2. copie TODO o arquivo;
+3. cole no SQL Editor;
+4. clique em **Run**.
+
+Pode executar o arquivo inteiro novamente. Ele foi preparado para preservar o schema existente e acrescentar a migração v5.2.
+
+Não apague as tabelas antigas.
+
+## 3. GitHub
+
+No GitHub Desktop:
+
+**Summary**
+```text
+TDB JOGOS v5.2 Estabilidade Online Competitivo
+```
+
+Depois:
+
+`Commit to main` → `Push origin`
+
+Se preferir usar a CLI e a pasta já estiver ligada ao projeto Vercel:
 
 ```bash
 npx vercel --prod
 ```
 
----
+## 4. Health
 
-## 4. Testar
-
-### Health
-
-Abra:
+Depois do deploy:
 
 ```text
 https://tdb-jogos.vercel.app/api/health
 ```
 
-Precisa mostrar:
+Esperado:
 
 ```json
 {
-  "version":"5.0.0",
-  "supabase":true,
-  "schemaReady":true,
-  "readyForMultiplayer":true
+  "ok": true,
+  "version": "5.2.0",
+  "supabase": true,
+  "schemaReady": true,
+  "readyForMultiplayer": true
 }
 ```
 
-### Snapshot
+Se aparecer `schemaReady:false`, normalmente faltou executar o `SUPABASE-SCHEMA.sql` da v5.2.
 
-Abra:
+## 5. Teste recomendado
 
-```text
-https://tdb-jogos.vercel.app/api/state/snapshot
-```
+Use dois navegadores/PCs com contas diferentes:
 
-Deve retornar JSON.
+1. buscar usuário pelo nome;
+2. enviar e aceitar pedido de amizade;
+3. criar sala;
+4. convidar amigo;
+5. aceitar convite;
+6. atualizar uma página dentro da sala e confirmar reconexão;
+7. testar Xadrez;
+8. testar Truco 1x1;
+9. testar TDB Music;
+10. conferir histórico e ranking depois de uma partida real.
 
-### Cadastro
+### Reconexão
+Feche/recarregue uma aba durante uma partida e volte antes de 90 segundos.
 
-Crie duas contas novas em navegadores diferentes.
+O esperado:
+- jogador aparece como Reconectando;
+- ao voltar, recebe a mesma sala/partida;
+- não ganha/perde por abandono antes de 90s.
 
-Depois copie o ID `TDB-XXXXXXXX` de uma e adicione na outra.
+### Ranking
+Partidas contra bot não devem alterar ranking/histórico competitivo.
 
-### Sala
+## 6. Segurança
 
-- PC 1 cria sala.
-- PC 2 deve enxergar a sala.
-- ao entrar, o host deve enxergar o jogador.
-- host inicia.
-- ambos devem entrar na mesma partida.
+Nunca envie para GitHub:
+- `SUPABASE_SECRET_KEY`;
+- `.env.local`;
+- chaves privadas.
 
-### TDB Music
-
-- os dois entram na mesma sala;
-- link colocado por um aparece no outro;
-- play/pause/próxima sincronizam.
-
----
-
-## 5. Status do topo
-
-`ONLINE`
-= API + Supabase prontos.
-
-`SEM SUPABASE`
-= site está no ar, mas o banco ainda não está pronto.
-
-`LOCAL`
-= API indisponível ou execução local sem backend.
-
----
-
-## 6. Por que Supabase é melhor aqui
-
-Contas e amigos são persistentes. Se uma Function da Vercel reiniciar, os dados continuam no Postgres.
-
-O Realtime é usado como sinal de atualização; o backend continua sendo autoridade para ações privadas, especialmente no Truco.
+As credenciais continuam nas Environment Variables da Vercel.

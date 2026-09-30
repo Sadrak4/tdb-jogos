@@ -3019,3 +3019,21 @@ input,select,button{
 .online-status-pill.warning:before{
   background:#e5ac35;
 }
+
+
+/* =========================================================
+   v5.2 — estabilidade online / social / ranking
+   ========================================================= */
+.online-status-pill.connecting{color:#f1cb72;border-color:rgba(241,203,114,.32);background:rgba(241,203,114,.08)}
+.online-status-pill.connecting:before{background:#f1cb72;animation:tdbPulse 1s infinite alternate}
+.online-status-pill.offline{color:#d8d8d8;border-color:rgba(255,255,255,.12);background:rgba(255,255,255,.04)}
+.online-status-pill.offline:before{background:#777}
+@keyframes tdbPulse{from{opacity:.3}to{opacity:1}}
+.connection-gate{min-height:100dvh;display:grid;place-items:center}.connection-gate .auth-card{text-align:center;max-width:460px}
+.invite-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;border:1px solid rgba(218,169,57,.35);background:linear-gradient(135deg,rgba(218,169,57,.13),rgba(255,255,255,.02));padding:14px 18px;border-radius:18px;margin-bottom:18px}.invite-banner span{color:#aaa;margin-right:auto}
+.ranking-wrap{margin:18px 0}.ranking-panel{overflow:hidden}.ranking-list{display:grid;gap:10px}.ranking-row{display:grid;grid-template-columns:42px 44px 1fr;align-items:center;gap:10px;padding:10px 12px;border:1px solid rgba(255,255,255,.07);border-radius:14px;background:rgba(255,255,255,.02)}.ranking-row small{display:block;color:#999;margin-top:3px}.rank-pos{font-size:22px;text-align:center}
+.social-alerts{margin-bottom:18px}.social-bottom{margin-top:18px}.social-results{margin-top:14px;display:grid;gap:8px}.social-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.07)}.social-row:last-child{border-bottom:0}.social-row>div:first-of-type:not(.avatar){flex:1}.social-row small{display:block;color:#919191;margin-top:3px}.social-row .friend-meta{flex:1}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:18px}.stat-card{padding:18px;border:1px solid rgba(218,169,57,.22);border-radius:16px;background:rgba(255,255,255,.025)}.stat-card span,.stat-card small{display:block;color:#999}.stat-card strong{display:block;font-size:34px;margin:6px 0;color:#f2d47e}.history-list{display:grid;gap:6px}.history-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.07)}.history-row:last-child{border-bottom:0}.history-row small{display:block;color:#999;margin-top:4px}
+.player-slot .small{line-height:1.35}.host-tag{margin-left:6px}.music-last-action{display:block;min-height:18px;color:#d8b75d;margin:3px 0 10px}.music-queue-actions{display:flex;gap:5px;align-items:center}.music-queue-actions .icon-btn{width:34px;height:34px;min-width:34px}.music-permissions .btn{grid-column:1/-1;margin-top:8px}
+.promotion-options{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.chess-promotion-modal{max-width:460px}
+@media(max-width:760px){.ranking-row{grid-template-columns:34px 40px 1fr}.social-row{align-items:flex-start;flex-wrap:wrap}.history-row{align-items:flex-start;flex-direction:column}.invite-banner{align-items:flex-start}.promotion-options{grid-template-columns:1fr}}

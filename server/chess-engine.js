@@ -234,7 +234,7 @@ function moveNotation(before,move,after,movedPiece,captured,wasCheck,wasMate){
   const prefix=letters[movedPiece.type]||'';
   const capture=captured||move.enPassant?'x':'';
   let txt=`${prefix}${capture}${squareName(move.to.r,move.to.c)}`;
-  if(move.promotion) txt+='=D';
+  if(move.promotion){const pm={queen:'D',rook:'T',bishop:'B',knight:'C'};txt+=`=${pm[move.promotionChoice]||'D'}`;}
   if(wasMate) txt+='#';
   else if(wasCheck) txt+='+';
   return txt;
@@ -266,12 +266,7 @@ function finalizeAfterMove(state,move,before,movedPiece,captured){
     state.drawReason='material insuficiente';
   }
 
-  const key=positionKey(state);
-  state.positionCounts[key]=(state.positionCounts[key]||0)+1;
-  if(state.positionCounts[key]>=3 && state.status==='playing'){
-    state.status='draw';
-    state.drawReason='tripla repetição';
-  }
+  // TDB JOGOS: empate automático por repetição foi desativado.
 
   const notation=moveNotation(before,move,state,movedPiece,captured,check,state.status==='checkmate');
   state.moveHistory.push({
@@ -294,6 +289,7 @@ function applyMove(state,move,promotionChoice='queen'){
   const movedPiece=clone(state.board[move.from.r][move.from.c]);
   const captured=clone(state.board[move.to.r][move.to.c]);
 
+  chosen.promotionChoice=promotionChoice;
   const next=makeMoveUnchecked(state,chosen,promotionChoice);
   next.lastMove={from:chosen.from,to:chosen.to};
   next.selectedSquare=null;

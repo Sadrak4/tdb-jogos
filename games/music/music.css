@@ -357,3 +357,9 @@
     max-height:20dvh !important;
   }
 }
+
+
+/* v5.2 queue controls */
+.music-queue-item{grid-template-columns:minmax(0,1fr) auto}
+.music-queue-actions{display:flex;gap:4px;padding-right:4px}
+.music-last-action{opacity:.9}

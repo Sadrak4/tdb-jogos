@@ -247,12 +247,8 @@ export async function removeFriend(userId,friendId){
 
   if(isSupabaseReady()){
     const db=getSupabaseClient();
-    const {error}=await db
-      .from('tdb_friends')
-      .delete()
-      .eq('user_id',userId)
-      .eq('friend_id',friendId);
-
+    const {error}=await db.from('tdb_friends').delete()
+      .or(`and(user_id.eq.${userId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${userId})`);
     if(error) throw new Error(error.message);
     await emitEvent('friends',null,'remove');
     return true;

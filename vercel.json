@@ -19,6 +19,10 @@
       "destination": "/api/router?route=profile/update"
     },
     {
+      "source": "/api/profile/history",
+      "destination": "/api/router?route=profile/history"
+    },
+    {
       "source": "/api/auth/register",
       "destination": "/api/router?route=auth/register"
     },
@@ -37,6 +41,14 @@
     {
       "source": "/api/state/snapshot",
       "destination": "/api/router?route=state/snapshot"
+    },
+    {
+      "source": "/api/heartbeat",
+      "destination": "/api/router?route=heartbeat"
+    },
+    {
+      "source": "/api/reconnect",
+      "destination": "/api/router?route=reconnect"
     },
     {
       "source": "/api/rooms/upsert",
@@ -59,6 +71,10 @@
       "destination": "/api/router?route=rooms/watch"
     },
     {
+      "source": "/api/rooms/kick",
+      "destination": "/api/router?route=rooms/kick"
+    },
+    {
       "source": "/api/games/start",
       "destination": "/api/router?route=games/start"
     },
@@ -79,6 +95,10 @@
       "destination": "/api/router?route=shared/set"
     },
     {
+      "source": "/api/music/action",
+      "destination": "/api/router?route=music/action"
+    },
+    {
       "source": "/api/presence/set",
       "destination": "/api/router?route=presence/set"
     },
@@ -93,6 +113,30 @@
     {
       "source": "/api/friends/remove",
       "destination": "/api/router?route=friends/remove"
+    },
+    {
+      "source": "/api/friends/respond",
+      "destination": "/api/router?route=friends/respond"
+    },
+    {
+      "source": "/api/users/search",
+      "destination": "/api/router?route=users/search"
+    },
+    {
+      "source": "/api/invites/send",
+      "destination": "/api/router?route=invites/send"
+    },
+    {
+      "source": "/api/invites/respond",
+      "destination": "/api/router?route=invites/respond"
+    },
+    {
+      "source": "/api/ranking",
+      "destination": "/api/router?route=ranking"
+    },
+    {
+      "source": "/api/logs/client",
+      "destination": "/api/router?route=logs/client"
     }
   ]
 }
