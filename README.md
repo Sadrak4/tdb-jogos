@@ -195,3 +195,5 @@ node tests/online-engine-smoke.mjs
 
 WebSockets na Vercel dependem do suporte atual de Vercel Functions/Fluid Compute.
 Conexões podem cair/reconectar; o cliente possui reconexão automática e o estado durável deve ficar no Redis.
+
+Deploy inicial Vercel
