@@ -1,50 +1,49 @@
-TDB JOGOS v6.1.1 — Screen Share Reliability Fix
+TDB JOGOS v6.1.2 — Screen Share Route Fix
 
-COMPARTILHAMENTO DE TELA
-- transmissão aparece integrada no centro da sala
-- transmissor vê prévia grande imediatamente após selecionar tela/janela/aba
-- botão fixo "Parar" permanece visível enquanto compartilha
-- botão "Parar compartilhamento" também fica no painel da transmissão
-- parar pelo botão nativo do navegador encerra o estado no TDB
-- espectador só recebe vídeo depois de clicar em "Visualizar transmissão"
-- espectador pode fechar sem encerrar a transmissão para os outros
-- botão Tela cheia
-- tentativa automática de reconexão
-- botão Tentar novamente quando a conexão falhar
-- fallback de autoplay quando áudio compartilhado é bloqueado pelo navegador
+CAUSA DO ERRO DA v6.1.1
+- o backend tinha a rota platform/screen-share registrada
+- porém vercel.json NÃO publicava /api/platform/screen-share
+- resultado em produção: HTTP 404 ao tentar anunciar ou consultar a transmissão
+- por isso o navegador conseguia abrir o seletor de tela, mas o TDB não conseguia publicar a transmissão na sala
 
-CORREÇÃO PRINCIPAL
-A v6.1 armazenava broadcaster heartbeat, viewer heartbeat, offer e answer dentro do mesmo JSON.
-Requisições simultâneas podiam sobrescrever partes do estado e fazer a transmissão desaparecer antes da conexão WebRTC concluir.
+CORREÇÕES
+- adicionado rewrite /api/platform/screen-share -> /api/router?route=platform/screen-share
+- cliente ganhou fallback direto para /api/router se a rota amigável responder 404
+- resposta vazia/HTML de rota inexistente também é detectada como erro
+- antes de abrir o seletor de tela, o TDB faz um preflight no servidor
+- se o servidor não estiver pronto, a janela de seleção nem é aberta
+- mensagens claras para 404, sessão inválida, manutenção, limite de requisição e captura bloqueada
+- depois que a tela é escolhida, a prévia aparece imediatamente
+- botão PARAR aparece imediatamente, antes da confirmação do servidor
+- START precisa confirmar o mesmo broadcastId criado pelo navegador
+- fluxo P2P/offer/answer/heartbeat da v6.1.1 foi preservado
 
-Na v6.1.1 os sinais usam registros independentes em tdb_shared:
-- metadados da transmissão
-- heartbeat do transmissor
-- presença/heartbeat do espectador
-- offer
-- answer
-- connected
+FLUXO NOVO
+Compartilhar tela
+→ Verificando servidor
+→ seletor nativo do navegador
+→ prévia local + PARAR
+→ servidor confirma START
+→ usuário da sala vê Visualizar transmissão
+→ WATCH
+→ OFFER
+→ ANSWER
+→ vídeo WebRTC
 
-Isso elimina a sobrescrita entre transmissor e espectador.
+TESTES
+- rewrite Vercel validado
+- fallback /api/router validado
+- preflight antes do getDisplayMedia validado
+- rota HTTP completa validada:
+  autenticação → sala → GET state → START → WATCH → STOP
+- serviço de sinalização validado
+- regressões anteriores preservadas
 
-ROBUSTEZ
-- broadcastId é validado nas mensagens WebRTC para sinais atrasados não afetarem uma transmissão nova
-- STOP atrasado de uma aba antiga não encerra uma transmissão nova
-- heartbeat do transmissor não pode ressuscitar transmissão já encerrada
-- sinalização continua sendo consultada enquanto a aba TDB está em segundo plano
-- tolerância maior para throttling de timers do navegador em segundo plano
-- sinais antigos são limpos ao encerrar/reiniciar a transmissão
-- STUN continua configurado por padrão
-- TURN opcional continua suportado para redes que bloqueiam P2P
-
-TDB LOUNGE
-- transmissão assume o centro da sala quando ativa
-- player musical fica mais compacto durante a transmissão
-- Fila / Histórico / Favoritas continuam funcionando
+LIMITAÇÃO DE REDE
+- continua sendo WebRTC P2P
+- STUN vem habilitado
+- algumas redes/NAT/CGNAT podem exigir TURN
+- suporte a TURN já existe via SCREEN_SHARE_TURN_* no ambiente
 
 BANCO
 - nenhum SQL novo
-- usa a tabela tdb_shared já existente
-
-VERSÃO
-6.1.1

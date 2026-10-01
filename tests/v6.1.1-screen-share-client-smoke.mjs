@@ -12,7 +12,7 @@ const health=read('server/http-handlers/health.js');
 assert('Screen share remains browser-permission based',screen.includes('navigator.mediaDevices.getDisplayMedia'));
 assert('Capture requests optional shared audio',screen.includes('audio:true'));
 assert('Capture falls back to video-only when audio constraint is unsupported',screen.includes("audio:false")&&screen.includes('NotSupportedError'));
-assert('Broadcaster preview renders before server START finishes',screen.includes("localPhase='registering'")&&screen.includes('render(true); // Preview + STOP button appears before the network request.'));
+assert('Broadcaster preview renders immediately after capture and before START finishes',screen.includes("localPhase='registering'")&&screen.includes('A prévia e o botão PARAR aparecem imediatamente.'));
 assert('Browser native stop ends the TDB broadcast',screen.includes("addEventListener('ended',()=>stopShare({reason:'browser'})"));
 assert('Broadcaster has fixed stop control',screen.includes('loungeScreenFloatingStop')&&screen.includes('Parar compartilhamento'));
 assert('Screen video is integrated into center stage',music.includes('id="loungeScreenStage"')&&screen.includes('loungeScreenLocalStageVideo')&&screen.includes('loungeScreenRemoteVideo'));
@@ -37,6 +37,6 @@ assert('WATCH clears stale negotiation before publishing viewer request',service
 assert('OFFER clears stale answer before publishing a new offer',service.includes('Clear old answer/connected state before publishing the fresh offer event'));
 assert('Shared store can list signal rows by prefix',store.includes('export async function listSharedValues(prefix)'));
 assert('Shared store emits screen events with only the room code',store.includes("topic:'screenshare'")&&store.includes("key.slice(7).split(':')[0]"));
-assert('Health reports 6.1.1',health.includes("version:'6.1.1'"));
+assert('Health reports 6.1.2',health.includes("version:'6.1.2'"));
 
 console.log('ALL V6.1.1 SCREEN SHARE CLIENT TESTS PASSED');

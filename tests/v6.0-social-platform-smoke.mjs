@@ -101,8 +101,8 @@ assert('Maintenance is enforced centrally',router.includes("code:'MAINTENANCE'")
 assert('Admin endpoints are exempt from maintenance',router.includes("route.startsWith('admin/')"));
 assert('Health returns maintenance state',health.includes('maintenance:status.maintenance'));
 assert('Realtime backend status reads maintenance state',realtime.includes("getSharedValue('app:maintenance'"));
-assert('Presence stores app version',maintenance.includes("version:String(version||'6.1.1')"));
-assert('Client logs carry v6 version',online.includes("context:{version:'6.1.1'"));
+assert('Presence stores app version',maintenance.includes("version:String(version||'6.1.2')"));
+assert('Client logs carry v6 version',online.includes("context:{version:'6.1.2'"));
 
 // Existing generic 5-minute cleanup is preserved for every game.
 assert('Room empty TTL remains exactly five minutes',roomLeave.includes('5*60*1000'));

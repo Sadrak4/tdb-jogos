@@ -34,13 +34,42 @@ function audioTrack(){return localStream?.getAudioTracks?.()[0]||null}
 function isBroadcaster(){return !!shareState?.active&&shareState?.broadcaster?.id===user()?.id}
 function hasTurn(){return iceServers.some(s=>[].concat(s.urls||[]).some(u=>String(u).startsWith('turn:')||String(u).startsWith('turns:')))}
 
-async function apiAction(action){
+function friendlyScreenError(err,phase=''){
+  const status=Number(err?.status||0);
+  if(status===404)return 'A rota de compartilhamento não foi publicada no servidor. Atualize o TDB para a versão mais recente.';
+  if(status===401)return 'Sua sessão online não está válida. Entre novamente na conta.';
+  if(status===503)return err?.message||'O TDB está em manutenção.';
+  if(status===429)return 'Muitas tentativas em pouco tempo. Aguarde alguns segundos e tente novamente.';
+  if(err?.name==='NotAllowedError')return 'O compartilhamento foi cancelado ou o navegador não recebeu permissão.';
+  if(err?.name==='AbortError')return 'A seleção da tela foi cancelada.';
+  if(err?.name==='NotReadableError')return 'O navegador não conseguiu capturar essa tela/janela. Tente outra janela ou desative fullscreen exclusivo.';
+  if(err?.name==='InvalidStateError')return 'O navegador bloqueou a captura porque a página não estava ativa. Clique no botão novamente.';
+  const message=String(err?.message||'').trim();
+  return message||(`Falha no compartilhamento${phase?` (${phase})`:''}.`);
+}
+
+async function preflightScreenShare(){
   if(!room||!online())throw new Error('Compartilhamento de tela exige a sala online.');
-  const r=await window.TDBOnline.screenShareAction(room.code,action);
+  const r=await window.TDBOnline.screenShareState(room.code);
   if(r?.iceServers?.length)iceServers=r.iceServers;
   if(r?.state)shareState=r.state;
-  render();
+  render(true);
   return r;
+}
+
+
+async function apiAction(action){
+  if(!room||!online())throw new Error('Compartilhamento de tela exige a sala online.');
+  try{
+    const r=await window.TDBOnline.screenShareAction(room.code,action);
+    if(r?.iceServers?.length)iceServers=r.iceServers;
+    if(r?.state)shareState=r.state;
+    render();
+    return r;
+  }catch(err){
+    console.warn('[TDB Screen Share API]',action?.type||'STATE',err);
+    throw err;
+  }
 }
 
 async function poll(force=false){
@@ -104,17 +133,40 @@ async function startShare(){
   if(!secureEnough())return notify('Compartilhar tela exige HTTPS ou localhost.');
   if(!navigator.mediaDevices?.getDisplayMedia)return notify('Seu navegador não oferece compartilhamento de tela.');
   if(!online())return notify('Compartilhamento de tela funciona somente na sala online.');
-  if(shareState?.active&&!isBroadcaster())return notify(`${shareState.broadcaster?.username||'Outra pessoa'} já está transmitindo.`);
   if(localStream)return notify('Sua tela já está sendo compartilhada.');
+
+  // Valida a rota/servidor ANTES de abrir o seletor do navegador.
+  // Isso evita o comportamento da v6.1.1: escolher uma tela e só depois
+  // descobrir que a rota da Vercel não estava publicada.
+  localPhase='preflight';
+  render(true);
+  try{
+    await preflightScreenShare();
+    if(shareState?.active&&!isBroadcaster()){
+      localPhase='idle';render(true);
+      return notify(`${shareState.broadcaster?.username||'Outra pessoa'} já está transmitindo.`);
+    }
+    if(shareState?.active&&isBroadcaster()){
+      localPhase='idle';render(true);
+      return notify('Sua conta já possui uma transmissão ativa nesta sala. Encerre-a antes de iniciar outra.');
+    }
+  }catch(err){
+    localPhase='idle';render(true);
+    return notify(friendlyScreenError(err,'verificação do servidor'));
+  }
 
   let stream;
   try{stream=await captureDisplay()}
   catch(err){
-    if(!['NotAllowedError','AbortError'].includes(err?.name))notify(err?.message||'Não foi possível capturar a tela.');
+    localPhase='idle';render(true);
+    if(!['NotAllowedError','AbortError'].includes(err?.name))notify(friendlyScreenError(err,'captura da tela'));
     return;
   }
 
-  if(!stream?.getVideoTracks?.().length){stopTracks(stream);return notify('Nenhuma tela foi selecionada.');}
+  if(!stream?.getVideoTracks?.().length){
+    stopTracks(stream);localPhase='idle';render(true);
+    return notify('Nenhuma tela foi selecionada.');
+  }
 
   localStream=stream;
   broadcastId=randomId();
@@ -127,21 +179,27 @@ async function startShare(){
   }
   for(const t of stream.getAudioTracks())t.addEventListener('ended',()=>render(true));
 
-  render(true); // Preview + STOP button appears before the network request.
+  // A prévia e o botão PARAR aparecem imediatamente.
+  render(true);
 
   try{
     const r=await apiAction({type:'START',broadcastId});
     if(!r?.state?.active||r.state?.broadcaster?.id!==user()?.id)throw new Error('O servidor não confirmou a transmissão.');
+    if(r.state.broadcastId!==broadcastId)throw new Error('O servidor confirmou uma sessão de transmissão diferente da atual.');
     localPhase='live';
     startHeartbeat();
     render(true);
     notify('Compartilhamento de tela iniciado.');
   }catch(err){
-    stopTracks(stream);localStream=null;broadcastId=null;localPhase='idle';closeAllBroadcasterPeers();render(true);
-    notify(err?.message||'Não foi possível anunciar a transmissão para a sala.');
+    stopTracks(stream);
+    localStream=null;
+    broadcastId=null;
+    localPhase='idle';
+    closeAllBroadcasterPeers();
+    render(true);
+    notify(friendlyScreenError(err,'registro da transmissão'));
   }
 }
-
 async function stopShare({silent=false,reason='user'}={}){
   const hadCapture=!!localStream;
   const wasBroadcaster=isBroadcaster()||hadCapture||localPhase==='registering';
@@ -401,7 +459,14 @@ function renderStage(force=false){
   }
   root.dataset.mode=mode;
 
-  if(mode==='idle'){root.innerHTML='';return}
+  if(mode==='idle'){
+    if(localPhase==='preflight'){
+      root.classList.add('active');
+      screen?.classList.add('lounge-has-screen-share');
+      root.innerHTML=`<div class="lounge-stage-available"><span class="eyebrow">COMPARTILHAMENTO</span><h2>Verificando transmissão…</h2><p>Confirmando conexão com o servidor antes de abrir o seletor de tela.</p></div>`;
+    }else root.innerHTML='';
+    return;
+  }
   if(mode==='local'){
     root.innerHTML=`<div class="lounge-stage-head"><div><span class="lounge-live-dot"></span><div><strong>VOCÊ ESTÁ COMPARTILHANDO</strong><small>${localPhase==='registering'?'Publicando transmissão na sala…':`${shareState?.viewerCount||0} espectador(es) • ${esc(connectionSummary())}`}</small></div></div><div class="lounge-stage-actions"><button class="btn btn-secondary btn-sm" onclick="TDBScreenShare.fullscreen()">Tela cheia</button><button class="btn btn-danger btn-sm" onclick="TDBScreenShare.stopShare()">Parar compartilhamento</button></div></div><div class="lounge-stage-video-wrap"><video id="loungeScreenLocalStageVideo" autoplay muted playsinline></video></div>`;
     attachLocalPreviews();return;
@@ -457,7 +522,7 @@ function render(force=false){
     return;
   }
 
-  root.innerHTML=`<div class="lounge-share-state"><span class="lounge-screen-icon">▣</span><strong>Compartilhe sua tela</strong><span>Escolha monitor, janela ou aba. O navegador sempre pede sua confirmação.</span></div><button class="btn btn-primary full" onclick="TDBScreenShare.startShare()">Compartilhar tela</button>`;
+  root.innerHTML=`<div class="lounge-share-state"><span class="lounge-screen-icon">▣</span><strong>${localPhase==='preflight'?'Verificando servidor…':'Compartilhe sua tela'}</strong><span>${localPhase==='preflight'?'Confirmando se a transmissão está disponível.':'Escolha monitor, janela ou aba. O navegador sempre pede sua confirmação.'}</span></div><button class="btn btn-primary full" ${localPhase==='preflight'?'disabled':''} onclick="TDBScreenShare.startShare()">${localPhase==='preflight'?'Verificando…':'Compartilhar tela'}</button>`;
 }
 
 function mount(activeRoom){

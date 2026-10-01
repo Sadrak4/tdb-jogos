@@ -43,7 +43,7 @@ async function start(port,attempt=0){
     const url=`http://localhost:${port}`;
     console.log('');
     console.log('======================================');
-    console.log(' TDB JOGOS v5.0 - Supabase Online');
+    console.log(' TDB JOGOS v6.1.2 - Screen Share Fix');
     console.log('======================================');
     console.log(`Site: ${url}`);
     console.log(`Health: ${url}/api/health`);

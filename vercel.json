@@ -195,6 +195,10 @@
       "destination": "/api/router?route=platform/music-profile"
     },
     {
+      "source": "/api/platform/screen-share",
+      "destination": "/api/router?route=platform/screen-share"
+    },
+    {
       "source": "/api/admin/operations",
       "destination": "/api/router?route=admin/operations"
     }

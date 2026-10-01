@@ -1,34 +1,20 @@
-# TDB JOGOS v6.1.1 — SCREEN SHARE RELIABILITY FIX
+# TDB JOGOS v6.1.2 — SCREEN SHARE ROUTE FIX
 
-Correção focada no compartilhamento de tela do TDB Lounge.
+Correção crítica do compartilhamento de tela.
 
-## O problema da v6.1
+A causa principal encontrada foi objetiva: `server/http-router.js` conhecia `platform/screen-share`, mas `vercel.json` não publicava `/api/platform/screen-share`. Em produção isso gerava HTTP 404 depois que o usuário selecionava a tela.
 
-A captura local funcionava e o navegador permitia escolher tela/janela/aba, mas a sinalização WebRTC podia desaparecer durante a negociação. Isso acontecia porque heartbeat do transmissor, heartbeat do espectador, offer e answer atualizavam o mesmo objeto compartilhado; requisições simultâneas podiam sobrescrever dados.
+## Correções desta versão
 
-## O que mudou
-
-- sinalização dividida em registros independentes no `tdb_shared`;
-- metadados, heartbeats, offer e answer não se sobrescrevem mais;
-- proteção por `broadcastId` contra mensagens atrasadas;
-- STOP antigo não encerra transmissão nova;
-- heartbeat não ressuscita transmissão encerrada;
-- polling continua enquanto a aba estiver em segundo plano se estiver transmitindo/assistindo;
-- retransmissão/retry automático quando ICE/WebRTC falhar;
-- suporte TURN opcional preservado;
-- vídeo compartilhado agora aparece no centro da sala;
-- prévia grande para quem transmite;
-- botão fixo para parar;
-- espectador continua optando por receber ou não o vídeo;
-- player de música fica compacto enquanto a transmissão ocupa o centro.
-
-## Banco
-
-Nenhuma migração SQL nova.
-
-## Limitação de rede
-
-Sem TURN, WebRTC depende de conexão P2P via STUN. Em muitas redes isso funciona diretamente. Redes restritivas podem exigir TURN; o código já possui suporte às variáveis `SCREEN_SHARE_TURN_*`.
+- rewrite da Vercel para screen share;
+- fallback automático para a função única `/api/router`;
+- preflight do servidor antes do seletor de tela;
+- detecção de resposta inválida/HTML;
+- erros mais claros;
+- prévia e botão PARAR imediatamente após a captura;
+- confirmação do `broadcastId`;
+- testes HTTP completos de START/WATCH/STOP;
+- nenhuma alteração SQL.
 
 ---
 

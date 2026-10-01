@@ -1,29 +1,42 @@
-# DEPLOY — TDB JOGOS v6.1.1 SCREEN SHARE FIX
+# DEPLOY — TDB JOGOS v6.1.2 SCREEN SHARE ROUTE FIX
 
-Esta versão corrige a negociação do compartilhamento de tela da v6.1.
+## O que estava errado
 
-## Banco de dados
+Na v6.1.1 a rota existia dentro de `server/http-router.js`, mas faltou publicar esta entrada em `vercel.json`:
 
-**Não execute SQL novo.**
+```text
+/api/platform/screen-share
+```
 
-A sinalização continua usando `tdb_shared`, porém agora em chaves independentes para evitar que heartbeat / offer / answer se sobrescrevam.
+Por isso a Vercel respondia HTTP 404 e a transmissão não chegava a ser registrada.
+
+A v6.1.2 corrige isso e adiciona um fallback direto para:
+
+```text
+/api/router?route=platform/screen-share
+```
+
+## Banco
+
+Não execute SQL novo.
 
 ## Publicar
 
-1. No GitHub Desktop, faça `Fetch origin` e `Pull origin` se aparecer.
-2. Extraia `TDB-JOGOS-v6.1.1-SCREENSHARE-FIX.zip`.
-3. Copie os arquivos por cima do repositório atual.
-4. Commit sugerido:
+1. `Fetch origin`
+2. `Pull origin` se aparecer
+3. Extraia `TDB-JOGOS-v6.1.2-SCREENSHARE-ROUTE-FIX.zip`
+4. Copie por cima do repositório
+5. Commit:
 
 ```text
-TDB JOGOS v6.1.1 Screen Share Fix
+TDB JOGOS v6.1.2 Screen Share Route Fix
 ```
 
-5. `Commit to main`
-6. `Push origin`
-7. Aguarde a Vercel concluir o deploy.
+6. `Commit to main`
+7. `Push origin`
+8. Aguarde a Vercel concluir o deploy
 
-## Confirmar versão
+## Verificar versão
 
 Abra:
 
@@ -31,40 +44,53 @@ Abra:
 https://tdb-jogos.vercel.app/api/health
 ```
 
-Confirme:
+Esperado:
 
 ```json
-"version": "6.1.1"
+"version": "6.1.2"
 ```
 
-## Teste recomendado
+## Teste da rota antes de compartilhar
 
-Use duas contas diferentes na mesma sala TDB Lounge.
+Depois do deploy, abra a TDB Lounge em uma conta online.
+
+Agora ao clicar em `Compartilhar tela`, o fluxo deve mostrar primeiro:
+
+```text
+Verificando servidor…
+```
+
+Somente se a rota responder corretamente o navegador abrirá o seletor de tela.
+
+Isso é proposital: se houver problema no backend, você recebe o erro antes de escolher uma tela.
+
+## Teste em dois usuários
 
 ### Transmissor
-1. Clique `Compartilhar tela`.
-2. Escolha tela inteira, janela ou aba.
-3. A prévia deve aparecer imediatamente no centro da sala.
-4. Deve aparecer um controle fixo `Compartilhando tela / Parar`.
+1. Entre na mesma Lounge com duas contas.
+2. No primeiro usuário clique `Compartilhar tela`.
+3. Aguarde `Verificando servidor…`.
+4. Escolha monitor, janela ou aba.
+5. Deve aparecer imediatamente:
+   - prévia da tela;
+   - `Parar compartilhamento`;
+   - barra fixa `Compartilhando tela`.
+6. Depois deve aparecer confirmação de transmissão iniciada.
 
 ### Espectador
-1. Deve aparecer que o outro usuário está compartilhando.
+1. No segundo usuário deve aparecer que existe uma transmissão.
 2. Clique `Visualizar transmissão`.
-3. Estado esperado: `Solicitando` -> `Negociando` -> `Estabelecendo vídeo` -> `AO VIVO`.
-4. Teste `Tela cheia`.
-5. Teste `Fechar`: somente o espectador para de assistir.
+3. Acompanhe:
+   - Solicitando transmissão
+   - Negociando conexão
+   - Estabelecendo vídeo
+   - AO VIVO
 
-### Encerramento
-- Clique `Parar compartilhamento` no TDB, ou
-- clique `Parar compartilhamento` no controle nativo do Chrome/Edge.
+## Se ainda não conectar vídeo
 
-Nos dois casos a transmissão deve desaparecer para os espectadores.
+Se a transmissão aparece para o outro usuário, mas o vídeo falha somente entre redes diferentes, a rota já está funcionando e o problema passa a ser WebRTC/NAT.
 
-## Redes diferentes
-
-A v6.1.1 usa STUN por padrão e funciona em redes que permitem WebRTC P2P.
-
-Para máxima compatibilidade entre redes corporativas, CGNATs ou firewalls restritivos, configure um servidor TURN na Vercel:
+Nesse caso configure TURN:
 
 ```text
 SCREEN_SHARE_TURN_URLS
@@ -72,10 +98,4 @@ SCREEN_SHARE_TURN_USERNAME
 SCREEN_SHARE_TURN_CREDENTIAL
 ```
 
-Exemplo do campo URL:
-
-```text
-turn:seu-servidor-turn:3478
-```
-
-O código detecta quando não existe TURN e mostra uma mensagem específica se a negociação P2P falhar repetidamente.
+STUN já está configurado por padrão.
