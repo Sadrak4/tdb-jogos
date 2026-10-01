@@ -1,18 +1,34 @@
-# TDB JOGOS v6.1 — TDB LOUNGE + SCREEN SHARE
+# TDB JOGOS v6.1.1 — SCREEN SHARE RELIABILITY FIX
 
-A antiga área **TDB Music** agora é **TDB Lounge**. O identificador interno continua `music` para preservar compatibilidade, mas a sala agora reúne música, chat e compartilhamento de tela.
+Correção focada no compartilhamento de tela do TDB Lounge.
 
-## Compartilhamento de tela
+## O problema da v6.1
 
-- escolha tela inteira, janela ou aba pelo seletor nativo do navegador;
-- uma transmissão simultânea por Lounge nesta versão;
-- quem não clicar em **Visualizar transmissão** não recebe a mídia;
-- quem assiste pode fechar ou colocar em tela cheia sem afetar os demais;
-- áudio da aba/tela é incluído quando navegador e sistema oferecem a opção;
-- WebRTC transporta a mídia; Supabase é usado somente para sinalização;
-- STUN funciona por padrão e TURN pode ser configurado depois para redes corporativas/restritas.
+A captura local funcionava e o navegador permitia escolher tela/janela/aba, mas a sinalização WebRTC podia desaparecer durante a negociação. Isso acontecia porque heartbeat do transmissor, heartbeat do espectador, offer e answer atualizavam o mesmo objeto compartilhado; requisições simultâneas podiam sobrescrever dados.
 
-Não há SQL novo.
+## O que mudou
+
+- sinalização dividida em registros independentes no `tdb_shared`;
+- metadados, heartbeats, offer e answer não se sobrescrevem mais;
+- proteção por `broadcastId` contra mensagens atrasadas;
+- STOP antigo não encerra transmissão nova;
+- heartbeat não ressuscita transmissão encerrada;
+- polling continua enquanto a aba estiver em segundo plano se estiver transmitindo/assistindo;
+- retransmissão/retry automático quando ICE/WebRTC falhar;
+- suporte TURN opcional preservado;
+- vídeo compartilhado agora aparece no centro da sala;
+- prévia grande para quem transmite;
+- botão fixo para parar;
+- espectador continua optando por receber ou não o vídeo;
+- player de música fica compacto enquanto a transmissão ocupa o centro.
+
+## Banco
+
+Nenhuma migração SQL nova.
+
+## Limitação de rede
+
+Sem TURN, WebRTC depende de conexão P2P via STUN. Em muitas redes isso funciona diretamente. Redes restritivas podem exigir TURN; o código já possui suporte às variáveis `SCREEN_SHARE_TURN_*`.
 
 ---
 

@@ -1,34 +1,50 @@
-TDB JOGOS v6.1 — TDB Lounge + Compartilhamento de Tela
-
-TDB LOUNGE
-- TDB Music foi renomeado visualmente para TDB Lounge
-- o id interno continua `music` para preservar banco/lifecycle
-- música, chat e compartilhamento de tela ficam na mesma sala
+TDB JOGOS v6.1.1 — Screen Share Reliability Fix
 
 COMPARTILHAMENTO DE TELA
-- botão Compartilhar tela dentro do Lounge
-- navegador permite escolher monitor inteiro, janela ou aba
-- captura usa getDisplayMedia do navegador
-- áudio da tela/aba é enviado quando o navegador/sistema disponibiliza essa opção
-- somente 1 transmissão ativa por sala nesta primeira versão
-- quem não clicar em Visualizar transmissão não recebe o vídeo
-- viewer pode fechar sem encerrar a transmissão para os outros
-- transmissor vê quantidade de espectadores/solicitações
-- botão Tela cheia para quem assiste
-- ao parar pelo navegador ou pelo TDB, a transmissão encerra
-- se transmissor cair, heartbeat expira o estado automaticamente
+- transmissão aparece integrada no centro da sala
+- transmissor vê prévia grande imediatamente após selecionar tela/janela/aba
+- botão fixo "Parar" permanece visível enquanto compartilha
+- botão "Parar compartilhamento" também fica no painel da transmissão
+- parar pelo botão nativo do navegador encerra o estado no TDB
+- espectador só recebe vídeo depois de clicar em "Visualizar transmissão"
+- espectador pode fechar sem encerrar a transmissão para os outros
+- botão Tela cheia
+- tentativa automática de reconexão
+- botão Tentar novamente quando a conexão falhar
+- fallback de autoplay quando áudio compartilhado é bloqueado pelo navegador
 
-TECNOLOGIA
-- WebRTC P2P para mídia
-- Supabase/tdb_shared apenas para sinalização, nunca para transportar vídeo
-- STUN público configurado por padrão
-- suporte opcional a TURN via variáveis de ambiente para redes restritas
+CORREÇÃO PRINCIPAL
+A v6.1 armazenava broadcaster heartbeat, viewer heartbeat, offer e answer dentro do mesmo JSON.
+Requisições simultâneas podiam sobrescrever partes do estado e fazer a transmissão desaparecer antes da conexão WebRTC concluir.
 
-TURN OPCIONAL
-SCREEN_SHARE_STUN_URLS
-SCREEN_SHARE_TURN_URLS
-SCREEN_SHARE_TURN_USERNAME
-SCREEN_SHARE_TURN_CREDENTIAL
+Na v6.1.1 os sinais usam registros independentes em tdb_shared:
+- metadados da transmissão
+- heartbeat do transmissor
+- presença/heartbeat do espectador
+- offer
+- answer
+- connected
+
+Isso elimina a sobrescrita entre transmissor e espectador.
+
+ROBUSTEZ
+- broadcastId é validado nas mensagens WebRTC para sinais atrasados não afetarem uma transmissão nova
+- STOP atrasado de uma aba antiga não encerra uma transmissão nova
+- heartbeat do transmissor não pode ressuscitar transmissão já encerrada
+- sinalização continua sendo consultada enquanto a aba TDB está em segundo plano
+- tolerância maior para throttling de timers do navegador em segundo plano
+- sinais antigos são limpos ao encerrar/reiniciar a transmissão
+- STUN continua configurado por padrão
+- TURN opcional continua suportado para redes que bloqueiam P2P
+
+TDB LOUNGE
+- transmissão assume o centro da sala quando ativa
+- player musical fica mais compacto durante a transmissão
+- Fila / Histórico / Favoritas continuam funcionando
 
 BANCO
-- nenhuma migração SQL nova
+- nenhum SQL novo
+- usa a tabela tdb_shared já existente
+
+VERSÃO
+6.1.1

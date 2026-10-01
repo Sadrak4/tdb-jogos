@@ -1040,3 +1040,125 @@
   .lounge-screen-window-head{align-items:flex-start}
   .lounge-screen-video-wrap{min-height:210px}
 }
+
+/* =========================================================
+   v6.1.1 — Screen share stage / reliable viewing
+   ========================================================= */
+.lounge-screen-stage{
+  display:none;
+  min-height:0;
+  overflow:hidden;
+  border:1px solid rgba(219,176,65,.24);
+  border-radius:14px;
+  background:#030403;
+  box-shadow:0 16px 45px rgba(0,0,0,.22);
+}
+.lounge-screen-stage.active{
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr);
+  min-height:clamp(260px,52dvh,620px);
+}
+.lounge-stage-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:9px 11px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  background:linear-gradient(180deg,#121411,#0b0d0b);
+}
+.lounge-stage-head>div:first-child{display:flex;align-items:center;gap:8px;min-width:0}
+.lounge-stage-head strong{display:block;color:#f0e7d0;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lounge-stage-head small{display:block;margin-top:2px;color:#7f887f;font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lounge-stage-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.lounge-stage-video-wrap{
+  position:relative;
+  min-height:220px;
+  background:#000;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+}
+.lounge-stage-video-wrap video{
+  width:100%;
+  height:100%;
+  max-height:70dvh;
+  object-fit:contain;
+  background:#000;
+}
+.lounge-stage-available{
+  min-height:clamp(260px,46dvh,520px);
+  padding:26px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:8px;
+  text-align:center;
+  background:
+    radial-gradient(circle at 50% 35%,rgba(197,157,55,.10),transparent 36%),
+    linear-gradient(180deg,#0b0d0b,#050605);
+}
+.lounge-stage-available h2{margin:0;color:#f0e8d6;font-size:clamp(16px,2vw,26px)}
+.lounge-stage-available p{margin:0 0 6px;color:#7c827d;font-size:10px}
+.lounge-screen-remote-status.hidden{display:none!important}
+.lounge-screen-retry{
+  position:absolute;
+  left:50%;bottom:22px;
+  transform:translateX(-50%);
+  z-index:3;
+}
+.lounge-screen-floating-stop{
+  position:fixed;
+  z-index:11000;
+  left:50%;
+  bottom:18px;
+  transform:translate(-50%,18px);
+  opacity:0;
+  pointer-events:none;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:8px 9px 8px 12px;
+  border:1px solid rgba(225,74,67,.42);
+  border-radius:999px;
+  background:rgba(11,12,11,.96);
+  box-shadow:0 14px 45px rgba(0,0,0,.48);
+  backdrop-filter:blur(10px);
+  transition:.18s ease;
+}
+.lounge-screen-floating-stop.visible{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.lounge-screen-floating-stop>span{display:flex;align-items:center;gap:7px;color:#eee4d5;font-size:9px}
+.lounge-screen-floating-stop i{width:8px;height:8px;border-radius:50%;background:#e14a43;box-shadow:0 0 12px rgba(225,74,67,.45)}
+.lounge-screen-floating-stop button{
+  border:0;border-radius:999px;padding:6px 10px;cursor:pointer;
+  background:#b93c37;color:white;font:inherit;font-size:9px;font-weight:800;
+}
+.music-screen.lounge-has-screen-share .music-main{
+  grid-template-rows:minmax(260px,1fr) auto minmax(130px,.46fr)!important;
+}
+.music-screen.lounge-has-screen-share .music-player-card{
+  padding:8px 10px!important;
+}
+.music-screen.lounge-has-screen-share .music-player-wrap{
+  height:clamp(90px,15dvh,145px)!important;
+  min-height:90px!important;
+}
+.music-screen.lounge-has-screen-share .music-now-header{
+  margin-bottom:4px!important;
+}
+.music-screen.lounge-has-screen-share .music-progress,
+.music-screen.lounge-has-screen-share .music-vote-progress{
+  margin-top:4px!important;
+}
+
+@media(max-width:1100px){
+  .lounge-screen-stage.active{min-height:340px}
+  .music-screen.lounge-has-screen-share .music-main{height:auto!important;min-height:760px!important}
+}
+@media(max-width:850px){
+  .lounge-stage-head{align-items:flex-start;flex-direction:column}
+  .lounge-stage-actions{width:100%}
+  .lounge-stage-actions .btn{flex:1}
+  .lounge-screen-stage.active{min-height:300px}
+  .lounge-screen-floating-stop{width:calc(100% - 24px);justify-content:space-between;bottom:12px}
+}

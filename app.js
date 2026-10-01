@@ -1633,7 +1633,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'6.1.0',
+      version:'6.1.1',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)

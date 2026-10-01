@@ -976,7 +976,7 @@ async function leaveMusicRoom(){
 
 function renderMusic(){
   app.innerHTML=`${topbar()}
-  <section class="music-screen fade-in">
+  <section id="musicScreen" class="music-screen fade-in">
     <aside class="music-sidebar">
       <div class="music-brand">${logoTag()}<div><strong>TDB LOUNGE</strong><span>MÚSICA • CHAT • TELA</span></div></div>
       <div class="music-room-info">
@@ -999,6 +999,7 @@ function renderMusic(){
     </aside>
 
     <main class="music-main">
+      <section id="loungeScreenStage" class="lounge-screen-stage"></section>
       <section class="music-player-card">
         <div class="music-now-header">
           <img id="musicNowArt" class="music-now-art" alt="">

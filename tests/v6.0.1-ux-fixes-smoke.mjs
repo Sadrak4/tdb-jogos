@@ -60,6 +60,6 @@ assert('Music can favorite from queue/history',
 assert('Music favorite list says saved to account',
   music.includes('salvo na sua conta'));
 
-assert('Health reports current stable version',health.includes("version:'6.1.0'"));
+assert('Health reports current stable version',health.includes("version:'6.1.1'"));
 
 console.log('ALL V6.0.1 UX FIX TESTS PASSED');

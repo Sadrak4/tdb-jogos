@@ -299,6 +299,13 @@ export async function getSharedValue(key,fallback=null){
   return MEMORY.shared.has(key)?clone(MEMORY.shared.get(key)):fallback;
 }
 
+function sharedEventMeta(key=''){
+  if(key.startsWith('game:')) return {topic:'game',roomCode:key.slice(5).split(':')[0]||null};
+  if(key.startsWith('music:')) return {topic:'music',roomCode:key.slice(6).split(':')[0]||null};
+  if(key.startsWith('screen:')) return {topic:'screenshare',roomCode:key.slice(7).split(':')[0]||null};
+  return {topic:'shared',roomCode:null};
+}
+
 export async function setSharedValue(key,value){
   await initSupabase();
 
@@ -311,10 +318,39 @@ export async function setSharedValue(key,value){
     if(error) throw new Error(error.message);
   }else MEMORY.shared.set(key,clone(value));
 
-  const roomCode=key.startsWith('game:')?key.slice(5):key.startsWith('music:')?key.slice(6):key.startsWith('screen:')?key.slice(7):null;
-  const topic=key.startsWith('game:')?'game':key.startsWith('music:')?'music':key.startsWith('screen:')?'screenshare':'shared';
+  const {topic,roomCode}=sharedEventMeta(key);
   await emitEvent(topic,roomCode,'set');
   return value;
+}
+
+export async function removeSharedValue(key){
+  await initSupabase();
+  if(isSupabaseReady()){
+    const {error}=await supabaseClient.from('tdb_shared').delete().eq('key',key);
+    if(error) throw new Error(error.message);
+  }else MEMORY.shared.delete(key);
+  const {topic,roomCode}=sharedEventMeta(key);
+  await emitEvent(topic,roomCode,'remove');
+  return true;
+}
+
+export async function listSharedValues(prefix){
+  await initSupabase();
+  const out=[];
+  if(isSupabaseReady()){
+    const safePrefix=String(prefix||'');
+    const {data,error}=await supabaseClient
+      .from('tdb_shared')
+      .select('key,value,updated_at')
+      .like('key',`${safePrefix}%`);
+    if(error) throw new Error(error.message);
+    for(const row of data||[])out.push({key:row.key,value:clone(row.value),updatedAt:row.updated_at?new Date(row.updated_at).getTime():0});
+    return out;
+  }
+  for(const [key,value] of MEMORY.shared.entries()){
+    if(key.startsWith(prefix))out.push({key,value:clone(value),updatedAt:Number(value?.updatedAt||0)});
+  }
+  return out;
 }
 
 export async function getRoomPrivate(code){
