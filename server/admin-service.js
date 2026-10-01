@@ -107,20 +107,24 @@ async function audit(action,{targetUserId=null,details={}}={}){
 
 export async function overview(){
   await initSupabase();
-  if(!isSupabaseReady())return{users:0,banned:0,openReports:0,errors24h:0};
+  if(!isSupabaseReady())return{users:0,banned:0,openReports:0,errors24h:0,onlineUsers:0,openRooms:0,activeMatches:0,maintenance:{enabled:false}};
   const db=getSupabaseClient();
   const since=new Date(Date.now()-24*60*60*1000).toISOString();
-  const [users,banned,reports,errors]=await Promise.all([
+  const onlineSince=new Date(Date.now()-30*1000).toISOString();
+  const [users,banned,reports,errors,online,rooms,matches,maintenance]=await Promise.all([
     db.from('tdb_users').select('*',{count:'exact',head:true}),
     db.from('tdb_users').select('*',{count:'exact',head:true}).eq('banned',true),
     db.from('tdb_reports').select('*',{count:'exact',head:true}).in('status',['open','reviewing']),
-    db.from('tdb_error_logs').select('*',{count:'exact',head:true}).gte('created_at',since)
+    db.from('tdb_error_logs').select('*',{count:'exact',head:true}).gte('created_at',since),
+    db.from('tdb_presence').select('*',{count:'exact',head:true}).gte('updated_at',onlineSince),
+    db.from('tdb_rooms').select('*',{count:'exact',head:true}).eq('status','open'),
+    db.from('tdb_matches').select('*',{count:'exact',head:true}).neq('status','finished'),
+    getSharedValue('app:maintenance',{enabled:false,message:'TDB em manutenção • voltamos em breve'})
   ]);
   return{
-    users:users.count||0,
-    banned:banned.count||0,
-    openReports:reports.count||0,
-    errors24h:errors.count||0
+    users:users.count||0,banned:banned.count||0,openReports:reports.count||0,errors24h:errors.count||0,
+    onlineUsers:online.count||0,openRooms:rooms.count||0,activeMatches:matches.count||0,
+    maintenance:maintenance||{enabled:false}
   };
 }
 
@@ -139,7 +143,20 @@ export async function listUsers(query=''){
   }
   const {data,error}=await q;
   if(error)throw new Error(error.message);
-  return data||[];
+  const users=data||[];
+  if(!users.length)return users;
+  const ids=users.map(u=>u.id);
+  const nowIso=new Date().toISOString();
+  const [sessions,presence]=await Promise.all([
+    db.from('tdb_sessions').select('user_id,expires_at').in('user_id',ids).gt('expires_at',nowIso),
+    db.from('tdb_presence').select('user_id,status,data,updated_at').in('user_id',ids)
+  ]);
+  if(sessions.error)throw new Error(sessions.error.message);
+  if(presence.error)throw new Error(presence.error.message);
+  const sessionCount=new Map();
+  for(const row of sessions.data||[])sessionCount.set(row.user_id,(sessionCount.get(row.user_id)||0)+1);
+  const presenceMap=new Map((presence.data||[]).map(row=>[row.user_id,row]));
+  return users.map(u=>{const pr=presenceMap.get(u.id);const age=pr?Date.now()-new Date(pr.updated_at).getTime():Infinity;return{...u,active_sessions:sessionCount.get(u.id)||0,presence_status:age<30000?(pr?.data?.status||pr?.status||'online'):age<90000?'away':'offline',client_version:pr?.data?.version||null,current_game:pr?.data?.game||null,current_room:pr?.data?.roomCode||null,last_seen_at:pr?.updated_at||null}});
 }
 
 export async function resetUserPassword(userId,newPassword=null){
@@ -238,4 +255,30 @@ export async function updateReport(reportId,{status,adminNote}={}){
   if(!data)throw new Error('Reporte não encontrado.');
   await audit('report_update',{details:{reportId:Number(reportId),status:nextStatus}});
   return data;
+}
+
+
+export async function operations(){
+  await initSupabase();
+  if(!isSupabaseReady())return{rooms:[],maintenance:{enabled:false},errorVersions:[]};
+  const db=getSupabaseClient();
+  const [roomsRes,logsRes,maintenance]=await Promise.all([
+    db.from('tdb_rooms').select('code,game,owner_id,status,privacy,data,updated_at').order('updated_at',{ascending:false}).limit(150),
+    db.from('tdb_error_logs').select('context,created_at').order('created_at',{ascending:false}).limit(500),
+    getSharedValue('app:maintenance',{enabled:false,message:'TDB em manutenção • voltamos em breve'})
+  ]);
+  if(roomsRes.error)throw new Error(roomsRes.error.message);
+  if(logsRes.error)throw new Error(logsRes.error.message);
+  const byVersion=new Map();
+  for(const row of logsRes.data||[]){const v=String(row.context?.version||'sem versão');byVersion.set(v,(byVersion.get(v)||0)+1)}
+  const errorVersions=[...byVersion.entries()].map(([version,count])=>({version,count})).sort((a,b)=>b.count-a.count);
+  const rooms=(roomsRes.data||[]).map(row=>({code:row.code,game:row.game,ownerId:row.owner_id,status:row.status,privacy:row.privacy,updated_at:row.updated_at,name:row.data?.name||row.code,players:row.data?.players?.length||0,spectators:row.data?.spectators?.length||0,emptyExpiresAt:row.data?.emptyExpiresAt||null}));
+  return{rooms,maintenance:maintenance||{enabled:false},errorVersions};
+}
+
+export async function setMaintenance(enabled,message=''){
+  const value={enabled:!!enabled,message:String(message||'TDB em manutenção • voltamos em breve').slice(0,240),updatedAt:Date.now()};
+  await setSharedValue('app:maintenance',value);
+  await audit(value.enabled?'maintenance_on':'maintenance_off',{details:value});
+  return value;
 }

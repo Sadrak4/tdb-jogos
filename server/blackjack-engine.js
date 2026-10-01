@@ -133,7 +133,7 @@ function advanceFromHand(state,player,now=Date.now()){
 function beginDealerTurn(state,now=Date.now()){
   state.phase='dealerTurn';
   state.dealer.revealed=true;
-  state.dealerNextAt=now+650;
+  state.dealerNextAt=now+820;
   state.turnDeadlineAt=null;
   state.currentPlayerId=null;
   log(state,'dealer','Dealer revelou a carta fechada.');
@@ -361,9 +361,13 @@ export function tick(state,room,now=Date.now()){
 
   if(s.phase==='dealerTurn'&&s.dealerNextAt&&now>=s.dealerNextAt){
     if(dealerShouldHit(s)){
-      s.dealer.cards.push(draw(s));s.dealerNextAt=now+650;
+      s.dealer.cards.push(draw(s));s.dealerNextAt=now+820;
       log(s,'dealer-hit','Dealer pediu uma carta.');s.version++;
-    }else settleRound(s,now);
+    }else{
+      const dealerValue=handValue(s.dealer.cards);
+      log(s,dealerValue.bust?'dealer-bust':'dealer-stand',dealerValue.bust?`Dealer estourou com ${dealerValue.total}.`:`Dealer parou em ${dealerValue.total}.`,{total:dealerValue.total});
+      settleRound(s,now);
+    }
   }
 
   if(s.phase==='roundEnd'&&s.nextRoundAt&&now>=s.nextRoundAt){

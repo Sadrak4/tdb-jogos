@@ -534,3 +534,103 @@
   .bj-action{min-width:46%;flex:1}
   .bj-sidebar{grid-template-columns:1fr}
 }
+
+
+/* =========================================================
+   v5.9 — Blackjack dealer pacing / round summary polish
+   ========================================================= */
+.bj-dealer-action{
+  width:max-content;
+  max-width:220px;
+  margin:4px auto 0;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid rgba(229,189,92,.25);
+  background:rgba(4,7,6,.76);
+  color:#e7ca82;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.12em;
+  animation:bjDealerActionIn .22s ease-out;
+}
+@keyframes bjDealerActionIn{
+  from{opacity:0;transform:translateY(-5px)}
+  to{opacity:1;transform:none}
+}
+.bj-hand.split-arrive{
+  animation:bjSplitHand .42s cubic-bezier(.16,.76,.22,1);
+}
+@keyframes bjSplitHand{
+  from{opacity:.2;transform:translateX(14px) scale(.94)}
+  to{opacity:1;transform:none}
+}
+.bj-round-summary{
+  position:absolute;
+  z-index:24;
+  left:50%;
+  top:46%;
+  transform:translate(-50%,-50%);
+  width:min(430px,46%);
+  padding:10px;
+  border:1px solid rgba(225,183,81,.42);
+  border-radius:14px;
+  background:rgba(7,9,8,.94);
+  box-shadow:0 18px 48px rgba(0,0,0,.46);
+  backdrop-filter:blur(12px);
+  animation:bjRoundSummaryIn .24s ease-out;
+}
+.bj-round-summary-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding-bottom:7px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.bj-round-summary-head span{
+  color:#d2ad58;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.12em;
+}
+.bj-round-summary-head strong{
+  color:#dad5c7;
+  font-size:8px;
+}
+.bj-round-summary-list{display:grid;gap:4px;padding-top:6px}
+.bj-round-summary-row{
+  display:grid;
+  grid-template-columns:82px minmax(0,1fr) 54px;
+  gap:7px;
+  align-items:center;
+  padding:5px 6px;
+  border-radius:8px;
+  background:rgba(255,255,255,.025);
+}
+.bj-round-summary-row span{
+  color:#d8d4c8;
+  font-size:8px;
+  font-weight:800;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.bj-round-summary-row strong{
+  color:#8f9993;
+  font-size:7px;
+  font-weight:600;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.bj-round-summary-row b{text-align:right;font-size:9px}
+.bj-round-summary-row.win b{color:#7bd5a0}
+.bj-round-summary-row.lose b{color:#dd827a}
+.bj-round-summary-row.push b{color:#d7c88c}
+@keyframes bjRoundSummaryIn{
+  from{opacity:0;transform:translate(-50%,-45%) scale(.96)}
+  to{opacity:1;transform:translate(-50%,-50%) scale(1)}
+}
+@media(max-width:900px){
+  .bj-round-summary{width:min(500px,86%)}
+}

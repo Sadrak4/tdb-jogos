@@ -22,6 +22,7 @@ export default async function handler(req,res){
     const required=room.game==='truco'?Number(room.trucoSeats||4):room.game==='chess'?2:1;
     if((room.players||[]).length<required) throw new Error(`A sala precisa de ${required} jogador(es).`);
     if((room.players||[]).some(p=>p.connection==='reconnecting')) throw new Error('Aguarde todos os jogadores reconectarem antes de iniciar.');
+    if(room.game!=='music'&&(room.players||[]).some(p=>!p.ready)) throw new Error('Todos os jogadores precisam marcar PRONTO antes de iniciar.');
 
     room.status='playing';
     await setRoomPrivate(room);

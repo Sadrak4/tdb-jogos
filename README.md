@@ -1,4 +1,69 @@
-# TDB JOGOS v5.8 — BLACKJACK PREMIUM
+# TDB JOGOS v6.0 — SOCIAL + PLATFORM UPDATE
+
+A v6.0 transforma o TDB JOGOS em uma plataforma social mais completa sem reintroduzir ranking global.
+
+## Principais novidades da v6.0
+
+### Salas e multiplayer
+- sistema **PRONTO** para Truco, Xadrez e Blackjack;
+- host só inicia quando há jogadores suficientes e todos estão prontos;
+- reconexão visual com contagem regressiva;
+- salas vazias continuam com tolerância de 5 minutos em todos os jogos e no TDB Music;
+- botão **COPIAR CONVITE**;
+- salas **Pública**, **Somente amigos**, **Somente convite** ou **Com senha**;
+- modo espectador mais visível, com contagem e botão **Assistir** no lobby;
+- tela de `Entrando na sala`, `Sincronizando partida` e `Reconectando`.
+
+### Lobby, amigos e Party
+- resumo do lobby com jogadores online, salas abertas e amigos ativos;
+- status detalhado de amigos: Truco, Xadrez, Blackjack, TDB Music, sala, ausente e offline;
+- perfil rápido do amigo com convite para sala;
+- Party de até 4 amigos;
+- líder pode anunciar a sala atual e os membros recebem opção para acompanhar;
+- Party pode acompanhar o líder inclusive em sala `Somente convite`, sem abrir acesso a terceiros.
+
+### Chat e reações
+- chat de texto por sala;
+- reações rápidas `😂 🔥 👏 😮 ❤️ 👍`;
+- chat também disponível para espectadores autorizados;
+- reações desaparecem automaticamente.
+
+### TDB Music
+- histórico das últimas 10 músicas tocadas;
+- músicas favoritas por usuário;
+- playlists/presets salvos;
+- host pode salvar a fila e carregar uma playlist novamente;
+- dados usam o armazenamento compartilhado já existente.
+
+### Visual e desempenho
+- modo tela cheia nos jogos;
+- opção de animações completas;
+- opção de efeitos de partículas;
+- controle de som permanece;
+- animação de entrada de jogadores na sala.
+
+### Painel ADM
+- filtros de contas, banidos, online e sessões;
+- filtros de reportes por conta/ID e data;
+- filtros de logs por versão e data;
+- sessões ativas e versão do cliente por conta;
+- dashboard com contas, online, salas, partidas, reportes e erros;
+- visão operacional de salas;
+- erros agrupados por versão;
+- modo manutenção com mensagem configurável.
+
+### Qualidade
+- testes automáticos simulando 2 a 4 clientes;
+- regressões das versões anteriores preservadas;
+- logs de cliente agora carregam automaticamente a versão `6.0.0`.
+
+## Banco de dados
+
+A v6.0 **não exige SQL novo**. Party, chat, reações, favoritos, playlists e manutenção usam estruturas/tabelas já existentes, principalmente `tdb_shared`.
+
+---
+
+## Recursos e histórico anteriores
 
 A v5.7 mantém o módulo completo de Blackjack e refaz a experiência visual para uma mesa premium, compacta e independente do Truco.
 
@@ -203,3 +268,26 @@ Quando todos jogam a carta de uma rodada, o servidor entra em `resolving` e mant
 Quando o último jogador sai de uma sala real, ela permanece no lobby por 5 minutos. Durante esse período outro jogador ainda pode entrar e se torna o novo host. A entrada cancela a expiração. Se ninguém entrar, a sala é removida pelo cleanup.
 
 A v5.8 não exige alteração de banco.
+
+
+## v5.9 — Game Polish
+
+### Truco
+A fase `resolving` continua durando aproximadamente 1,8 segundo. Durante esse período a carta vencedora é destacada em dourado e as cartas fazem uma animação de descarte antes de serem retiradas da mesa.
+
+Ao encerrar uma mão, um resumo curto informa quem venceu, qual foi a carta pública vencedora e quantos pontos a mão valeu. Cartas jogadas escondidas continuam privadas e nunca têm sua identidade exibida nesse resumo.
+
+### Xadrez
+Foi adicionado feedback mais claro de turno, xeque, animação curta da última jogada e estados de urgência do relógio. A tela final também ganhou estatísticas da partida.
+
+### Blackjack
+O dealer agora tem um ritmo visual mais legível entre revelação e compras. A mesa exibe mensagens de ação do dealer e um resumo coletivo da rodada antes de abrir a próxima aposta.
+
+### TDB Music
+O cabeçalho `Agora Tocando` ganhou thumbnail, host, modo de controle, barra de progresso, progresso de votação e indicação de ressincronização quando o player precisa corrigir drift.
+
+### Salas vazias
+O TTL de 5 minutos permanece no fluxo genérico das salas e, portanto, cobre Truco, Xadrez, Blackjack e TDB Music.
+
+### Banco
+A v5.9 não adiciona tabelas nem colunas. Não é necessário executar SQL novo.

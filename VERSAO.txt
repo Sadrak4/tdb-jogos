@@ -1,22 +1,55 @@
-TDB JOGOS v5.8 — Truco Reveal + Room Grace
+TDB JOGOS v6.0 — Social + Platform Update
 
-TRUCO
-- a última carta da rodada permanece visível por aproximadamente 1,8s
-- o servidor mantém as cartas na mesa durante a fase resolving
-- o timer fica pausado durante essa exibição
-- o resultado da rodada já aparece enquanto as cartas ainda estão visíveis
-- cliente local usa o mesmo delay visual
-- correção adicional: empate usa corretamente o jogador que abriu a rodada
+SALAS / MULTIPLAYER
+- sistema PRONTO para Truco, Xadrez e Blackjack
+- host só inicia com quantidade mínima e todos prontos
+- ready reseta ao voltar da partida para a sala
+- reconexão visual com countdown
+- loading de entrada/sincronização
+- privacidade: pública / amigos / convite / senha
+- copiar convite
+- espectadores com contagem e acesso direto
+- TTL de sala vazia continua 5 minutos em todos os jogos e Music
 
-SALAS
-- quando o último jogador sai, a sala não some imediatamente
-- sala fica visível e pode ser retomada por 5 minutos
-- sala vazia mostra aviso de expiração aproximada
-- quem entrar numa sala vazia dentro do prazo se torna o novo host
-- entrada cancela automaticamente a expiração
-- após 5 minutos vazia, a sala é ocultada/removida pelo cleanup
-- salas de simulação/bot continuam sendo removidas imediatamente
+SOCIAL / PARTY
+- lobby com online, salas abertas e amigos ativos
+- status detalhado dos amigos por jogo/atividade
+- perfil rápido com convite de sala
+- party de até 4 amigos
+- líder publica sala e grupo pode acompanhar
+- party respeita privacidade e pode seguir líder em sala somente convite
+
+CHAT / REAÇÕES
+- chat por sala
+- reações rápidas: 😂 🔥 👏 😮 ❤️ 👍
+- espectadores autorizados podem participar do feed
+
+TDB MUSIC
+- histórico recente: últimas 10 faixas
+- favoritos pessoais
+- playlists/presets salvos
+- host pode salvar e aplicar fila
+- recursos persistidos em tdb_shared
+
+VISUAL / CONFIGURAÇÕES
+- tela cheia nos jogos
+- animações completas on/off
+- partículas on/off
+- som permanece configurável
+- animação de entrada de jogadores
+
+PAINEL ADM
+- filtros de contas/reportes/logs
+- sessões ativas e versão do cliente
+- usuários online / salas abertas / partidas ativas
+- erros nas últimas 24h
+- erros agrupados por versão
+- salas recentes
+- modo manutenção com mensagem configurável
+
+TESTES
+- simulação automática de 2–4 clientes
+- regressões v5.x preservadas
 
 BANCO
-- nenhuma tabela nova
-- nenhuma migração SQL necessária
+- nenhuma migração SQL nova necessária

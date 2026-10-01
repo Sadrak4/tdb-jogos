@@ -211,6 +211,8 @@ function updateClockDisplays(){
         value=Math.max(0,value-(Date.now()-chess.serverClockAt)/1000);
       }
       el.textContent=chess.clockEnabled?formatClock(value):'SEM RELÓGIO';
+      el.classList.toggle('urgent',chess.clockEnabled&&chess.status==='playing'&&chess.turn===color&&value<=30&&value>10);
+      el.classList.toggle('critical',chess.clockEnabled&&chess.status==='playing'&&chess.turn===color&&value<=10);
     }
   }
 }
@@ -250,6 +252,7 @@ function renderChessScreen(first=false){
 
       <main class="chess-center">
         <div id="chessTopPlayer"></div>
+        <div class="chess-turn-banner" id="chessTurnBanner"></div>
         <div class="chess-board-shell">
           <div class="chess-board" id="chessBoard"></div>
         </div>
@@ -294,6 +297,15 @@ function updateChessUI(){
   document.getElementById('capturedWhite').innerHTML=chess.capturedWhite.map(E.displayPiece).join(' ');
   document.getElementById('capturedBlack').innerHTML=chess.capturedBlack.map(E.displayPiece).join(' ');
   document.getElementById('chessStatusLabel').textContent=statusText();
+  const turnBanner=document.getElementById('chessTurnBanner');
+  if(turnBanner){
+    const inCheck=chess.status==='playing'&&E.isInCheck(chess,chess.turn);
+    const mine=chess.turn===lc;
+    turnBanner.className=`chess-turn-banner ${mine?'mine':'theirs'} ${inCheck?'check-alert':''}`;
+    turnBanner.innerHTML=chess.status==='playing'
+      ? `<strong>${inCheck?'XEQUE • ':''}${mine?'SUA VEZ':'AGUARDANDO ADVERSÁRIO'}</strong><span>${mine?'Escolha uma peça e faça sua jogada.':`${escapeHtml(byColor(chess.turn)?.username||'Adversário')} está jogando.`}</span>`
+      : `<strong>${escapeHtml(statusText().toUpperCase())}</strong>`;
+  }
   document.getElementById('chessOverlay').innerHTML=renderOverlay();
   updateClockDisplays();
 }
@@ -334,13 +346,17 @@ function renderBoard(){
       const sel=selected&&selected.r===r&&selected.c===c;
       const isLegal=legal.has(`${r},${c}`);
       const isLast=last&&((last.from.r===r&&last.from.c===c)||(last.to.r===r&&last.to.c===c));
+      const isLastDestination=last&&last.to.r===r&&last.to.c===c;
       const kingCheck=p?.type==='king'&&p.color===chess.turn&&E.isInCheck(chess,p.color);
+      const orientationSign=orientation==='black'?-1:1;
+      const moveX=isLastDestination?(last.from.c-last.to.c)*orientationSign:0;
+      const moveY=isLastDestination?(last.from.r-last.to.r)*orientationSign:0;
       const rankLabel=(c===cols[0]) ? `<span class="rank-label">${8-r}</span>` : '';
       const fileLabel=(r===rows[rows.length-1]) ? `<span class="file-label">${E.FILES[c].toUpperCase()}</span>` : '';
-      html+=`<button class="chess-square ${dark?'dark':'light'} ${sel?'selected':''} ${isLegal?'legal':''} ${isLast?'last':''} ${kingCheck?'check':''}"
+      html+=`<button class="chess-square ${dark?'dark':'light'} ${sel?'selected':''} ${isLegal?'legal':''} ${isLast?'last':''} ${isLastDestination?'last-destination':''} ${kingCheck?'check':''}"
         onclick="clickChessSquare(${r},${c})">
         ${rankLabel}${fileLabel}
-        ${p?`<span class="chess-piece ${p.color}">${E.displayPiece(p)}</span>`:''}
+        ${p?`<span class="chess-piece ${p.color} ${isLastDestination?'piece-arrive':''}" ${isLastDestination?`style="--move-x:${moveX};--move-y:${moveY}"`:''}>${E.displayPiece(p)}</span>`:''}
         ${isLegal?`<i class="legal-dot ${p?'capture':''}"></i>`:''}
       </button>`;
     }
@@ -576,7 +592,17 @@ function renderOverlay(){
 
 function resultModal(title,text){
   const canRematch=!chess.onlineMode || chess.room?.ownerId===state.user.id;
-  return `<div class="chess-modal-backdrop"><div class="chess-result-modal">${logoTag()}<h2>${title}</h2><p>${text}</p><div class="choices">${canRematch?'<button class="btn btn-primary" onclick="restartChess()">Nova partida</button>':''}<button class="btn btn-dark" onclick="returnFromChess()">Voltar à sala</button></div>${chess.onlineMode&&!canRematch?'<small class="muted">O host pode iniciar a próxima partida.</small>':''}</div></div>`;
+  const plies=chess.moveHistory?.length||0;
+  const moves=Math.ceil(plies/2);
+  const duration=Math.max(0,Math.floor((Date.now()-Number(chess.startedAt||Date.now()))/1000));
+  const dm=Math.floor(duration/60),ds=duration%60;
+  return `<div class="chess-modal-backdrop"><div class="chess-result-modal">${logoTag()}<h2>${title}</h2><p>${text}</p>
+    <div class="chess-result-stats">
+      <div><span>Movimentos</span><strong>${moves}</strong></div>
+      <div><span>Duração</span><strong>${String(dm).padStart(2,'0')}:${String(ds).padStart(2,'0')}</strong></div>
+      <div><span>Última jogada</span><strong>${escapeHtml(chess.moveHistory?.at(-1)?.notation||'—')}</strong></div>
+    </div>
+    <div class="choices">${canRematch?'<button class="btn btn-primary" onclick="restartChess()">Nova partida</button>':''}<button class="btn btn-secondary" onclick="copyChessPgn()">Copiar PGN</button><button class="btn btn-dark" onclick="returnFromChess()">Voltar à sala</button></div>${chess.onlineMode&&!canRematch?'<small class="muted">O host pode iniciar a próxima partida.</small>':''}</div></div>`;
 }
 
 function offerChessDraw(){

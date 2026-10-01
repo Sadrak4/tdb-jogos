@@ -52,7 +52,7 @@ export async function initSupabase(){
     try{
       supabaseClient=createClient(url,secret,{
         auth:{persistSession:false,autoRefreshToken:false},
-        global:{headers:{'X-Client-Info':'tdb-jogos-server/5.6'}}
+        global:{headers:{'X-Client-Info':'tdb-jogos-server/6.0'}}
       });
       const checks=await Promise.all([
         supabaseClient.from('tdb_rooms').select('code',{head:true,count:'exact'}).limit(1),
@@ -346,13 +346,15 @@ export async function backendStatus(){
   const production=!!process.env.VERCEL;
   const configured=!!envUrl() && !!envSecret();
 
+  const maintenance=await getSharedValue('app:maintenance',{enabled:false,message:'TDB em manutenção • voltamos em breve'}).catch(()=>({enabled:false}));
   return {
     supabase:isSupabaseReady(),
     configured,
     schemaReady,
     production,
     storage:isSupabaseReady()?'supabase':'memory',
-    readyForMultiplayer:isSupabaseReady() || !production,
+    readyForMultiplayer:(isSupabaseReady() || !production) && !maintenance?.enabled,
+    maintenance:maintenance&&typeof maintenance==='object'?maintenance:{enabled:false},
     error:lastError
   };
 }

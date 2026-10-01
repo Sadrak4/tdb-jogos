@@ -5,7 +5,7 @@ export default async function handler(_req,res){
   res.status(200).json({
     ok:true,
     app:'TDB JOGOS',
-    version:'5.8.0',
+    version:'6.0.0',
     realtime:'supabase-realtime+http-fallback',
     supabase:status.supabase,
     configured:status.configured,
@@ -13,6 +13,7 @@ export default async function handler(_req,res){
     storage:status.storage,
     readyForMultiplayer:status.readyForMultiplayer,
     production:status.production,
-    error:status.readyForMultiplayer?null:status.error
+    maintenance:status.maintenance||{enabled:false},
+    error:status.maintenance?.enabled?null:(status.readyForMultiplayer?null:status.error)
   });
 }

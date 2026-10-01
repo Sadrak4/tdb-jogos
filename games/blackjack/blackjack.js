@@ -138,11 +138,54 @@ function relativePlayers(){
   if(others.length>=2){out.push({player:others[0],pos:'left'});out.push({player:others[1],pos:'right'})}
   return out;
 }
+
+function recentBlackjackEvent(type,playerId=null,windowMs=1400){
+  const now=Date.now();
+  return [...(blackjack?.events||[])].reverse().find(e=>
+    e.type===type &&
+    (playerId===null||e.playerId===playerId) &&
+    now-Number(e.at||0)<=windowMs
+  )||null;
+}
+function dealerActionText(){
+  if(blackjack.phase==='dealerTurn'){
+    const last=[...(blackjack.events||[])].reverse().find(e=>['dealer','dealer-hit','dealer-stand','dealer-bust'].includes(e.type));
+    if(last?.type==='dealer')return'DEALER REVELA A CARTA';
+    if(last?.type==='dealer-hit')return'DEALER COMPRA';
+    if(last?.type==='dealer-bust')return'DEALER ESTOUROU';
+    if(last?.type==='dealer-stand')return'DEALER PAROU';
+    return'DEALER JOGANDO';
+  }
+  return'';
+}
+function roundSummaryHtml(){
+  if(blackjack.phase!=='roundEnd')return'';
+  const dealer=blackjack.dealer||{};
+  const rows=(blackjack.players||[]).filter(p=>p.hands?.length&&!p.left).map(p=>{
+    const net=Number(p.roundNet||0);
+    const result=net>0?'win':net<0?'lose':'push';
+    const handText=p.hands.map((h,i)=>`${p.hands.length>1?`M${i+1} `:''}${resultLabel(h.result)} ${handValueLabel(h)}`).join(' • ');
+    return `<div class="bj-round-summary-row ${result}">
+      <span>${esc(p.id===blackjack.localPlayerId?'VOCÊ':p.username)}</span>
+      <strong>${esc(handText)}</strong>
+      <b>${net>0?'+':''}${chips(net)}</b>
+    </div>`;
+  }).join('');
+  return `<div class="bj-round-summary">
+    <div class="bj-round-summary-head">
+      <span>RESUMO DA RODADA ${blackjack.round}</span>
+      <strong>Dealer ${dealer.bust?'estourou em ':''}${dealer.value??'—'}</strong>
+    </div>
+    <div class="bj-round-summary-list">${rows}</div>
+  </div>`;
+}
+
 function handHtml(hand,index,p,isLocal){
   const active=blackjack.phase==='playerTurns'&&blackjack.currentPlayerId===p.id&&p.activeHand===index&&hand.status==='playing';
   const cards=(hand.cards||[]).map(c=>cardHtml(c,{mini:false})).join('');
   const result=hand.result?`<span class="bj-hand-result ${resultClass(hand.result)}">${resultLabel(hand.result)}</span>`:'';
-  return `<div class="bj-hand ${active?'active':''} ${hand.status==='bust'?'bust':''}">
+  const splitAnimated=p.hands.length>1&&!!recentBlackjackEvent('split',p.id);
+  return `<div class="bj-hand ${active?'active':''} ${hand.status==='bust'?'bust':''} ${splitAnimated?'split-arrive':''}">
     ${p.hands.length>1?`<div class="bj-hand-title">MÃO ${index+1}${hand.doubled?' • DOBRADA':''}</div>`:''}
     <div class="bj-hand-cards">${cards}</div>
     <div class="bj-hand-meta"><strong>${handValueLabel(hand)}</strong><span>● ${chips(hand.bet)} fichas</span>${result}</div>
@@ -176,8 +219,10 @@ function dealerHtml(){
   const cards=(d.cards||[]).map(c=>cardHtml(c)).join('');
   const showValue=(d.cards||[]).length?`<span class="bj-dealer-value">${d.value??''}</span>`:'';
 
+  const action=dealerActionText();
   return `<section class="bj-dealer ${blackjack.phase==='dealerTurn'?'active':''}">
     <div class="bj-dealer-title"><span>DEALER</span>${showValue}<small>PARA EM 17</small></div>
+    ${action?`<div class="bj-dealer-action">${esc(action)}</div>`:''}
     <div class="bj-dealer-cards">${cards||'<div class="bj-card-placeholder"></div><div class="bj-card-placeholder"></div>'}</div>
     <div class="bj-shoe" aria-hidden="true"><span>TDB</span><i></i><i></i><i></i></div>
   </section>`;
@@ -272,6 +317,7 @@ function tableBody(){
     ${right?playerPanel(right.player,'right'):''}
     ${bottom?playerPanel(bottom.player,'bottom'):''}
     <div class="bj-center-status"><span>${phaseLabel()}</span>${timerHtml()}<small>RODADA ${blackjack.round} • ${blackjack.shoeRemaining} CARTAS</small></div>
+    ${roundSummaryHtml()}
   </div>`;
 }
 function renderBody(){
@@ -331,6 +377,8 @@ function playNewEvents(previous,incoming){
     if(e.type==='double')window.TDBSound?.play?.('blackjackDouble',{channel:e.id,dedupeMs:0});
     if(e.type==='split')window.TDBSound?.play?.('blackjackSplit',{channel:e.id,dedupeMs:0});
     if(e.type==='dealer')window.TDBSound?.play?.('dealerFlip',{channel:e.id,dedupeMs:0});
+    if(e.type==='dealer-stand')window.TDBSound?.play?.('blackjackStand',{channel:e.id,dedupeMs:0});
+    if(e.type==='dealer-bust')window.TDBSound?.play?.('blackjackBust',{channel:e.id,dedupeMs:0});
     if(e.type==='bust'&&e.playerId===incoming.localPlayerId)window.TDBSound?.play?.('blackjackBust',{channel:e.id,dedupeMs:0});
 
     if(['bet','double','split'].includes(e.type)&&e.playerId){

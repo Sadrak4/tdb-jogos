@@ -50,7 +50,7 @@ function createTrucoState(room){
     trickCards:[],trickResults:[],hands:{},vira:null,manilhaRank:null,
     pendingRaise:null,eleven:null,ironHand:false,logs:[],version:1,
     turnTimer:Number(room.turnTimer||0),turnDeadlineAt:null,lastAutoAction:null,
-    trickResolveAt:null,pendingTrick:null
+    trickResolveAt:null,pendingTrick:null,lastTrickSummary:null,lastHandSummary:null
   };
   dealHand(s);
   return s;
@@ -66,7 +66,7 @@ function dealHand(s){
   for(const seat of s.activeSeats) s.hands[seat]=[];
   for(let r=0;r<3;r++) for(const seat of s.activeSeats) s.hands[seat].push(d.shift());
   s.vira=d.shift(); s.manilhaRank=nextRank(s.vira.rank);
-  s.round=0;s.trickCards=[];s.trickResults=[];s.handValue=1;s.pendingRaise=null;s.trickResolveAt=null;s.pendingTrick=null;
+  s.round=0;s.trickCards=[];s.trickResults=[];s.handValue=1;s.pendingRaise=null;s.trickResolveAt=null;s.pendingTrick=null;s.lastTrickSummary=null;
   s.dealer=nextSeat(s.activeSeats,s.dealer);
   s.current=nextSeat(s.activeSeats,s.dealer);
   s.ironHand=s.scores[0]===11&&s.scores[1]===11;
@@ -99,15 +99,30 @@ function beginResolveTrick(s,now=Date.now()){
   const result=tie?'tie':teamForSeat(s,best.seat);
   const lead=s.trickCards[0]?.seat ?? s.current;
   const trickWinnerSeat=tie?lead:best.seat;
+  const winningPlay=tie?null:s.trickCards.find(tc=>tc.seat===trickWinnerSeat)||best;
   s.trickResults.push(result);
-  s.pendingTrick={result,winnerSeat:trickWinnerSeat};
+  s.pendingTrick={
+    result,
+    winnerSeat:trickWinnerSeat,
+    winningCard:winningPlay?.card||null,
+    hidden:!!winningPlay?.hidden,
+    round:Number(s.round||0)+1,
+    handValue:Number(s.handValue||1)
+  };
   s.trickResolveAt=now+TRICK_REVEAL_MS;
   s.phase='resolving';
   s.turnDeadlineAt=null;
 }
 function finalizeResolvedTrick(s){
   if(s.phase!=='resolving'||!s.pendingTrick)return;
-  const trickWinnerSeat=s.pendingTrick.winnerSeat;
+  const resolved=structuredClone(s.pendingTrick);
+  const trickWinnerSeat=resolved.winnerSeat;
+  const winnerPlayer=s.players.find(p=>p.seat===trickWinnerSeat);
+  s.lastTrickSummary={
+    ...resolved,
+    winnerName:resolved.result==='tie'?'Empate':(winnerPlayer?.username||'Jogador'),
+    at:Date.now()
+  };
   s.round++;
   s.trickCards=[];
   s.trickResolveAt=null;
@@ -124,6 +139,19 @@ function finalizeResolvedTrick(s){
 }
 function awardHand(s,team,points){
   s.scores[team]+=points;
+  const winnerPlayer=s.lastTrickSummary?.result===team
+    ? s.players.find(p=>p.seat===s.lastTrickSummary?.winnerSeat)
+    : null;
+  s.lastHandSummary={
+    team,
+    points,
+    winnerSeat:winnerPlayer?.seat??null,
+    winnerName:winnerPlayer?.username||`Time ${team+1}`,
+    winningCard:s.lastTrickSummary?.result===team?s.lastTrickSummary?.winningCard||null:null,
+    hidden:s.lastTrickSummary?.result===team?!!s.lastTrickSummary?.hidden:false,
+    at:Date.now(),
+    expiresAt:Date.now()+4800
+  };
   s.logs.push(`Time ${team+1} ganhou ${points} ponto(s).`);
   if(s.scores[team]>=12){
     s.winner=team;s.phase='finished';s.turnDeadlineAt=null;s.version++;return;
@@ -198,6 +226,10 @@ export function applyTrucoAction(state,seat,action){
 }
 export function tick(state,now=Date.now()){
   let s=clone(state);
+  if(s.lastHandSummary?.expiresAt && now>=Number(s.lastHandSummary.expiresAt)){
+    s.lastHandSummary=null;
+    s.version=(s.version||0)+1;
+  }
   if(s.phase==='resolving'){
     if(Number(s.trickResolveAt||0)>0 && now>=Number(s.trickResolveAt||0)){
       finalizeResolvedTrick(s);
@@ -238,6 +270,9 @@ export function viewFor(state,userId,role='player'){
   const mySeat=me?.seat??null;
   // Hidden cards already played on the table must stay private too.
   s.trickCards=(s.trickCards||[]).map(tc=>tc.hidden?{...tc,card:null}:tc);
+  if(s.pendingTrick?.hidden) s.pendingTrick.winningCard=null;
+  if(s.lastTrickSummary?.hidden) s.lastTrickSummary.winningCard=null;
+  if(s.lastHandSummary?.hidden) s.lastHandSummary.winningCard=null;
 
   for(const seat of s.activeSeats){
     let canSee=role!=='spectator' && seat===mySeat;

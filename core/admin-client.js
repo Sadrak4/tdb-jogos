@@ -23,7 +23,9 @@ async function resetPassword(userId,newPassword=null){return await api('/api/adm
 async function setBan(userId,banned,reason=''){return await api('/api/admin/ban',{method:'POST',body:JSON.stringify({userId,banned,reason})})}
 async function revokeSessions(userId){return await api('/api/admin/revoke-sessions',{method:'POST',body:JSON.stringify({userId})})}
 async function logs(type='errors'){return(await api(`/api/admin/logs?type=${encodeURIComponent(type)}&_=${Date.now()}`,{method:'GET'})).logs||[]}
+async function operations(){return(await api(`/api/admin/operations?_=${Date.now()}`,{method:'GET'})).operations}
+async function setMaintenance(enabled,message=''){return await api('/api/admin/operations',{method:'POST',body:JSON.stringify({enabled,message})})}
 async function reports(status='all'){return(await api(`/api/admin/reports?status=${encodeURIComponent(status)}&_=${Date.now()}`,{method:'GET'})).reports||[]}
 async function updateReport(reportId,status,adminNote=''){return await api('/api/admin/reports',{method:'POST',body:JSON.stringify({reportId,status,adminNote})})}
-window.TDBAdmin={login,session,logout,overview,users,resetPassword,setBan,revokeSessions,logs,reports,updateReport,get hasToken(){return!!token()}};
+window.TDBAdmin={login,session,logout,overview,users,resetPassword,setBan,revokeSessions,logs,reports,updateReport,operations,setMaintenance,get hasToken(){return!!token()}};
 })();

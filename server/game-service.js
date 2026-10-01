@@ -37,7 +37,8 @@ export async function returnToRoom(code,userId){
   delete room.startedAt;
   room.players=(room.players||[]).map(p=>({
     ...p,
-    connection:'online'
+    connection:'online',
+    ready:room.game==='music'
   }));
 
   await setRoomPrivate(room);

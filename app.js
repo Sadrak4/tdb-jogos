@@ -14,7 +14,7 @@ if(!Core){
   throw new Error('TDBCore não foi carregado antes do app.js');
 }
 
-const DEFAULT_SETTINGS = { sound: true, friendNotifications: true, masterVolume: 55, uiVolume: 42, gameVolume: 50, notificationVolume: 48 };
+const DEFAULT_SETTINGS = { sound: true, friendNotifications: true, animations: true, particles: true, masterVolume: 55, uiVolume: 42, gameVolume: 50, notificationVolume: 48 };
 
 const state = {
   user: Core.auth.currentUser(),
@@ -32,7 +32,11 @@ const state = {
   actionLocks: new Set(),
   botReturnRoom: null,
   notifiedInviteIds: new Set(),
-  inviteToastTimer: null
+  inviteToastTimer: null,
+  socialParty: null,
+  partyInvites: [],
+  knownRoomPlayers: new Set(),
+  connectionStates: new Map()
 };
 
 
@@ -48,8 +52,17 @@ window.addEventListener('tdb-online-sync',event=>{
     const latest=state.rooms.find(r=>r.code===state.activeRoom.code);
     if(latest){
       const previousOwner=state.activeRoom.ownerId;
+      const previousConnections=new Map((state.activeRoom.players||[]).map(p=>[p.id,p.connection||'online']));
       state.activeRoom=latest;
       Core.rooms.setActive(latest);
+      for(const p of latest.players||[]){
+        const before=previousConnections.get(p.id);
+        const after=p.connection||'online';
+        if(before&&before!==after){
+          if(after==='reconnecting') toast(`${p.username} desconectou • aguardando reconexão.`);
+          if(before==='reconnecting'&&after==='online') toast(`${p.username} reconectou.`);
+        }
+      }
 
       if(state.view==='waiting'){
         patchWaitingRoom(previousOwner!==latest.ownerId);
@@ -66,7 +79,7 @@ window.addEventListener('tdb-online-sync',event=>{
     if(state.view==='game') patchGameRooms();
   }
 
-  if(['social','friends','invites'].includes(syncKind) && state.user){
+  if(['social','friends','invites','party','presence'].includes(syncKind) && state.user){
     refreshSocialData(false);
   }
 
@@ -80,6 +93,7 @@ window.addEventListener('tdb-online-status',event=>{
   const el=document.getElementById('onlineStatusPill');
   const ping=document.getElementById('onlinePingPill');
   if(ping) ping.textContent=Number.isFinite(detail.latencyMs)?`${detail.latencyMs} ms`:'';
+  window.TDBPlatformUI?.setMaintenance?.(detail.maintenance||{enabled:false});
   if(!el) return;
   el.classList.remove('online','warning','connecting','offline');
   const phase=detail.phase||'connecting';
@@ -144,6 +158,9 @@ const games = {
 Core.sound.setEnabled(state.settings.sound);
 window.TDBSound?.configure?.({enabled:state.settings.sound,master:(state.settings.masterVolume??55)/100,ui:(state.settings.uiVolume??42)/100,game:(state.settings.gameVolume??50)/100,notification:(state.settings.notificationVolume??48)/100});
 
+document.documentElement.dataset.motion=state.settings.animations===false?'reduced':'full';
+document.documentElement.classList.toggle('tdb-particles-off',state.settings.particles===false);
+
 
 function migrateUsers() {
   let changed = false;
@@ -177,7 +194,8 @@ function saveRooms(){ Core.rooms.replace(state.rooms); }
 function saveSettings(){
   Core.storage.set('tbd_settings', state.settings);
   Core.sound.setEnabled(state.settings.sound);
-window.TDBSound?.configure?.({enabled:state.settings.sound,master:(state.settings.masterVolume??55)/100,ui:(state.settings.uiVolume??42)/100,game:(state.settings.gameVolume??50)/100,notification:(state.settings.notificationVolume??48)/100});
+  window.TDBSound?.configure?.({enabled:state.settings.sound,master:(state.settings.masterVolume??55)/100,ui:(state.settings.uiVolume??42)/100,game:(state.settings.gameVolume??50)/100,notification:(state.settings.notificationVolume??48)/100});
+  window.TDBPlatformUI?.applyGraphics?.();
 }
 function saveSession(user){
   state.user=user;
@@ -247,6 +265,49 @@ function renderInviteBanner(){
   if(!invites.length) return '';
   const i=invites[0];
   return `<div class="invite-banner"><strong>Convite de ${escapeHtml(i.sender?.username||'amigo')}</strong><span>Sala ${escapeHtml(i.room_code)}</span><button class="btn btn-primary btn-sm" onclick="respondRoomInvite(${i.id},true)">Entrar</button><button class="btn btn-dark btn-sm" onclick="respondRoomInvite(${i.id},false)">Recusar</button></div>`;
+}
+
+
+function privacyLabel(room){
+  const map={public:'Pública',private:'Com senha',friends:'Somente amigos',invite:'Somente convite'};
+  return map[room?.privacy]||'Pública';
+}
+function lobbyPulseHtml(){
+  const presence=window.TDBOnline?.cache?.presence||{};
+  const now=Date.now();
+  const online=Object.values(presence).filter(p=>now-Number(p.updatedAt||0)<30000).length;
+  const open=state.rooms.filter(r=>r.status==='open'&&(!r.emptyExpiresAt||Number(r.emptyExpiresAt)>now)).length;
+  const friendsPlaying=state.friends.filter(f=>/^(Jogando|Ouvindo|Na sala)/.test(f.status||'')).length;
+  return `<div class="lobby-pulse" id="lobbyPulse"><article><span>Jogadores online</span><strong>${online}</strong></article><article><span>Salas abertas</span><strong>${open}</strong></article><article><span>Amigos ativos</span><strong>${friendsPlaying}</strong></article></div>`;
+}
+function partyPanelHtml(){
+  const party=state.socialParty,invites=state.partyInvites||[];
+  if(!party&&!invites.length)return `<div class="party-panel"><div class="party-panel-head"><div><strong>Grupo / Party</strong><small class="muted">Junte até 4 amigos antes de escolher o jogo.</small></div><button class="btn btn-secondary btn-sm" onclick="createParty()">Criar grupo</button></div></div>`;
+  const inviteHtml=invites.map(i=>`<div class="party-call"><b>${escapeHtml(i.from?.username||'Amigo')}</b> convidou você para um grupo. <button class="link-btn" onclick="respondPartyInvite('${i.id}',true)">Aceitar</button> <button class="link-btn" onclick="respondPartyInvite('${i.id}',false)">Recusar</button></div>`).join('');
+  if(!party)return `<div class="party-panel"><div class="party-panel-head"><strong>Convites de grupo</strong></div>${inviteHtml}</div>`;
+  const members=(party.members||[]).map(m=>`<div class="party-member"><div class="avatar">${escapeHtml(m.avatar||initials(m.username))}</div><div><strong>${escapeHtml(m.username)}${m.id===party.leaderId?' 👑':''}</strong><small class="muted">${escapeHtml(m.id)}</small></div></div>`).join('');
+  return `<div class="party-panel"><div class="party-panel-head"><div><strong>Seu grupo • ${(party.members||[]).length}/4</strong><small class="muted">${party.isLeader?'Você é o líder.':'Acompanhe o líder para a próxima sala.'}</small></div><div>${party.isLeader?'<button class="btn btn-secondary btn-sm" onclick="openInvitePartyModal()">Convidar</button>':''} <button class="btn btn-dark btn-sm" onclick="leaveParty()">Sair</button></div></div><div class="party-members">${members}</div>${party.roomCode?`<div class="party-call">O líder está em <b>${escapeHtml(party.roomName||party.roomCode)}</b> • ${escapeHtml(games[party.game]?.name||party.game||'Sala')} <button class="btn btn-primary btn-sm" onclick="followPartyRoom('${escapeHtml(party.roomCode)}')">Acompanhar</button></div>`:''}${inviteHtml}</div>`;
+}
+async function createParty(){try{await window.TDBOnline.partyAction({type:'CREATE'});await refreshSocialData(false);if(state.view==='lobby')renderLobby()}catch(err){toast(err.message||'Não foi possível criar o grupo.')}}
+async function leaveParty(){try{await window.TDBOnline.partyAction({type:'LEAVE'});state.socialParty=null;await refreshSocialData(false);if(state.view==='lobby')renderLobby()}catch(err){toast(err.message||'Não foi possível sair do grupo.')}}
+async function inviteToParty(userId){try{await window.TDBOnline.partyAction({type:'INVITE',userId});toast('Convite de grupo enviado.');await refreshSocialData(false)}catch(err){toast(err.message||'Não foi possível convidar para o grupo.')}}
+async function respondPartyInvite(inviteId,accept){try{await window.TDBOnline.partyAction({type:'RESPOND',inviteId,accept});await refreshSocialData(false);if(state.view==='lobby')renderLobby();toast(accept?'Você entrou no grupo.':'Convite de grupo recusado.')}catch(err){toast(err.message||'Não foi possível responder ao convite.')}}
+async function setPartyRoomIfLeader(room){if(!state.socialParty?.isLeader||!room?.code)return;try{await window.TDBOnline.partyAction({type:'SET_ROOM',roomCode:room.code});await refreshSocialData(false)}catch(err){console.warn('[Party room]',err)}}
+function followPartyRoom(code){state.selectedGame=getRoomByCode(code)?.game||state.selectedGame;requestJoinRoom(code)}
+function openInvitePartyModal(){
+  document.getElementById('partyInviteModal')?.remove();
+  const available=state.friends.filter(f=>!(state.socialParty?.members||[]).some(m=>m.id===f.id));
+  const el=document.createElement('div');el.className='modal-backdrop';el.id='partyInviteModal';el.innerHTML=`<div class="modal"><div class="modal-head"><h3>Convidar para o grupo</h3><button class="icon-btn" onclick="document.getElementById('partyInviteModal').remove()">×</button></div><div class="modal-body"><div class="invite-friend-list">${available.length?available.map(f=>`<div class="social-row"><div class="avatar">${escapeHtml(f.avatar||initials(f.username))}</div><div><strong>${escapeHtml(f.username)}</strong><small>${escapeHtml(f.status||'Offline')}</small></div><button class="btn btn-primary btn-sm" onclick="inviteToParty('${f.id}')">Convidar</button></div>`).join(''):'<div class="muted">Nenhum amigo disponível para convidar.</div>'}</div></div></div>`;document.body.appendChild(el);
+}
+function openFriendQuickProfile(id){
+  const f=state.friends.find(x=>x.id===id);if(!f)return;
+  document.getElementById('friendQuickModal')?.remove();
+  const el=document.createElement('div');el.className='modal-backdrop';el.id='friendQuickModal';el.innerHTML=`<div class="modal"><div class="modal-head"><h3>${escapeHtml(f.username)}</h3><button class="icon-btn" onclick="document.getElementById('friendQuickModal').remove()">×</button></div><div class="modal-body"><div class="profile-card"><div class="profile-avatar-xl">${escapeHtml(f.avatar||initials(f.username))}</div><h2>${escapeHtml(f.username)}</h2><div class="code-box">${escapeHtml(f.id)}</div><p class="muted">${escapeHtml(f.status||'Offline')}</p></div></div><div class="modal-foot">${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${f.id}')">Convidar para minha sala</button>`:''}<button class="btn btn-secondary" onclick="inviteToParty('${f.id}')">Convidar para grupo</button></div></div>`;document.body.appendChild(el);
+}
+function copyRoomInvite(code){
+  const text=`Entre na sala ${code} do TDB JOGOS`;
+  if(navigator.clipboard)navigator.clipboard.writeText(text).then(()=>toast('Convite copiado.'));
+  else toast(text);
 }
 
 function setPresence(status,extra={}){
@@ -620,10 +681,14 @@ function patchLobbyDynamic(){
   const live=document.getElementById('lobbyLiveGrid');
   const gamesBox=document.getElementById('lobbyGameGrid');
   const friends=document.getElementById('lobbyFriendsGrid');
+  const pulse=document.getElementById('lobbyPulseWrap');
+  const party=document.getElementById('lobbyPartyWrap');
 
   if(live) live.innerHTML=renderLiveMatches();
   if(gamesBox) gamesBox.innerHTML=gameCard('truco')+gameCard('blackjack')+gameCard('chess')+gameCard('music');
   if(friends) friends.innerHTML=state.friends.slice(0,3).map(friendCard).join('');
+  if(pulse) pulse.innerHTML=lobbyPulseHtml();
+  if(party) party.innerHTML=partyPanelHtml();
 }
 
 function visibleRoomsForSelectedGame(){
@@ -645,29 +710,52 @@ function patchGameRooms(){
   if(count) count.textContent=`${rooms.length} encontrada${rooms.length===1?'':'s'}`;
 }
 
+function minimumPlayersForRoom(room){
+  if(room.game==='truco')return Number(room.trucoSeats||4);
+  if(room.game==='chess')return 2;
+  if(room.game==='blackjack')return 1;
+  return 1;
+}
+function allPlayersReady(room){return room.game==='music'||(room.players||[]).length>0&&(room.players||[]).every(p=>!!p.ready&&p.connection!=='reconnecting')}
+function roomCanStart(room){return room.game==='music'||((room.players||[]).length>=minimumPlayersForRoom(room)&&allPlayersReady(room))}
+function readyActionButton(room){
+  if(room.game==='music')return'';
+  const me=(room.players||[]).find(p=>p.id===state.user.id);
+  if(!me)return'';
+  return `<button class="btn ${me.ready?'btn-secondary':'btn-primary'}" onclick="toggleRoomReady()">${me.ready?'✓ PRONTO • desfazer':'MARCAR PRONTO'}</button>`;
+}
 function waitingHostActions(room){
-  const cap=roomCapacity(room);
+  const cap=roomCapacity(room),ready=allPlayersReady(room),enough=(room.players||[]).length>=minimumPlayersForRoom(room),canStart=roomCanStart(room);
+  const startDisabled=canStart?'':`disabled title="${!enough?'Aguardando jogadores':'Todos os jogadores precisam marcar PRONTO'}"`;
   if(room.game==='truco'){
-    return `<button class="btn btn-secondary" onclick="startTrucoWithBots()">Testar com ${cap===2?'1 bot':'3 bots'}</button>
-      <button class="btn btn-primary" onclick="startGame()">Iniciar partida</button>`;
+    return `${readyActionButton(room)} <button class="btn btn-secondary" onclick="startTrucoWithBots()">Testar com ${cap===2?'1 bot':'3 bots'}</button>
+      <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${!enough?'Aguardando jogadores':ready?'Iniciar partida':'Aguardando PRONTO'}</button>`;
   }
   if(room.game==='chess'){
-    return `<button class="btn btn-secondary" onclick="launchChessBot()">Testar com bot</button>
-      <button class="btn btn-primary" onclick="startGame()">Iniciar partida</button>`;
+    return `${readyActionButton(room)} <button class="btn btn-secondary" onclick="launchChessBot()">Testar com bot</button>
+      <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${!enough?'Aguardando jogadores':ready?'Iniciar partida':'Aguardando PRONTO'}</button>`;
   }
   if(room.game==='blackjack'){
-    return `<button class="btn btn-primary" onclick="startGame()">Abrir mesa de Blackjack</button>`;
+    return `${readyActionButton(room)} <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${ready?'Abrir mesa de Blackjack':'Aguardando PRONTO'}</button>`;
   }
-  if(room.game==='music'){
-    return `<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Music</button>`;
-  }
-  return `<button class="btn btn-primary" onclick="startGame()">Iniciar partida</button>`;
+  if(room.game==='music')return `<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Music</button>`;
+  return `${readyActionButton(room)} <button class="btn btn-primary" ${startDisabled} onclick="startGame()">Iniciar partida</button>`;
 }
 
 function waitingNonHostAction(room){
   return room.game==='music'
     ? `<button class="btn btn-primary" onclick="openMusicRoom()">Entrar no player</button>`
-    : `<span class="muted">Aguardando o host iniciar.</span>`;
+    : `${readyActionButton(room)} <span class="muted">Aguardando o host iniciar.</span>`;
+}
+async function toggleRoomReady(){
+  const room=state.activeRoom;if(!room||room.game==='music')return;
+  const me=(room.players||[]).find(p=>p.id===state.user.id);if(!me)return;
+  const next=!me.ready;
+  if(Core.mode==='online'&&window.TDBOnline?.connected){
+    try{const updated=await window.TDBOnline.setRoomReady(room.code,next);if(updated){state.activeRoom=updated;Core.rooms.setActive(updated);patchWaitingRoom(true);window.TDBSound?.play?.(next?'confirm':'back')}}catch(err){toast(err.message||'Não foi possível alterar PRONTO.')}
+    return;
+  }
+  me.ready=next;me.readyAt=next?Date.now():null;updateStoredRoom(room);patchWaitingRoom(true);
 }
 
 function waitingPlayersHtml(room){
@@ -707,8 +795,10 @@ function renderLobby(){
     <div class="hero-strip">
       <span class="eyebrow">TDB JOGOS</span>
       <h1>A espera ficou mais divertida.</h1>
-      <p>Escolha um jogo, encontre uma sala ou crie a sua. Sem torneios, sem moedas: só uma mesa rápida para jogar com os amigos.</p>
+      <p>Escolha um jogo, encontre uma sala ou crie a sua. Agora com grupos, status ao vivo e salas mais sociais.</p>
     </div>
+    <div id="lobbyPulseWrap">${lobbyPulseHtml()}</div>
+    <div id="lobbyPartyWrap">${partyPanelHtml()}</div>
     <div class="section-title"><div><h2>Partidas ao vivo</h2><p>Assista sem interferir na partida.</p></div></div>
     <div class="live-grid" id="lobbyLiveGrid">${renderLiveMatches()}</div>
     <div class="section-title"><div><h2>Escolha um jogo</h2><p>As salas ficam dentro de cada jogo.</p></div></div>
@@ -728,11 +818,12 @@ function gameCard(key){
 }
 function friendCard(f){
   const status=f.status||'Offline';
-  const busy=status.startsWith('Jogando');
+  const busy=/^(Jogando|Ouvindo|Na sala)/.test(status);
+  const offline=status==='Offline';
   return `<div class="friend-card">
     <div class="avatar">${escapeHtml(f.avatar||initials(f.username))}</div>
-    <div class="friend-meta"><strong>${escapeHtml(f.username)}</strong><span><i class="dot ${busy?'busy':'online'}"></i>${escapeHtml(status)}</span><small>${escapeHtml(f.id)}</small></div>
-    <button class="btn btn-dark" onclick="inviteFriend('${f.id}')">Convidar</button>
+    <div class="friend-meta" onclick="openFriendQuickProfile('${f.id}')"><strong>${escapeHtml(f.username)}</strong><span><i class="dot ${offline?'offline':busy?'busy':'online'}"></i>${escapeHtml(status)}</span><small>${escapeHtml(f.id)} • abrir perfil rápido</small></div>
+    <button class="btn btn-dark" onclick="event.stopPropagation();inviteFriend('${f.id}')">Convidar</button>
   </div>`;
 }
 
@@ -831,7 +922,7 @@ function drawGamePage(){
         <div class="panel-body"><div class="room-list" id="gameRoomList">${rooms.length?rooms.map(roomRow).join(''):`<div class="empty-state">Nenhuma sala nesse filtro.</div>`}</div></div>
       </div>
       <aside class="panel side-info"><div class="panel-header"><h2>Como funciona</h2></div><div class="panel-body">
-        <h3>Salas abertas</h3><p>Você pode entrar enquanto houver vaga. Sala privada pode pedir senha.</p>
+        <h3>Salas abertas</h3><p>Você pode entrar enquanto houver vaga. A sala pode ser pública, somente amigos, somente convite ou protegida por senha.</p>
         <h3 style="margin-top:22px;">${key==='chess'?'Xadrez Tradicional':key==='blackjack'?'Blackjack TDB':key==='music'?'Sala compartilhada':'Em andamento'}</h3><p>${key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='blackjack'?'Até 3 jogadores contra o dealer. Pedir, parar, dobrar e separar, com entrada durante a rodada para jogar na próxima.':key==='music'?'Todos adicionam vídeos do YouTube na fila e compartilham os controles da sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
         <h3 style="margin-top:22px;">Seu jogo</h3><ul><li>Crie uma sala.</li><li>Compartilhe o código.</li><li>Convide amigos.</li></ul>
       </div></aside>
@@ -842,14 +933,16 @@ function setRoomFilter(filter){ state.roomFilter=filter; drawGamePage(); }
 function roomRow(room){
   const g=games[room.game], cap=roomCapacity(room), open=room.status==='open', full=(room.players?.length||0)>=cap;
   const joinable=['music','blackjack'].includes(room.game) ? !full : (open&&!full);
+  const watchable=room.status==='playing'&&['truco','chess','blackjack'].includes(room.game)&&!joinable;
   const empty=!(room.players||[]).length;
   const emptyLeft=empty&&room.emptyExpiresAt?Math.max(0,Math.ceil((Number(room.emptyExpiresAt)-Date.now())/60000)):0;
   const ownerLabel=empty?'Sala vazia':`Host: ${escapeHtml(room.owner||'—')}`;
+  const spectators=(room.spectators||[]).length;
   return `<div class="room-row ${empty?'room-empty-grace':''}">
-    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • ${ownerLabel} ${room.privacy==='private'?'🔒':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='music'?' • 🎵 compartilhada':room.game==='blackjack'?' • até 3 vs dealer':''}${empty&&emptyLeft?` • expira em ~${emptyLeft} min`:''}</span></div>
-    <div class="room-stat"><strong>${room.players?.length||0}/${cap}</strong><span>${room.game==='music'?'Ouvintes':'Jogadores'}</span></div>
+    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • ${ownerLabel} ${room.privacy==='private'?'🔒':room.privacy==='friends'?'👥':room.privacy==='invite'?'✉️':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='music'?' • 🎵 compartilhada':room.game==='blackjack'?' • até 3 vs dealer':''}${empty&&emptyLeft?` • expira em ~${emptyLeft} min`:''}</span></div>
+    <div class="room-stat"><strong>${room.players?.length||0}/${cap}</strong><span>${room.game==='music'?'Ouvintes':`Jogadores${spectators?` • 👁 ${spectators}`:''}`}</span></div>
     <div><span class="badge ${open?'open':'playing'}">${empty?'Vazia':room.game==='music'?(open?'Aberta':'Tocando'):room.game==='blackjack'?(open?'Aberta':'Rodada em andamento'):open?'Aberta':'Em andamento'}</span></div>
-    <button class="btn ${joinable?'btn-primary':'btn-dark'}" ${joinable?`onclick="requestJoinRoom('${room.code}')"`:'disabled'}>${joinable?'Entrar':full?'Cheia':'Jogando'}</button>
+    <button class="btn ${joinable?'btn-primary':watchable?'btn-secondary':'btn-dark'}" ${joinable?`onclick="requestJoinRoom('${room.code}')"`:watchable?`onclick="watchRoom('${room.code}')"`:'disabled'}>${joinable?'Entrar':watchable?'Assistir':full?'Cheia':'Jogando'}</button>
   </div>`;
 }
 function openCreateRoom(){
@@ -858,8 +951,8 @@ function openCreateRoom(){
     <div class="modal-head"><h3>Criar jogo de ${g.name}</h3><button class="icon-btn" onclick="closeModal()">×</button></div>
     <div class="modal-body"><div class="form-grid">
       <div class="field"><label>Nome da sala</label><input id="roomName" maxlength="30" value="Sala de ${escapeHtml(state.user.username)}"></div>
-      <div class="field"><label>Privacidade</label><select id="roomPrivacy" class="select"><option value="public">Pública</option><option value="private">Privada</option></select></div>
-      <div class="field"><label>Senha opcional</label><input id="roomPassword" maxlength="16" placeholder="Deixe vazio se não quiser senha"></div>
+      <div class="field"><label>Privacidade</label><select id="roomPrivacy" class="select"><option value="public">Pública</option><option value="friends">Somente amigos</option><option value="invite">Somente convite</option><option value="private">Com senha</option></select></div>
+      <div class="field"><label>Senha (usada em “Com senha”)</label><input id="roomPassword" maxlength="16" placeholder="Até 16 caracteres"></div>
       ${state.selectedGame==='truco'?`<div class="field"><label>Formato do truco</label><select id="trucoSeats" class="select"><option value="2">2 jogadores (1x1)</option><option value="4" selected>4 jogadores (2x2)</option></select></div><div class="field"><label>Tempo por jogada</label><select id="turnTimer" class="select"><option value="0">Sem limite</option><option value="30">30 segundos</option><option value="60">60 segundos</option></select></div>`:''}
       ${state.selectedGame==='chess'?`
         <div class="field"><label>Tempo da partida</label>
@@ -965,13 +1058,15 @@ async function createRoom(){
       code:genRoomCode(state.selectedGame),game:state.selectedGame,name,
       owner:state.user.username,ownerId:state.user.id,privacy,password,status:'open',
       turnTimer,trucoSeats,chessClock,chessColor,musicControl,musicSkipMode,musicQueueLimit,blackjackTurnTimer,blackjackMinBet,blackjackStartingChips,blackjackDecks,
-      players:[{username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online'}],
+      players:[{username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online',ready:state.selectedGame==='music'}],
       spectators:[],createdAt:Date.now()
     };
 
     let room=candidate;
     if(Core.mode==='online' && window.TDBOnline?.connected){
+      window.TDBPlatformUI?.showLoading?.('Criando sala…');
       room=await window.TDBOnline.upsertRoom(candidate);
+      window.TDBPlatformUI?.hideLoading?.();
       if(!room) return false;
     }else{
       const i=state.rooms.findIndex(r=>r.code===room.code);
@@ -982,6 +1077,7 @@ async function createRoom(){
     const i=state.rooms.findIndex(r=>r.code===room.code);
     if(i>=0) state.rooms[i]=room; else state.rooms.push(room);
     saveActiveRoom(room);
+    setPartyRoomIfLeader(room);
     state.selectedGame=room.game;
     state.view=room.game==='music'?'music':'waiting';
     closeModal(); window.TDBSound?.play?.('roomJoin',{channel:'room-create',dedupeMs:120});
@@ -992,6 +1088,7 @@ async function createRoom(){
 }
 
 window.addEventListener('tdb-room-join-result',event=>{
+  window.TDBPlatformUI?.hideLoading?.();
   const result=event.detail||{};
   if(!result.ok){
     state.view='game';
@@ -1005,6 +1102,7 @@ window.addEventListener('tdb-room-join-result',event=>{
 
   state.selectedGame=room.game;
   saveActiveRoom(room);
+  setPartyRoomIfLeader(room);
   closeModal();
 
   // Set the destination before realtime room updates can redraw the room list.
@@ -1029,10 +1127,12 @@ async function requestJoinRoom(code){
     }
 
     state.view='joining';
+    window.TDBPlatformUI?.showLoading?.('Entrando na sala…');
     const sent=await guardedAction(`join-${code}`,()=>window.TDBOnline.joinRoom(code,password));
 
     if(!sent){
       state.view='game';
+      window.TDBPlatformUI?.hideLoading?.();
       return toast('Conexão online indisponível. Tente novamente.');
     }
     return;
@@ -1054,7 +1154,7 @@ function joinRoom(code,password=''){
   if(!room.players.some(p=>p.id===state.user.id)){
     if(room.players.length>=roomCapacity(room)) return toast('A sala está cheia.');
     const wasEmpty=room.players.length===0;
-    room.players.push({username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online'});
+    room.players.push({username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online',ready:room.game==='music'});
     if(wasEmpty){
       room.owner=state.user.username;
       room.ownerId=state.user.id;
@@ -1068,6 +1168,7 @@ function joinRoom(code,password=''){
   }
 
   state.selectedGame=room.game;
+  setPartyRoomIfLeader(room);
   closeModal();
   window.TDBSound?.play?.('roomJoin',{channel:'room-join',dedupeMs:120});
 
@@ -1092,9 +1193,11 @@ async function joinByCode(){
 
   if(Core.mode==='online' && window.TDBOnline?.connected){
     state.view='joining';
+    window.TDBPlatformUI?.showLoading?.('Entrando na sala…');
     const sent=await guardedAction(`join-${code}`,()=>window.TDBOnline.joinRoom(code,pass));
     if(!sent){
       state.view='game';
+      window.TDBPlatformUI?.hideLoading?.();
       return toast('Conexão online indisponível. Tente novamente.');
     }
     return;
@@ -1140,6 +1243,7 @@ function renderWaitingRoom(){
   }
 
   const room=state.activeRoom;
+  if(state.__knownRoomCode!==room.code){state.knownRoomPlayers=new Set();state.__knownRoomCode=room.code;}
   const g=games[room.game];
   const isHost=room.ownerId===state.user.id;
   const cap=roomCapacity(room);
@@ -1157,12 +1261,14 @@ function renderWaitingRoom(){
   <section class="waiting-room fade-in"><div class="waiting-card">
     <div class="waiting-hero"><div class="game-head"><div class="big-symbol">${g.symbol}</div><div>
       <h1>${escapeHtml(room.name)}</h1>
-      <p>${g.name}${meta} • ${room.privacy==='private'?'Sala privada':'Sala pública'} • Host: <span id="waitingHostName">${escapeHtml(room.owner)}</span></p>
+      <p>${g.name}${meta} • ${privacyLabel(room)} • Host: <span id="waitingHostName">${escapeHtml(room.owner)}</span></p>
       <div class="code-box">Código: <strong>${room.code}</strong><button class="link-btn" onclick="copyCode('${room.code}')">Copiar</button></div>
     </div></div></div>
 
     <div class="room-tools">
+      <button class="btn btn-primary" onclick="copyRoomInvite('${room.code}')">COPIAR CONVITE</button>
       <button class="btn btn-secondary" onclick="openInviteFriendsModal()">Convidar amigos</button>
+      <button class="btn btn-secondary" onclick="TDBPlatformUI.openSocial()">Chat da sala</button>
       <button class="btn btn-dark" onclick="toggleFullscreen()">Tela cheia</button>
     </div>
 
@@ -1178,7 +1284,9 @@ function renderWaitingRoom(){
 }
 function playerSlot(p,isHost){
   const canKick=isHost && p.id!==state.user.id;
-  return `<div class="player-slot"><div class="avatar">${escapeHtml(p.avatar||initials(p.username))}</div><div class="slot-main"><strong>${escapeHtml(p.username)} ${p.id===state.activeRoom.ownerId?'<span class="host-tag">HOST</span>':''}</strong><div class="muted small">${escapeHtml(p.id||'Jogador')}${connectionLabel(p)}</div></div>${canKick?`<button class="btn btn-danger btn-sm" onclick="kickPlayer('${p.id}')">Expulsar</button>`:''}</div>`;
+  const known=state.knownRoomPlayers.has(p.id);state.knownRoomPlayers.add(p.id);
+  const ready=state.activeRoom?.game==='music'||!!p.ready;
+  return `<div class="player-slot ${known?'':'player-entry'}"><div class="avatar">${escapeHtml(p.avatar||initials(p.username))}</div><div class="slot-main"><strong>${escapeHtml(p.username)} ${p.id===state.activeRoom.ownerId?'<span class="host-tag">HOST</span>':''}</strong><div class="muted small">${escapeHtml(p.id||'Jogador')}${connectionLabel(p)}</div></div>${state.activeRoom?.game!=='music'?`<span class="ready-badge ${ready?'ready':'not-ready'}">${ready?'✓ PRONTO':'AGUARDANDO'}</span>`:''}${canKick?`<button class="btn btn-danger btn-sm" onclick="kickPlayer('${p.id}')">Expulsar</button>`:''}</div>`;
 }
 async function kickPlayer(id){
   const room=state.activeRoom;if(!room) return;
@@ -1233,6 +1341,8 @@ async function startGame(){
   const g=games[room.game];
 
   if(room.game==='music') return openMusicRoom();
+  if((room.players||[]).length<minimumPlayersForRoom(room)) return toast(`A sala ainda precisa de ${minimumPlayersForRoom(room)} jogador(es).`);
+  if(!allPlayersReady(room)) return toast('Todos os jogadores precisam marcar PRONTO antes de iniciar.');
 
   if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess','blackjack'].includes(room.game)){
     if(!ensureOnlineMultiplayerReady()) return;
@@ -1253,7 +1363,9 @@ async function startGame(){
     OnlineGameBridge.role='player';
     window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
 
+    window.TDBPlatformUI?.showLoading?.('Sincronizando partida…');
     const ok=await window.TDBOnline.startGame(room.code);
+    window.TDBPlatformUI?.hideLoading?.();
     if(!ok){
       OnlineGameBridge.stop();
       room.status='open';
@@ -1307,9 +1419,17 @@ function copyCode(code){
   else toast(`Código: ${code}`);
 }
 function toggleFullscreen(){
-  if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
-  else document.exitFullscreen?.();
+  const gameLike=['playing-truco','playing-chess','playing-blackjack','music','watching'].includes(state.view)||!!document.querySelector('.blackjack-page,.chess-page,.truco-game,.truco-table,.music-page');
+  if(!document.fullscreenElement){
+    if(gameLike)document.body.classList.add('tdb-game-focus');
+    document.documentElement.requestFullscreen?.();
+  }else{
+    document.body.classList.remove('tdb-game-focus');
+    document.exitFullscreen?.();
+  }
 }
+
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)document.body.classList.remove('tdb-game-focus')});
 
 function renderFriends(skipRefresh=false){
   if(!state.user) return renderAuth('login');
@@ -1400,6 +1520,8 @@ async function refreshSocialData(render=true){
     const summary=await window.TDBOnline.socialSummary();
     state.friends=summary.friends||[];
     state.social={incoming:summary.incoming||[],outgoing:summary.outgoing||[],invites:summary.invites||[]};
+    state.socialParty=summary.party?.party||null;
+    state.partyInvites=summary.party?.invites||[];
     saveFriends();
 
     if(state.view==='lobby') patchLobbyDynamic();
@@ -1505,8 +1627,10 @@ function audioSlider(title,desc,key,value){
 function renderSettings(){
   state.view='settings';
   app.innerHTML=`${topbar('settings')}<section class="dashboard fade-in">
-    <div class="page-head"><div><h1 class="page-title">Configurações</h1><p class="muted">Áudio, interface e suporte do TDB JOGOS.</p></div></div>
+    <div class="page-head"><div><h1 class="page-title">Configurações</h1><p class="muted">Gráficos, animações, áudio, interface e suporte do TDB JOGOS.</p></div></div>
     <div class="settings-stack">
+      ${settingRow('Animações completas','Movimentos de cartas, peças, fichas, entrada de jogadores e transições.','animations',state.settings.animations!==false)}
+      ${settingRow('Efeitos de partículas','Permite efeitos visuais decorativos. Desative em PCs mais fracos.','particles',state.settings.particles!==false)}
       ${settingRow('Sons do TDB JOGOS','Ativa cliques, efeitos de partidas e alertas sonoros.','sound',state.settings.sound)}
       ${audioSlider('Volume geral','Limite mestre de todos os efeitos. O padrão é propositalmente baixo.','masterVolume',state.settings.masterVolume??55)}
       ${audioSlider('Interface','Botões, navegação, confirmação e retorno.','uiVolume',state.settings.uiVolume??42)}
@@ -1551,7 +1675,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'5.6.0',
+      version:'6.0.0',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)
@@ -1782,6 +1906,8 @@ function applyOnlineTrucoState(serverState,role='player'){
 
   // Normalize server field names to the UI model.
   truco.roundWinners=truco.trickResults||[];
+  truco.lastHandSummary=serverState.lastHandSummary||null;
+  truco.lastTrickSummary=serverState.lastTrickSummary||null;
   truco.handOfEleven=truco.eleven
     ? {team:truco.eleven.team,pending:truco.eleven.pending,responses:truco.eleven.responses||{}}
     : null;
@@ -1868,6 +1994,9 @@ function startTrucoGame(room,localBots=false){
     round:0,
     roundWinners:[],
     trickCards:[],
+    pendingTrick:null,
+    lastTrickSummary:null,
+    lastHandSummary:null,
     hands:[[],[],[],[]],
     vira:null,
     manilhaRank:null,
@@ -1930,6 +2059,9 @@ function dealNewHand(){
   truco.round=0;
   truco.roundWinners=[];
   truco.trickCards=[];
+  truco.pendingTrick=null;
+  truco.lastTrickSummary=null;
+  truco.trickResolveAt=null;
   truco.handValue=1;
   truco.raiseLevel=1;
   truco.pendingRaise=null;
@@ -2113,7 +2245,7 @@ function mountTrucoScreen(){
         <div id="trucoDealAnim"></div>
         <div id="trucoMyHand"></div>
         <div id="trucoOverlay"></div>
-        <div id="trucoRoundFlash"></div>
+        <div id="trucoRoundFlash"></div><div id="trucoHandSummary"></div>
       </div>
 
       <div id="trucoActions"></div>
@@ -2298,14 +2430,22 @@ function syncPlayZoneStable(){
     let el=zone.querySelector(`.play-card[data-player="${key}"]`);
 
     const visualPos=trucoVisualPositionForSeat(Number(tc.player));
+    const resolving=truco.phase==='resolving'&&!!truco.pendingTrick;
+    const winnerSeat=truco.pendingTrick?.result==='tie'?null:Number(truco.pendingTrick?.winnerSeat);
+    const isWinner=resolving&&winnerSeat===Number(tc.player);
+    const revealLeft=Math.max(0,Number(truco.trickResolveAt||0)-Date.now());
+    const discardDelay=Math.max(650,revealLeft-520);
     if(!el){
       el=document.createElement('div');
-      el.className=`play-card visual-${visualPos} card-enter`;
+      el.className=`play-card visual-${visualPos} card-enter ${isWinner?'round-winner-card':''} ${resolving?'round-discarding':''}`;
+      if(resolving)el.style.setProperty('--discard-delay',`${discardDelay}ms`);
       el.dataset.player=key;
       el.innerHTML=renderCard(tc.card,tc.hidden,false);
       zone.appendChild(el);
     }else{
-      el.className=`play-card visual-${visualPos}`;
+      el.className=`play-card visual-${visualPos} ${isWinner?'round-winner-card':''} ${resolving?'round-discarding':''}`;
+      if(resolving)el.style.setProperty('--discard-delay',`${discardDelay}ms`);
+      else el.style.removeProperty('--discard-delay');
       const hiddenNow=!!tc.hidden;
       const child=el.querySelector('.truco-card');
       const isHidden=child?.classList.contains('hidden');
@@ -2328,6 +2468,8 @@ function updateTrucoScreen(){
   text('trucoRound',`${Math.min(truco.round+1,3)}/3`);
   text('trucoManilha',truco.manilhaRank||'—');
   set('trucoRoundDots',renderRoundDots());
+  set('trucoHandSummary',renderLastHandSummary());
+  scheduleTrucoSummaryExpiry();
 
   const currentPlayer=playerBySeat(truco.current);
   const resolving=truco.phase==='resolving';
@@ -2356,7 +2498,7 @@ function updateTrucoScreen(){
   }
 
   syncPlayZoneStable();
-  set('trucoDiscard','');
+  set('trucoDiscard',renderDiscardPile());
   set('trucoDealAnim',truco.phase==='dealing' ? renderDealAnimation() : '');
 
   syncMyHandStable();
@@ -2364,6 +2506,65 @@ function updateTrucoScreen(){
   set('trucoActions',renderTrucoActions());
   set('trucoLog',truco.logs.map(l=>`<div>• ${escapeHtml(l)}</div>`).join(''));
   if(truco.phase==='raise-response' && truco.pendingRaise?.targetTeam===localTrucoTeam()) maybeAutoFriendlyVote();
+}
+
+
+function localTrickPreview(){
+  const visible=truco.trickCards.filter(x=>!x.hidden);
+  if(!visible.length){
+    return {result:'tie',winnerSeat:truco.starter,winningCard:null,hidden:true,round:truco.round+1,handValue:truco.handValue};
+  }
+  let best=visible[0],tied=false;
+  for(const play of visible.slice(1)){
+    const cmp=compareCards(play,best);
+    if(cmp>0){best=play;tied=false}
+    else if(cmp===0&&play.card.rank===best.card.rank)tied=true;
+  }
+  if(tied){
+    return {result:'tie',winnerSeat:truco.starter,winningCard:null,hidden:false,round:truco.round+1,handValue:truco.handValue};
+  }
+  return {
+    result:playerBySeat(best.player)?.team??'tie',
+    winnerSeat:best.player,
+    winningCard:best.card,
+    hidden:!!best.hidden,
+    round:truco.round+1,
+    handValue:truco.handValue
+  };
+}
+function trucoSummaryCardText(summary){
+  if(!summary)return'';
+  if(summary.hidden||!summary.winningCard)return'carta escondida';
+  return cardText(summary.winningCard);
+}
+function renderLastHandSummary(){
+  const summary=truco?.lastHandSummary;
+  if(!summary)return'';
+  if(summary.expiresAt&&Date.now()>Number(summary.expiresAt))return'';
+  const mine=summary.team===localTrucoTeam();
+  const who=summary.winnerName||(mine?'Você':'Adversário');
+  const card=trucoSummaryCardText(summary);
+  return `<div class="truco-hand-summary ${mine?'ours':'theirs'}">
+    <span>${mine?'MÃO VENCIDA':'MÃO ENCERRADA'}</span>
+    <strong>${escapeHtml(who)} venceu${card?` com ${escapeHtml(card)}`:''}</strong>
+    <small>mão valeu ${Number(summary.points||truco.handValue||1)} ponto(s)</small>
+  </div>`;
+}
+
+
+function scheduleTrucoSummaryExpiry(){
+  clearTimeout(window.__tdbTrucoHandSummaryTimer);
+  const summary=truco?.lastHandSummary;
+  if(!summary?.expiresAt)return;
+  const key=Number(summary.at||0);
+  const delay=Math.max(0,Number(summary.expiresAt)-Date.now());
+  window.__tdbTrucoHandSummaryTimer=setTimeout(()=>{
+    if(truco?.lastHandSummary&&Number(truco.lastHandSummary.at||0)===key){
+      truco.lastHandSummary=null;
+      const slot=document.getElementById('trucoHandSummary');
+      if(slot)slot.innerHTML='';
+    }
+  },delay+30);
 }
 
 function showRoundFlash(message){
@@ -2564,6 +2765,8 @@ function applyPlayCard({playerIdx,cardIdx,hidden=false}){
   logTruco(`${actingPlayer?.username||'Jogador'} ${hidden?'jogou uma carta escondida':`jogou ${cardText(card)}`}.`);
   playCardSound(hidden);
   if(truco.trickCards.length===truco.activeSeats.length){
+    truco.pendingTrick=localTrickPreview();
+    truco.trickResolveAt=Date.now()+1800;
     truco.phase='resolving';
     renderTruco();
     setTimeout(resolveTrick,1800);
@@ -2575,28 +2778,36 @@ function applyPlayCard({playerIdx,cardIdx,hidden=false}){
 }
 
 function resolveTrick(){
-  const visible=truco.trickCards.filter(x=>!x.hidden);
-  let winner='tie';
-  if(visible.length){
-    let best=visible[0], tied=false;
-    for(let i=1;i<visible.length;i++){
-      const cmp=compareCards(visible[i],best);
-      if(cmp>0){ best=visible[i]; tied=false; }
-      else if(cmp===0 && visible[i].card.rank===best.card.rank) tied=true;
-    }
-    winner=tied?'tie':(playerBySeat(best.player)?.team ?? 'tie');
-  }
+  const pending=truco.pendingTrick||localTrickPreview();
+  const winner=pending.result;
+  const winnerSeat=pending.winnerSeat;
+  const winnerPlayer=winner==='tie'?null:playerBySeat(winnerSeat);
+
   truco.roundWinners.push(winner);
+  truco.lastTrickSummary={
+    ...pending,
+    winnerName:winner==='tie'?'Empate':(winnerPlayer?.username||'Jogador'),
+    at:Date.now()
+  };
+
   const localTeam=localTrucoTeam();
   logTruco(`Rodada ${truco.round+1}: ${winner==='tie'?'empate':winner===localTeam?(truco.mode==='1v1'?'você':'nossa dupla'):(truco.mode==='1v1'?'adversário':'adversários')}.`);
   showRoundFlash(winner==='tie'?'EMPATE NA RODADA':winner===localTeam?(truco.mode==='1v1'?'VOCÊ VENCEU A RODADA':'NOSSA DUPLA VENCEU A RODADA'):(truco.mode==='1v1'?'ADVERSÁRIO VENCEU A RODADA':'ELES VENCERAM A RODADA'));
   if(winner!=='tie') window.TDBSound?.play?.(winner===localTeam?'roundWin':'roundLose',{channel:'truco-round',dedupeMs:100});
+
   truco.discardCount += truco.activeSeats.length;
   const handWinner=evaluateHandWinner();
-  if(handWinner!==null) return awardHand(handWinner);
+  if(handWinner!==null){
+    truco.pendingTrick=null;
+    truco.trickResolveAt=null;
+    return awardHand(handWinner);
+  }
+
   truco.round++;
-  const nextStarter = winner==='tie' ? truco.starter : firstPlayerOfWinningTeamFromLastTrick(winner);
+  const nextStarter = winner==='tie' ? truco.starter : winnerSeat;
   truco.trickCards=[];
+  truco.pendingTrick=null;
+  truco.trickResolveAt=null;
   truco.starter=nextStarter;
   truco.current=truco.starter;
   truco.phase='playing';
@@ -2636,6 +2847,18 @@ function awardHand(team){
   if(team==='none'){
     logTruco('As três rodadas empataram. Ninguém pontua.');
   } else {
+    const last=truco.lastTrickSummary;
+    const winnerPlayer=last?.result===team?playerBySeat(last.winnerSeat):null;
+    truco.lastHandSummary={
+      team,
+      points:truco.handValue,
+      winnerSeat:winnerPlayer?.seat??null,
+      winnerName:winnerPlayer?.username||(team===localTrucoTeam()?'Você':'Adversário'),
+      winningCard:last?.result===team?last?.winningCard||null:null,
+      hidden:last?.result===team?!!last?.hidden:false,
+      at:Date.now(),
+      expiresAt:Date.now()+4800
+    };
     truco.scores[team]+=truco.handValue;
     logTruco(`${team===localTrucoTeam()?(truco.mode==='1v1'?'Você':'Nossa dupla'):(truco.mode==='1v1'?'Adversário':'Adversários')} ganhou ${truco.handValue} ponto(s).`);
   }
