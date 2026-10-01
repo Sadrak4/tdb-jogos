@@ -1,4 +1,17 @@
-# TDB JOGOS v6.0 — SOCIAL + PLATFORM UPDATE
+# TDB JOGOS v6.0.1 — UX / MUSIC FIXES
+
+Esta versão é uma correção de experiência antes da próxima grande atualização gráfica.
+
+## Correções principais
+
+- Truco joga a carta diretamente no clique.
+- Sistema `PRONTO` foi removido de todos os jogos e do backend.
+- Corrigida repetição infinita da animação da última jogada no Xadrez.
+- TDB Music recebeu correção responsiva para fila, histórico, player e controles em zoom 100%.
+- Favoritos do Music são persistentes por conta e armazenam a URL canônica do YouTube.
+- Nenhuma migração SQL nova.
+
+---
 
 A v6.0 transforma o TDB JOGOS em uma plataforma social mais completa sem reintroduzir ranking global.
 
@@ -55,7 +68,7 @@ A v6.0 transforma o TDB JOGOS em uma plataforma social mais completa sem reintro
 ### Qualidade
 - testes automáticos simulando 2 a 4 clientes;
 - regressões das versões anteriores preservadas;
-- logs de cliente agora carregam automaticamente a versão `6.0.0`.
+- logs de cliente carregam automaticamente a versão atual do aplicativo.
 
 ## Banco de dados
 

@@ -716,46 +716,29 @@ function minimumPlayersForRoom(room){
   if(room.game==='blackjack')return 1;
   return 1;
 }
-function allPlayersReady(room){return room.game==='music'||(room.players||[]).length>0&&(room.players||[]).every(p=>!!p.ready&&p.connection!=='reconnecting')}
-function roomCanStart(room){return room.game==='music'||((room.players||[]).length>=minimumPlayersForRoom(room)&&allPlayersReady(room))}
-function readyActionButton(room){
-  if(room.game==='music')return'';
-  const me=(room.players||[]).find(p=>p.id===state.user.id);
-  if(!me)return'';
-  return `<button class="btn ${me.ready?'btn-secondary':'btn-primary'}" onclick="toggleRoomReady()">${me.ready?'✓ PRONTO • desfazer':'MARCAR PRONTO'}</button>`;
-}
 function waitingHostActions(room){
-  const cap=roomCapacity(room),ready=allPlayersReady(room),enough=(room.players||[]).length>=minimumPlayersForRoom(room),canStart=roomCanStart(room);
-  const startDisabled=canStart?'':`disabled title="${!enough?'Aguardando jogadores':'Todos os jogadores precisam marcar PRONTO'}"`;
+  const cap=roomCapacity(room);
+  const enough=(room.players||[]).length>=minimumPlayersForRoom(room);
+  const startDisabled=enough?'':`disabled title="Aguardando jogadores"`;
   if(room.game==='truco'){
-    return `${readyActionButton(room)} <button class="btn btn-secondary" onclick="startTrucoWithBots()">Testar com ${cap===2?'1 bot':'3 bots'}</button>
-      <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${!enough?'Aguardando jogadores':ready?'Iniciar partida':'Aguardando PRONTO'}</button>`;
+    return `<button class="btn btn-secondary" onclick="startTrucoWithBots()">Testar com ${cap===2?'1 bot':'3 bots'}</button>
+      <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?'Iniciar partida':'Aguardando jogadores'}</button>`;
   }
   if(room.game==='chess'){
-    return `${readyActionButton(room)} <button class="btn btn-secondary" onclick="launchChessBot()">Testar com bot</button>
-      <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${!enough?'Aguardando jogadores':ready?'Iniciar partida':'Aguardando PRONTO'}</button>`;
+    return `<button class="btn btn-secondary" onclick="launchChessBot()">Testar com bot</button>
+      <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?'Iniciar partida':'Aguardando jogadores'}</button>`;
   }
   if(room.game==='blackjack'){
-    return `${readyActionButton(room)} <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${ready?'Abrir mesa de Blackjack':'Aguardando PRONTO'}</button>`;
+    return `<button class="btn btn-primary" onclick="startGame()">Abrir mesa de Blackjack</button>`;
   }
   if(room.game==='music')return `<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Music</button>`;
-  return `${readyActionButton(room)} <button class="btn btn-primary" ${startDisabled} onclick="startGame()">Iniciar partida</button>`;
+  return `<button class="btn btn-primary" ${startDisabled} onclick="startGame()">Iniciar partida</button>`;
 }
 
 function waitingNonHostAction(room){
   return room.game==='music'
     ? `<button class="btn btn-primary" onclick="openMusicRoom()">Entrar no player</button>`
-    : `${readyActionButton(room)} <span class="muted">Aguardando o host iniciar.</span>`;
-}
-async function toggleRoomReady(){
-  const room=state.activeRoom;if(!room||room.game==='music')return;
-  const me=(room.players||[]).find(p=>p.id===state.user.id);if(!me)return;
-  const next=!me.ready;
-  if(Core.mode==='online'&&window.TDBOnline?.connected){
-    try{const updated=await window.TDBOnline.setRoomReady(room.code,next);if(updated){state.activeRoom=updated;Core.rooms.setActive(updated);patchWaitingRoom(true);window.TDBSound?.play?.(next?'confirm':'back')}}catch(err){toast(err.message||'Não foi possível alterar PRONTO.')}
-    return;
-  }
-  me.ready=next;me.readyAt=next?Date.now():null;updateStoredRoom(room);patchWaitingRoom(true);
+    : `<span class="muted">Aguardando o host iniciar.</span>`;
 }
 
 function waitingPlayersHtml(room){
@@ -1058,7 +1041,7 @@ async function createRoom(){
       code:genRoomCode(state.selectedGame),game:state.selectedGame,name,
       owner:state.user.username,ownerId:state.user.id,privacy,password,status:'open',
       turnTimer,trucoSeats,chessClock,chessColor,musicControl,musicSkipMode,musicQueueLimit,blackjackTurnTimer,blackjackMinBet,blackjackStartingChips,blackjackDecks,
-      players:[{username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online',ready:state.selectedGame==='music'}],
+      players:[{username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online'}],
       spectators:[],createdAt:Date.now()
     };
 
@@ -1154,7 +1137,7 @@ function joinRoom(code,password=''){
   if(!room.players.some(p=>p.id===state.user.id)){
     if(room.players.length>=roomCapacity(room)) return toast('A sala está cheia.');
     const wasEmpty=room.players.length===0;
-    room.players.push({username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online',ready:room.game==='music'});
+    room.players.push({username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online'});
     if(wasEmpty){
       room.owner=state.user.username;
       room.ownerId=state.user.id;
@@ -1285,8 +1268,7 @@ function renderWaitingRoom(){
 function playerSlot(p,isHost){
   const canKick=isHost && p.id!==state.user.id;
   const known=state.knownRoomPlayers.has(p.id);state.knownRoomPlayers.add(p.id);
-  const ready=state.activeRoom?.game==='music'||!!p.ready;
-  return `<div class="player-slot ${known?'':'player-entry'}"><div class="avatar">${escapeHtml(p.avatar||initials(p.username))}</div><div class="slot-main"><strong>${escapeHtml(p.username)} ${p.id===state.activeRoom.ownerId?'<span class="host-tag">HOST</span>':''}</strong><div class="muted small">${escapeHtml(p.id||'Jogador')}${connectionLabel(p)}</div></div>${state.activeRoom?.game!=='music'?`<span class="ready-badge ${ready?'ready':'not-ready'}">${ready?'✓ PRONTO':'AGUARDANDO'}</span>`:''}${canKick?`<button class="btn btn-danger btn-sm" onclick="kickPlayer('${p.id}')">Expulsar</button>`:''}</div>`;
+  return `<div class="player-slot ${known?'':'player-entry'}"><div class="avatar">${escapeHtml(p.avatar||initials(p.username))}</div><div class="slot-main"><strong>${escapeHtml(p.username)} ${p.id===state.activeRoom.ownerId?'<span class="host-tag">HOST</span>':''}</strong><div class="muted small">${escapeHtml(p.id||'Jogador')}${connectionLabel(p)}</div></div>${canKick?`<button class="btn btn-danger btn-sm" onclick="kickPlayer('${p.id}')">Expulsar</button>`:''}</div>`;
 }
 async function kickPlayer(id){
   const room=state.activeRoom;if(!room) return;
@@ -1342,7 +1324,6 @@ async function startGame(){
 
   if(room.game==='music') return openMusicRoom();
   if((room.players||[]).length<minimumPlayersForRoom(room)) return toast(`A sala ainda precisa de ${minimumPlayersForRoom(room)} jogador(es).`);
-  if(!allPlayersReady(room)) return toast('Todos os jogadores precisam marcar PRONTO antes de iniciar.');
 
   if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess','blackjack'].includes(room.game)){
     if(!ensureOnlineMultiplayerReady()) return;
@@ -1675,7 +1656,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'6.0.0',
+      version:'6.0.1',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)
@@ -2729,12 +2710,19 @@ function renderTrucoActions(){
   const canTruco=myTurn && !truco.handOfEleven && !truco.ironHand && truco.handValue<12 && !truco.pendingRaise;
   const nextRaise=truco.handValue===1?3:truco.handValue===3?6:truco.handValue===6?9:truco.handValue===9?12:null;
   return `<div class="truco-actions">
-    ${myTurn?`<div class="player-prompt">SUA VEZ • escolha uma carta</div>`:''}
-    <button class="btn btn-primary action-main" ${myTurn&&truco.selectedCard!==null?'':'disabled'} onclick="playSelected(false)">Jogar carta</button>
-    <button class="btn btn-secondary action-main" title="${truco.round===0?'Disponível a partir da segunda rodada':'Jogar a carta virada para baixo'}" ${canHide&&truco.selectedCard!==null?'':'disabled'} onclick="playSelected(true)">Esconder</button>
+    ${myTurn?`<div class="player-prompt">${truco.hideNextCard?'CARTA ESCONDIDA • clique na carta que deseja jogar':'SUA VEZ • clique em uma carta para jogar'}</div>`:''}
+    ${canHide?`<button class="btn ${truco.hideNextCard?'btn-danger':'btn-secondary'} action-main" onclick="toggleTrucoHideMode()">${truco.hideNextCard?'Cancelar esconder':'Esconder carta'}</button>`:''}
     ${nextRaise?`<button class="btn btn-secondary action-main" ${canTruco?'':'disabled'} onclick="requestRaise()">${nextRaise===3?'TRUCO':nextRaise}</button>`:''}
     <button class="btn btn-dark" onclick="leaveTrucoTable()">Sair da partida</button>
   </div>`;
+}
+
+function toggleTrucoHideMode(){
+  const seat=localTrucoSeat();
+  if(!isLocalTrucoPlayer() || truco.current!==seat || truco.phase!=='playing' || truco.round===0 || truco.ironHand) return;
+  truco.hideNextCard=!truco.hideNextCard;
+  truco.selectedCard=null;
+  renderTruco();
 }
 
 function selectTrucoCard(idx){
@@ -2748,19 +2736,25 @@ function selectTrucoCard(idx){
     idx>=(truco.hands?.[seat]||[]).length
   ) return;
 
-  truco.selectedCard=idx;
-  renderTruco();
+  const hidden=!!truco.ironHand || (!!truco.hideNextCard && truco.round>0);
+  truco.hideNextCard=false;
+  truco.selectedCard=null;
+  trucoDispatch('PLAY_CARD',{playerIdx:seat,cardIdx:idx,hidden});
 }
+// Mantido apenas por compatibilidade com código antigo; a UI nova joga no clique.
 function playSelected(hidden=false){
   const seat=localTrucoSeat();
   if(!isLocalTrucoPlayer() || truco.current!==seat || truco.selectedCard===null || truco.phase!=='playing') return;
-  trucoDispatch('PLAY_CARD',{playerIdx:seat,cardIdx:truco.selectedCard,hidden});
+  const idx=truco.selectedCard;
+  truco.selectedCard=null;
+  trucoDispatch('PLAY_CARD',{playerIdx:seat,cardIdx:idx,hidden});
 }
 function applyPlayCard({playerIdx,cardIdx,hidden=false}){
   clearInterval(trucoTimerInterval);
   const card=truco.hands[playerIdx].splice(cardIdx,1)[0];
   truco.trickCards.push({player:playerIdx,card,hidden});
   truco.selectedCard=null;
+  truco.hideNextCard=false;
   const actingPlayer=playerBySeat(playerIdx);
   logTruco(`${actingPlayer?.username||'Jogador'} ${hidden?'jogou uma carta escondida':`jogou ${cardText(card)}`}.`);
   playCardSound(hidden);
@@ -3326,6 +3320,7 @@ function leaveTrucoTable(){
 window.startTrucoWithBots=startTrucoWithBots;
 window.startTrucoGame=startTrucoGame;
 window.selectTrucoCard=selectTrucoCard;
+window.toggleTrucoHideMode=toggleTrucoHideMode;
 window.playSelected=playSelected;
 window.requestRaise=requestRaise;
 window.respondRaise=respondRaise;

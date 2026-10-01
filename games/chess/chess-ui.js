@@ -10,6 +10,7 @@ let chess=null;
 let chessClockTimer=null;
 let lastClockTick=0;
 let pendingOnlineMove=null;
+let lastAnimatedMoveKey=null;
 
 function byColor(color){ return chess.players[color]; }
 function localColor(){
@@ -159,6 +160,7 @@ window.applyOnlineChessState=applyOnlineChessState;
 function startChessGame(room,localBot=false){
   clearInterval(chessClockTimer);
   pendingOnlineMove=null;
+  lastAnimatedMoveKey=null;
   state.view=localBot?'bot-chess':'playing-chess';
   const players=room.players.slice(0,2);
   const colors=chooseColors(room,players);
@@ -337,6 +339,9 @@ function renderBoard(){
   const legal=new Set(chess.legalMoves.map(m=>`${m.to.r},${m.to.c}`));
   const selected=chess.selectedSquare;
   const last=chess.lastMove;
+  const moveCount=chess.moveHistory?.length||0;
+  const lastMoveKey=last?`${moveCount}:${last.from.r},${last.from.c}>${last.to.r},${last.to.c}:${last.notation||''}`:'';
+  const animateLastMove=!!lastMoveKey&&lastMoveKey!==lastAnimatedMoveKey;
 
   let html='';
   for(const r of rows){
@@ -356,12 +361,13 @@ function renderBoard(){
       html+=`<button class="chess-square ${dark?'dark':'light'} ${sel?'selected':''} ${isLegal?'legal':''} ${isLast?'last':''} ${isLastDestination?'last-destination':''} ${kingCheck?'check':''}"
         onclick="clickChessSquare(${r},${c})">
         ${rankLabel}${fileLabel}
-        ${p?`<span class="chess-piece ${p.color} ${isLastDestination?'piece-arrive':''}" ${isLastDestination?`style="--move-x:${moveX};--move-y:${moveY}"`:''}>${E.displayPiece(p)}</span>`:''}
+        ${p?`<span class="chess-piece ${p.color} ${isLastDestination&&animateLastMove?'piece-arrive':''}" ${isLastDestination&&animateLastMove?`style="--move-x:${moveX};--move-y:${moveY}"`:''}>${E.displayPiece(p)}</span>`:''}
         ${isLegal?`<i class="legal-dot ${p?'capture':''}"></i>`:''}
       </button>`;
     }
   }
   board.innerHTML=html;
+  if(animateLastMove)lastAnimatedMoveKey=lastMoveKey;
 }
 
 async function clickChessSquare(r,c){

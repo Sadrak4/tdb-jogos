@@ -38,19 +38,6 @@ async function requireRoomMember(code,userId){
   return room;
 }
 
-export async function setReady(code,user,ready){
-  const room=await getRoomPrivate(String(code||'').toUpperCase());
-  if(!room)throw new Error('Sala não encontrada.');
-  if(room.game==='music')throw new Error('TDB Music não usa estado de pronto.');
-  if(room.status!=='open')throw new Error('A partida já começou.');
-  const player=(room.players||[]).find(p=>p.id===user.id);
-  if(!player)throw new Error('Você não está como jogador nesta sala.');
-  player.ready=!!ready;
-  player.readyAt=player.ready?now():null;
-  await setRoomPrivate(room);
-  await emitEvent('rooms',room.code,'ready');
-  return room;
-}
 
 export async function roomFeed(code,user){
   const room=await requireRoomMember(code,user.id);
@@ -247,9 +234,10 @@ export async function musicProfileAction(user,action={}){
     if(!/^[A-Za-z0-9_-]{11}$/.test(videoId))throw new Error('Música inválida.');
     const favorites=await getSharedValue(musicFavoritesKey(user.id),[]);
     let list=Array.isArray(favorites)?favorites:[];
-    const exists=list.some(x=>x.videoId===videoId);
-    if(exists)list=list.filter(x=>x.videoId!==videoId);
-    else list.unshift({videoId,title:cleanText(track.title,180)||'YouTube',channel:cleanText(track.channel,120),thumbnail:String(track.thumbnail||'').slice(0,500),url:String(track.url||'').slice(0,500),savedAt:now()});
+    const canonicalUrl=`https://www.youtube.com/watch?v=${videoId}`;
+    const exists=list.some(x=>x.videoId===videoId||x.url===canonicalUrl);
+    if(exists)list=list.filter(x=>x.videoId!==videoId&&x.url!==canonicalUrl);
+    else list.unshift({videoId,title:cleanText(track.title,180)||'YouTube',channel:cleanText(track.channel,120),thumbnail:String(track.thumbnail||'').slice(0,500),url:canonicalUrl,savedAt:now(),ownerId:user.id});
     list=list.slice(0,MUSIC_FAVORITES_MAX);
     await setSharedValue(musicFavoritesKey(user.id),list);
     return{favorites:list,favorited:!exists};

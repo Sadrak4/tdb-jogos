@@ -1,55 +1,34 @@
-TDB JOGOS v6.0 — Social + Platform Update
+TDB JOGOS v6.0.1 — UX / MUSIC FIXES
 
-SALAS / MULTIPLAYER
-- sistema PRONTO para Truco, Xadrez e Blackjack
-- host só inicia com quantidade mínima e todos prontos
-- ready reseta ao voltar da partida para a sala
-- reconexão visual com countdown
-- loading de entrada/sincronização
-- privacidade: pública / amigos / convite / senha
-- copiar convite
-- espectadores com contagem e acesso direto
-- TTL de sala vazia continua 5 minutos em todos os jogos e Music
+TRUCO
+- clicar na carta agora joga imediatamente
+- botão "Jogar carta" foi removido
+- para jogar escondida: clique em "Esconder carta" e depois escolha a carta
+- Mão de Ferro continua jogando escondido automaticamente
 
-SOCIAL / PARTY
-- lobby com online, salas abertas e amigos ativos
-- status detalhado dos amigos por jogo/atividade
-- perfil rápido com convite de sala
-- party de até 4 amigos
-- líder publica sala e grupo pode acompanhar
-- party respeita privacidade e pode seguir líder em sala somente convite
+SISTEMA PRONTO
+- removido dos jogos e das salas
+- host pode iniciar assim que houver jogadores suficientes
+- Blackjack pode iniciar com 1 jogador
+- Xadrez exige 2 jogadores
+- Truco exige 2 ou 4 conforme a sala
+- requisito PRONTO removido também do backend, evitando erro HTTP ao iniciar Blackjack
 
-CHAT / REAÇÕES
-- chat por sala
-- reações rápidas: 😂 🔥 👏 😮 ❤️ 👍
-- espectadores autorizados podem participar do feed
+XADREZ
+- animação da última jogada toca apenas uma vez
+- selecionar/clicar em uma peça não reinicia a animação anterior
 
 TDB MUSIC
-- histórico recente: últimas 10 faixas
-- favoritos pessoais
-- playlists/presets salvos
-- host pode salvar e aplicar fila
-- recursos persistidos em tdb_shared
-
-VISUAL / CONFIGURAÇÕES
-- tela cheia nos jogos
-- animações completas on/off
-- partículas on/off
-- som permanece configurável
-- animação de entrada de jogadores
-
-PAINEL ADM
-- filtros de contas/reportes/logs
-- sessões ativas e versão do cliente
-- usuários online / salas abertas / partidas ativas
-- erros nas últimas 24h
-- erros agrupados por versão
-- salas recentes
-- modo manutenção com mensagem configurável
-
-TESTES
-- simulação automática de 2–4 clientes
-- regressões v5.x preservadas
+- layout responsivo refeito para não depender de zoom do navegador
+- player, controles, fila e histórico se ajustam automaticamente à altura disponível
+- fila compacta e rolável quando houver muitas músicas
+- histórico recente também é compacto e rolável
+- controles permanecem visíveis em notebooks/monitores baixos
+- favoritos ficam salvos por CONTA, não por sala
+- favorito salva URL canônica do YouTube
+- favoritos continuam disponíveis em outras salas/sessões da mesma conta
+- fila e histórico também possuem botão de favoritar
+- histórico permite adicionar a música novamente à fila
 
 BANCO
 - nenhuma migração SQL nova necessária

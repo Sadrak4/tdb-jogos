@@ -30,13 +30,11 @@ const maintenance=read('server/maintenance-service.js');
 const gameService=read('server/game-service.js');
 const roomLeave=read('server/http-handlers/rooms/leave.js');
 
-// Ready system.
-assert('Ready endpoint is registered',router.includes("['rooms/ready',roomReady]"));
-assert('Server stores ready state',platform.includes('player.ready=!!ready'));
-assert('Competitive game refuses unready players',start.includes("some(p=>!p.ready)"));
-assert('Waiting room exposes ready toggle',app.includes('toggleRoomReady')&&app.includes('MARCAR PRONTO'));
-assert('Host start checks all ready players',app.includes('allPlayersReady(room)'));
-assert('Ready resets after returning to room',gameService.includes("ready:room.game==='music'"));
+// v6.0.1 removed the READY system after UX testing.
+assert('Ready route is removed',!router.includes("['rooms/ready',roomReady]"));
+assert('Server no longer stores room ready state',!platform.includes('player.ready=!!ready'));
+assert('Game start no longer blocks on ready flags',!start.includes("some(p=>!p.ready)"));
+assert('Waiting room no longer exposes ready controls',!app.includes('toggleRoomReady')&&!app.includes('MARCAR PRONTO'));
 
 // Reconnection visual.
 assert('Visual reconnect countdown exists',platformUI.includes('reconnectUntil')&&platformUI.includes('Reconectando'));
@@ -104,8 +102,8 @@ assert('Maintenance is enforced centrally',router.includes("code:'MAINTENANCE'")
 assert('Admin endpoints are exempt from maintenance',router.includes("route.startsWith('admin/')"));
 assert('Health returns maintenance state',health.includes('maintenance:status.maintenance'));
 assert('Realtime backend status reads maintenance state',realtime.includes("getSharedValue('app:maintenance'"));
-assert('Presence stores app version',maintenance.includes("version:String(version||'6.0.0')"));
-assert('Client logs carry v6 version',online.includes("context:{version:'6.0.0'"));
+assert('Presence stores app version',maintenance.includes("version:String(version||'6.0.1')"));
+assert('Client logs carry v6 version',online.includes("context:{version:'6.0.1'"));
 
 // Existing generic 5-minute cleanup is preserved for every game.
 assert('Room empty TTL remains exactly five minutes',roomLeave.includes('5*60*1000'));

@@ -637,19 +637,74 @@ function refreshRoomMembers(){
 }
 
 
-async function loadMusicProfile(){
-  if(!isOnlineMusic())return;
-  try{musicProfileData=await window.TDBOnline.musicProfile()||{favorites:[],presets:[]};renderMusicExtras()}catch(err){console.warn('[Music profile]',err)}
+
+function canonicalMusicUrl(trackOrId){
+  const videoId=typeof trackOrId==='string'?trackOrId:trackOrId?.videoId;
+  return /^[A-Za-z0-9_-]{11}$/.test(String(videoId||''))
+    ? `https://www.youtube.com/watch?v=${videoId}`
+    : String(trackOrId?.url||'');
 }
-function currentFavorite(){const t=currentTrack();return !!t&&musicProfileData.favorites?.some(f=>f.videoId===t.videoId)}
+function isFavoriteTrack(track){
+  if(!track)return false;
+  const url=canonicalMusicUrl(track);
+  return (musicProfileData.favorites||[]).some(f=>f.videoId===track.videoId||canonicalMusicUrl(f)===url);
+}
+function findKnownTrack(videoId){
+  return (musicState?.queue||[]).find(t=>t.videoId===videoId)
+    || (musicState?.history||[]).find(t=>t.videoId===videoId)
+    || (musicProfileData.favorites||[]).find(t=>t.videoId===videoId)
+    || null;
+}
+async function toggleFavoriteTrack(videoId){
+  const track=findKnownTrack(videoId);
+  if(!track)return toast('Música não encontrada.');
+  if(!window.TDBOnline?.musicProfileAction)return toast('Favoritos da conta exigem conexão online.');
+  const normalized={...track,url:canonicalMusicUrl(track)};
+  try{
+    const r=await window.TDBOnline.musicProfileAction({type:'TOGGLE_FAVORITE',track:normalized});
+    musicProfileData.favorites=r.favorites||[];
+    renderDynamic();
+    toast(r.favorited?'Música salva nos seus favoritos.':'Música removida dos seus favoritos.');
+  }catch(err){
+    toast(err.message||'Não foi possível atualizar seus favoritos.');
+  }
+}
+
+async function loadMusicProfile(){
+  if(!window.TDBOnline?.musicProfile)return;
+  try{
+    musicProfileData=await window.TDBOnline.musicProfile()||{favorites:[],presets:[]};
+    renderDynamic();
+  }catch(err){
+    console.warn('[Music profile]',err);
+  }
+}
+function currentFavorite(){return isFavoriteTrack(currentTrack())}
 async function toggleCurrentFavorite(){
   const t=currentTrack();if(!t)return toast('Nenhuma música tocando.');
-  try{const r=await window.TDBOnline.musicProfileAction({type:'TOGGLE_FAVORITE',track:t});musicProfileData.favorites=r.favorites||[];renderMusicExtras();toast(r.favorited?'Música favoritada.':'Favorito removido.')}catch(err){toast(err.message||'Não foi possível favoritar.')}
+  return toggleFavoriteTrack(t.videoId);
 }
 async function addFavoriteToQueue(videoId){
   const t=musicProfileData.favorites?.find(x=>x.videoId===videoId);if(!t)return;
-  await sendOnlineMusic({type:'ADD_TRACK',track:t});
+  const track={...t,url:canonicalMusicUrl(t)};
+  if(isOnlineMusic())return sendOnlineMusic({type:'ADD_TRACK',track});
+  const next=structuredClone(musicState);
+  next.queue.push({...track,id:`Q-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,addedBy:state.user.username,addedById:state.user.id,addedAt:Date.now()});
+  if(next.currentIndex<0){next.currentIndex=0;next.position=0;next.status='paused';next.changedAt=Date.now()}
+  saveMusicState(next);
 }
+
+async function addTrackFromHistory(videoId){
+  const t=(musicState?.history||[]).find(x=>x.videoId===videoId);
+  if(!t)return toast('Música não encontrada no histórico.');
+  const track={...t,url:canonicalMusicUrl(t)};
+  if(isOnlineMusic())return sendOnlineMusic({type:'ADD_TRACK',track});
+  const next=structuredClone(musicState);
+  next.queue.push({...track,id:`Q-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,addedBy:state.user.username,addedById:state.user.id,addedAt:Date.now()});
+  if(next.currentIndex<0){next.currentIndex=0;next.position=0;next.status='paused';next.changedAt=Date.now()}
+  saveMusicState(next);
+}
+
 async function saveRoomPlaylist(){
   if(room.ownerId!==state.user.id)return toast('Somente o host pode salvar a playlist.');
   const name=prompt('Nome da playlist:','Noite TDB');if(!name)return;
@@ -659,8 +714,8 @@ async function applyRoomPlaylist(id){try{const r=await window.TDBOnline.musicPro
 async function deleteRoomPlaylist(id){if(!confirm('Excluir esta playlist salva?'))return;try{const r=await window.TDBOnline.musicProfileAction({type:'DELETE_PRESET',presetId:id});musicProfileData.presets=r.presets||[];renderMusicExtras()}catch(err){toast(err.message||'Não foi possível excluir.')}}
 function renderMusicExtras(){
   const favoriteBtn=document.getElementById('musicFavoriteBtn');if(favoriteBtn)favoriteBtn.textContent=currentFavorite()?'★ Favoritada':'☆ Favoritar';
-  const history=document.getElementById('musicHistory');if(history)history.innerHTML=(musicState?.history||[]).slice(0,10).map((t,i)=>`<div class="music-mini-track"><img src="${escapeHtml(t.thumbnail||`https://i.ytimg.com/vi/${t.videoId}/hqdefault.jpg`)}"><span><strong>${escapeHtml(t.title||'YouTube')}</strong><small>${new Date(t.playedAt||Date.now()).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</small></span></div>`).join('')||'<div class="music-message">Nenhuma música tocada ainda.</div>';
-  const fav=document.getElementById('musicFavorites');if(fav)fav.innerHTML=(musicProfileData.favorites||[]).map(t=>`<div class="music-mini-track"><img src="${escapeHtml(t.thumbnail||`https://i.ytimg.com/vi/${t.videoId}/hqdefault.jpg`)}"><span><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(t.channel||'YouTube')}</small></span><button class="icon-btn" onclick="addFavoriteToQueue('${t.videoId}')">+</button></div>`).join('')||'<div class="music-message">Você ainda não favoritou músicas.</div>';
+  const history=document.getElementById('musicHistory');if(history)history.innerHTML=(musicState?.history||[]).slice(0,10).map((t,i)=>`<div class="music-mini-track"><img src="${escapeHtml(t.thumbnail||`https://i.ytimg.com/vi/${t.videoId}/hqdefault.jpg`)}"><span><strong>${escapeHtml(t.title||'YouTube')}</strong><small>${new Date(t.playedAt||Date.now()).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</small></span><div class="music-mini-actions"><button class="icon-btn" title="Favoritar na minha conta" onclick="toggleFavoriteTrack('${t.videoId}')">${isFavoriteTrack(t)?'★':'☆'}</button><button class="icon-btn" title="Adicionar novamente" onclick="addTrackFromHistory('${t.videoId}')">+</button></div></div>`).join('')||'<div class="music-message">Nenhuma música tocada ainda.</div>';
+  const fav=document.getElementById('musicFavorites');if(fav)fav.innerHTML=(musicProfileData.favorites||[]).map(t=>`<div class="music-mini-track"><img src="${escapeHtml(t.thumbnail||`https://i.ytimg.com/vi/${t.videoId}/hqdefault.jpg`)}"><span><strong>${escapeHtml(t.title)}</strong><small>${escapeHtml(t.channel||'YouTube')} • salvo na sua conta</small></span><div class="music-mini-actions"><button class="icon-btn" title="Adicionar à fila" onclick="addFavoriteToQueue('${t.videoId}')">+</button><button class="icon-btn" title="Remover dos favoritos" onclick="toggleFavoriteTrack('${t.videoId}')">×</button></div></div>`).join('')||'<div class="music-message">Você ainda não favoritou músicas.</div>';
   const presets=document.getElementById('musicPresets');if(presets)presets.innerHTML=(musicProfileData.presets||[]).map(pl=>`<div class="music-preset-row"><span><strong>${escapeHtml(pl.name)}</strong><small>${pl.tracks?.length||0} músicas</small></span>${room.ownerId===state.user.id?`<button class="btn btn-secondary btn-sm" onclick="applyRoomPlaylist('${pl.id}')">Carregar</button>`:''}<button class="icon-btn" onclick="deleteRoomPlaylist('${pl.id}')">×</button></div>`).join('')||'<div class="music-message">Nenhuma playlist salva.</div>';
 }
 
@@ -717,6 +772,7 @@ function renderDynamic(){
           <span><strong>${escapeHtml(item.title)}</strong><small>por ${escapeHtml(item.addedBy)}${index===musicState.currentIndex?' • TOCANDO AGORA':''}</small></span>
         </button>
         <div class="music-queue-actions">
+          <button class="icon-btn music-favorite-row" title="Salvar nos meus favoritos" onclick="toggleFavoriteTrack('${item.videoId}')">${isFavoriteTrack(item)?'★':'☆'}</button>
           <button class="icon-btn" title="Subir" onclick="moveMusic(${index},-1)">↑</button>
           <button class="icon-btn" title="Descer" onclick="moveMusic(${index},1)">↓</button>
           <button class="icon-btn" title="Remover" onclick="removeMusic(${index})">×</button>
@@ -962,6 +1018,8 @@ window.moveMusic=moveMusic;
 window.toggleMusicLock=toggleMusicLock;
 window.leaveMusicRoom=leaveMusicRoom;
 window.toggleCurrentFavorite=toggleCurrentFavorite;
+window.toggleFavoriteTrack=toggleFavoriteTrack;
+window.addTrackFromHistory=addTrackFromHistory;
 window.addFavoriteToQueue=addFavoriteToQueue;
 window.saveRoomPlaylist=saveRoomPlaylist;
 window.applyRoomPlaylist=applyRoomPlaylist;
