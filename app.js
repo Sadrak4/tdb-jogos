@@ -33,15 +33,13 @@ const state = {
   botReturnRoom: null,
   notifiedInviteIds: new Set(),
   inviteToastTimer: null,
-  socialParty: null,
-  partyInvites: [],
   knownRoomPlayers: new Set(),
   connectionStates: new Map()
 };
 
 
 window.addEventListener('tdb-online-sync',event=>{
-  if(Core.mode!=='online') return;
+  if(Core.mode!=='online'||window.__TDB_EXPLICIT_LOGOUT__===true) return;
 
   const syncKind=event.detail?.kind||'general';
   state.rooms=Core.rooms.list();
@@ -79,7 +77,7 @@ window.addEventListener('tdb-online-sync',event=>{
     if(state.view==='game') patchGameRooms();
   }
 
-  if(['social','friends','invites','party','presence'].includes(syncKind) && state.user){
+  if(['social','friends','invites','presence'].includes(syncKind) && state.user){
     refreshSocialData(false);
   }
 
@@ -133,6 +131,7 @@ const OnlineGameBridge={
 window.OnlineGameBridge=OnlineGameBridge;
 
 window.addEventListener('tdb-game-state',event=>{
+  if(window.__TDB_EXPLICIT_LOGOUT__===true)return;
   const {roomCode,state:gameState}=event.detail||{};
   if(!gameState || roomCode!==OnlineGameBridge.roomCode) return;
 
@@ -152,7 +151,7 @@ const games = {
   truco: { name: 'Truco', symbol: '🃏', subtitle: 'Blefe, parceria e resenha.', players: 4, minPlayers: 2, prefix: 'TRC' },
   blackjack: { name: 'Blackjack', symbol: '♠️', subtitle: 'Mesa premium contra dealer automático.', players: 3, minPlayers: 1, prefix: 'BLJ' },
   chess: { name: 'Xadrez', symbol: '♟️', subtitle: 'Partidas rápidas 1x1 entre amigos.', players: 2, minPlayers: 2, prefix: 'XDR' },
-  music: { name: 'TDB Music', symbol: '🎵', subtitle: 'Ouça YouTube em uma fila compartilhada.', players: 20, minPlayers: 1, prefix: 'MUS' }
+  music: { name: 'TDB Lounge', symbol: '◈', subtitle: 'Música, chat e compartilhamento de tela em uma sala.', players: 20, minPlayers: 1, prefix: 'MUS' }
 };
 
 Core.sound.setEnabled(state.settings.sound);
@@ -280,29 +279,10 @@ function lobbyPulseHtml(){
   const friendsPlaying=state.friends.filter(f=>/^(Jogando|Ouvindo|Na sala)/.test(f.status||'')).length;
   return `<div class="lobby-pulse" id="lobbyPulse"><article><span>Jogadores online</span><strong>${online}</strong></article><article><span>Salas abertas</span><strong>${open}</strong></article><article><span>Amigos ativos</span><strong>${friendsPlaying}</strong></article></div>`;
 }
-function partyPanelHtml(){
-  const party=state.socialParty,invites=state.partyInvites||[];
-  if(!party&&!invites.length)return `<div class="party-panel"><div class="party-panel-head"><div><strong>Grupo / Party</strong><small class="muted">Junte até 4 amigos antes de escolher o jogo.</small></div><button class="btn btn-secondary btn-sm" onclick="createParty()">Criar grupo</button></div></div>`;
-  const inviteHtml=invites.map(i=>`<div class="party-call"><b>${escapeHtml(i.from?.username||'Amigo')}</b> convidou você para um grupo. <button class="link-btn" onclick="respondPartyInvite('${i.id}',true)">Aceitar</button> <button class="link-btn" onclick="respondPartyInvite('${i.id}',false)">Recusar</button></div>`).join('');
-  if(!party)return `<div class="party-panel"><div class="party-panel-head"><strong>Convites de grupo</strong></div>${inviteHtml}</div>`;
-  const members=(party.members||[]).map(m=>`<div class="party-member"><div class="avatar">${escapeHtml(m.avatar||initials(m.username))}</div><div><strong>${escapeHtml(m.username)}${m.id===party.leaderId?' 👑':''}</strong><small class="muted">${escapeHtml(m.id)}</small></div></div>`).join('');
-  return `<div class="party-panel"><div class="party-panel-head"><div><strong>Seu grupo • ${(party.members||[]).length}/4</strong><small class="muted">${party.isLeader?'Você é o líder.':'Acompanhe o líder para a próxima sala.'}</small></div><div>${party.isLeader?'<button class="btn btn-secondary btn-sm" onclick="openInvitePartyModal()">Convidar</button>':''} <button class="btn btn-dark btn-sm" onclick="leaveParty()">Sair</button></div></div><div class="party-members">${members}</div>${party.roomCode?`<div class="party-call">O líder está em <b>${escapeHtml(party.roomName||party.roomCode)}</b> • ${escapeHtml(games[party.game]?.name||party.game||'Sala')} <button class="btn btn-primary btn-sm" onclick="followPartyRoom('${escapeHtml(party.roomCode)}')">Acompanhar</button></div>`:''}${inviteHtml}</div>`;
-}
-async function createParty(){try{await window.TDBOnline.partyAction({type:'CREATE'});await refreshSocialData(false);if(state.view==='lobby')renderLobby()}catch(err){toast(err.message||'Não foi possível criar o grupo.')}}
-async function leaveParty(){try{await window.TDBOnline.partyAction({type:'LEAVE'});state.socialParty=null;await refreshSocialData(false);if(state.view==='lobby')renderLobby()}catch(err){toast(err.message||'Não foi possível sair do grupo.')}}
-async function inviteToParty(userId){try{await window.TDBOnline.partyAction({type:'INVITE',userId});toast('Convite de grupo enviado.');await refreshSocialData(false)}catch(err){toast(err.message||'Não foi possível convidar para o grupo.')}}
-async function respondPartyInvite(inviteId,accept){try{await window.TDBOnline.partyAction({type:'RESPOND',inviteId,accept});await refreshSocialData(false);if(state.view==='lobby')renderLobby();toast(accept?'Você entrou no grupo.':'Convite de grupo recusado.')}catch(err){toast(err.message||'Não foi possível responder ao convite.')}}
-async function setPartyRoomIfLeader(room){if(!state.socialParty?.isLeader||!room?.code)return;try{await window.TDBOnline.partyAction({type:'SET_ROOM',roomCode:room.code});await refreshSocialData(false)}catch(err){console.warn('[Party room]',err)}}
-function followPartyRoom(code){state.selectedGame=getRoomByCode(code)?.game||state.selectedGame;requestJoinRoom(code)}
-function openInvitePartyModal(){
-  document.getElementById('partyInviteModal')?.remove();
-  const available=state.friends.filter(f=>!(state.socialParty?.members||[]).some(m=>m.id===f.id));
-  const el=document.createElement('div');el.className='modal-backdrop';el.id='partyInviteModal';el.innerHTML=`<div class="modal"><div class="modal-head"><h3>Convidar para o grupo</h3><button class="icon-btn" onclick="document.getElementById('partyInviteModal').remove()">×</button></div><div class="modal-body"><div class="invite-friend-list">${available.length?available.map(f=>`<div class="social-row"><div class="avatar">${escapeHtml(f.avatar||initials(f.username))}</div><div><strong>${escapeHtml(f.username)}</strong><small>${escapeHtml(f.status||'Offline')}</small></div><button class="btn btn-primary btn-sm" onclick="inviteToParty('${f.id}')">Convidar</button></div>`).join(''):'<div class="muted">Nenhum amigo disponível para convidar.</div>'}</div></div></div>`;document.body.appendChild(el);
-}
 function openFriendQuickProfile(id){
   const f=state.friends.find(x=>x.id===id);if(!f)return;
   document.getElementById('friendQuickModal')?.remove();
-  const el=document.createElement('div');el.className='modal-backdrop';el.id='friendQuickModal';el.innerHTML=`<div class="modal"><div class="modal-head"><h3>${escapeHtml(f.username)}</h3><button class="icon-btn" onclick="document.getElementById('friendQuickModal').remove()">×</button></div><div class="modal-body"><div class="profile-card"><div class="profile-avatar-xl">${escapeHtml(f.avatar||initials(f.username))}</div><h2>${escapeHtml(f.username)}</h2><div class="code-box">${escapeHtml(f.id)}</div><p class="muted">${escapeHtml(f.status||'Offline')}</p></div></div><div class="modal-foot">${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${f.id}')">Convidar para minha sala</button>`:''}<button class="btn btn-secondary" onclick="inviteToParty('${f.id}')">Convidar para grupo</button></div></div>`;document.body.appendChild(el);
+  const el=document.createElement('div');el.className='modal-backdrop';el.id='friendQuickModal';el.innerHTML=`<div class="modal"><div class="modal-head"><h3>${escapeHtml(f.username)}</h3><button class="icon-btn" onclick="document.getElementById('friendQuickModal').remove()">×</button></div><div class="modal-body"><div class="profile-card"><div class="profile-avatar-xl">${escapeHtml(f.avatar||initials(f.username))}</div><h2>${escapeHtml(f.username)}</h2><div class="code-box">${escapeHtml(f.id)}</div><p class="muted">${escapeHtml(f.status||'Offline')}</p></div></div><div class="modal-foot">${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${f.id}')">Convidar para minha sala</button>`:''}</div></div>`;document.body.appendChild(el);
 }
 function copyRoomInvite(code){
   const text=`Entre na sala ${code} do TDB JOGOS`;
@@ -491,7 +471,7 @@ function renderAuth(mode='login'){
       <div class="auth-copy">
         <h1>A espera ficou<br>mais divertida.</h1>
         <p>Truco, Xadrez, Blackjack e música em um só lugar. Entre com a galera e transforme aqueles minutos de fila em uma partida.</p>
-        <div class="pill-row"><span class="pill">Truco</span><span class="pill">Blackjack</span><span class="pill">Xadrez</span><span class="pill">TDB Music</span></div>
+        <div class="pill-row"><span class="pill">Truco</span><span class="pill">Blackjack</span><span class="pill">Xadrez</span><span class="pill">TDB Lounge</span></div>
       </div>
     </aside>
     <section class="auth-panel">
@@ -528,7 +508,9 @@ function renderAuth(mode='login'){
           const user=await window.TDBAuthOnline.register(username,password,null);
           saveSession(user);
           state.user=user;
+          window.__TDB_EXPLICIT_LOGOUT__=false;
           window.TDBSound?.play?.('success',{channel:'auth-success',dedupeMs:120});
+          await window.TDBOnline?.resume?.();
           await window.TDBOnline?.refreshSnapshot?.();
           setTimeout(renderLobby,120);
           return;
@@ -552,7 +534,9 @@ function renderAuth(mode='login'){
         const user=await window.TDBAuthOnline.login(username,password);
         saveSession(user);
         state.user=user;
+        window.__TDB_EXPLICIT_LOGOUT__=false;
         window.TDBSound?.play?.('success',{channel:'auth-success',dedupeMs:120});
+        await window.TDBOnline?.resume?.();
         await window.TDBOnline?.refreshSnapshot?.();
         setTimeout(()=>{
           if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===user.id)) renderWaitingRoom();
@@ -682,13 +666,11 @@ function patchLobbyDynamic(){
   const gamesBox=document.getElementById('lobbyGameGrid');
   const friends=document.getElementById('lobbyFriendsGrid');
   const pulse=document.getElementById('lobbyPulseWrap');
-  const party=document.getElementById('lobbyPartyWrap');
 
   if(live) live.innerHTML=renderLiveMatches();
   if(gamesBox) gamesBox.innerHTML=gameCard('truco')+gameCard('blackjack')+gameCard('chess')+gameCard('music');
   if(friends) friends.innerHTML=state.friends.slice(0,3).map(friendCard).join('');
   if(pulse) pulse.innerHTML=lobbyPulseHtml();
-  if(party) party.innerHTML=partyPanelHtml();
 }
 
 function visibleRoomsForSelectedGame(){
@@ -731,7 +713,7 @@ function waitingHostActions(room){
   if(room.game==='blackjack'){
     return `<button class="btn btn-primary" onclick="startGame()">Abrir mesa de Blackjack</button>`;
   }
-  if(room.game==='music')return `<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Music</button>`;
+  if(room.game==='music')return `<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Lounge</button>`;
   return `<button class="btn btn-primary" ${startDisabled} onclick="startGame()">Iniciar partida</button>`;
 }
 
@@ -778,10 +760,9 @@ function renderLobby(){
     <div class="hero-strip">
       <span class="eyebrow">TDB JOGOS</span>
       <h1>A espera ficou mais divertida.</h1>
-      <p>Escolha um jogo, encontre uma sala ou crie a sua. Agora com grupos, status ao vivo e salas mais sociais.</p>
+      <p>Escolha um jogo, encontre uma sala ou crie a sua. Status ao vivo, salas sociais e partidas entre amigos.</p>
     </div>
     <div id="lobbyPulseWrap">${lobbyPulseHtml()}</div>
-    <div id="lobbyPartyWrap">${partyPanelHtml()}</div>
     <div class="section-title"><div><h2>Partidas ao vivo</h2><p>Assista sem interferir na partida.</p></div></div>
     <div class="live-grid" id="lobbyLiveGrid">${renderLiveMatches()}</div>
     <div class="section-title"><div><h2>Escolha um jogo</h2><p>As salas ficam dentro de cada jogo.</p></div></div>
@@ -906,7 +887,7 @@ function drawGamePage(){
       </div>
       <aside class="panel side-info"><div class="panel-header"><h2>Como funciona</h2></div><div class="panel-body">
         <h3>Salas abertas</h3><p>Você pode entrar enquanto houver vaga. A sala pode ser pública, somente amigos, somente convite ou protegida por senha.</p>
-        <h3 style="margin-top:22px;">${key==='chess'?'Xadrez Tradicional':key==='blackjack'?'Blackjack TDB':key==='music'?'Sala compartilhada':'Em andamento'}</h3><p>${key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='blackjack'?'Até 3 jogadores contra o dealer. Pedir, parar, dobrar e separar, com entrada durante a rodada para jogar na próxima.':key==='music'?'Todos adicionam vídeos do YouTube na fila e compartilham os controles da sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
+        <h3 style="margin-top:22px;">${key==='chess'?'Xadrez Tradicional':key==='blackjack'?'Blackjack TDB':key==='music'?'TDB Lounge':'Em andamento'}</h3><p>${key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='blackjack'?'Até 3 jogadores contra o dealer. Pedir, parar, dobrar e separar, com entrada durante a rodada para jogar na próxima.':key==='music'?'Música compartilhada, chat e transmissão de tela opcional na mesma sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
         <h3 style="margin-top:22px;">Seu jogo</h3><ul><li>Crie uma sala.</li><li>Compartilhe o código.</li><li>Convide amigos.</li></ul>
       </div></aside>
     </div>
@@ -922,7 +903,7 @@ function roomRow(room){
   const ownerLabel=empty?'Sala vazia':`Host: ${escapeHtml(room.owner||'—')}`;
   const spectators=(room.spectators||[]).length;
   return `<div class="room-row ${empty?'room-empty-grace':''}">
-    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • ${ownerLabel} ${room.privacy==='private'?'🔒':room.privacy==='friends'?'👥':room.privacy==='invite'?'✉️':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='music'?' • 🎵 compartilhada':room.game==='blackjack'?' • até 3 vs dealer':''}${empty&&emptyLeft?` • expira em ~${emptyLeft} min`:''}</span></div>
+    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • ${ownerLabel} ${room.privacy==='private'?'🔒':room.privacy==='friends'?'👥':room.privacy==='invite'?'✉️':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='music'?' • ◈ Lounge':room.game==='blackjack'?' • até 3 vs dealer':''}${empty&&emptyLeft?` • expira em ~${emptyLeft} min`:''}</span></div>
     <div class="room-stat"><strong>${room.players?.length||0}/${cap}</strong><span>${room.game==='music'?'Ouvintes':`Jogadores${spectators?` • 👁 ${spectators}`:''}`}</span></div>
     <div><span class="badge ${open?'open':'playing'}">${empty?'Vazia':room.game==='music'?(open?'Aberta':'Tocando'):room.game==='blackjack'?(open?'Aberta':'Rodada em andamento'):open?'Aberta':'Em andamento'}</span></div>
     <button class="btn ${joinable?'btn-primary':watchable?'btn-secondary':'btn-dark'}" ${joinable?`onclick="requestJoinRoom('${room.code}')"`:watchable?`onclick="watchRoom('${room.code}')"`:'disabled'}>${joinable?'Entrar':watchable?'Assistir':full?'Cheia':'Jogando'}</button>
@@ -1060,7 +1041,6 @@ async function createRoom(){
     const i=state.rooms.findIndex(r=>r.code===room.code);
     if(i>=0) state.rooms[i]=room; else state.rooms.push(room);
     saveActiveRoom(room);
-    setPartyRoomIfLeader(room);
     state.selectedGame=room.game;
     state.view=room.game==='music'?'music':'waiting';
     closeModal(); window.TDBSound?.play?.('roomJoin',{channel:'room-create',dedupeMs:120});
@@ -1085,7 +1065,6 @@ window.addEventListener('tdb-room-join-result',event=>{
 
   state.selectedGame=room.game;
   saveActiveRoom(room);
-  setPartyRoomIfLeader(room);
   closeModal();
 
   // Set the destination before realtime room updates can redraw the room list.
@@ -1151,7 +1130,6 @@ function joinRoom(code,password=''){
   }
 
   state.selectedGame=room.game;
-  setPartyRoomIfLeader(room);
   closeModal();
   window.TDBSound?.play?.('roomJoin',{channel:'room-join',dedupeMs:120});
 
@@ -1235,7 +1213,7 @@ function renderWaitingRoom(){
     room.game==='truco' ? ` • ${cap===2?'1x1':'2x2'}` :
     room.game==='chess' ? ` • 1x1 • ${room.chessClock?Math.floor(room.chessClock/60)+' min':'Sem relógio'}` :
     room.game==='blackjack' ? ` • até 3 jogadores • dealer automático` :
-    room.game==='music' ? ` • fila compartilhada` : '';
+    room.game==='music' ? ` • Lounge compartilhado` : '';
 
   const hostActions=waitingHostActions(room);
   const nonHostAction=waitingNonHostAction(room);
@@ -1293,12 +1271,12 @@ function leaveRoom(){
 
 function openMusicRoom(){
   const room=state.activeRoom;
-  if(!room || room.game!=='music') return toast('Entre em uma sala TDB Music primeiro.');
-  if(typeof window.startMusicRoom!=='function') return toast('Módulo TDB Music não carregou.');
+  if(!room || room.game!=='music') return toast('Entre em uma sala TDB Lounge primeiro.');
+  if(typeof window.startMusicRoom!=='function') return toast('Módulo TDB Lounge não carregou.');
 
   state.view='music';
 
-  // TDB Music is a persistent shared room, not a competitive match.
+  // TDB Lounge is a persistent shared room, not a competitive match.
   // Do not flip it between open/playing or re-upsert it just to open the player.
   if(Core.mode!=='online'){
     updateStoredRoom(room);
@@ -1309,9 +1287,9 @@ function openMusicRoom(){
   try{
     window.startMusicRoom(structuredClone(room));
   }catch(err){
-    console.error('[TDB Music] Falha ao abrir sala:',err);
+    console.error('[TDB Lounge] Falha ao abrir sala:',err);
     state.view='game';
-    toast('Não foi possível abrir o TDB Music. Tente novamente.');
+    toast('Não foi possível abrir o TDB Lounge. Tente novamente.');
   }
 }
 window.openMusicRoom=openMusicRoom;
@@ -1501,8 +1479,6 @@ async function refreshSocialData(render=true){
     const summary=await window.TDBOnline.socialSummary();
     state.friends=summary.friends||[];
     state.social={incoming:summary.incoming||[],outgoing:summary.outgoing||[],invites:summary.invites||[]};
-    state.socialParty=summary.party?.party||null;
-    state.partyInvites=summary.party?.invites||[];
     saveFriends();
 
     if(state.view==='lobby') patchLobbyDynamic();
@@ -1641,9 +1617,10 @@ function updateAudioSetting(key,value,output){
   if(output) output.textContent=`${state.settings[key]}%`;
   saveSettings();
 }
-function testCurrentAudio(){
+async function testCurrentAudio(){
   if(!state.settings.sound) return toast('Ative os sons primeiro.');
-  window.TDBSound?.play?.('success',{channel:'audio-test',dedupeMs:0});
+  const ok=await window.TDBSound?.test?.();
+  if(ok===false)toast('O navegador bloqueou o áudio. Clique novamente em Testar som.');
 }
 async function submitBugReport(){
   if(!window.TDBOnline?.connected) return toast('É preciso estar online para enviar um reporte.');
@@ -1656,7 +1633,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'6.0.1',
+      version:'6.1.0',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)
@@ -1670,21 +1647,32 @@ async function submitBugReport(){
   }finally{if(btn){btn.disabled=false;btn.textContent='Enviar reporte'}}
 }
 
-function logout(){
+async function logout(){
+  if(window.__TDB_EXPLICIT_LOGOUT__===true)return;
+  window.__TDB_EXPLICIT_LOGOUT__=true;
+  state.view='login';
+  clearTimeout(state.inviteToastTimer);
+  const leavingRoom=state.activeRoom&&!state.activeRoom.simulation?state.activeRoom.code:null;
   try{
-    exitActiveContext('logout');
-    if(state.user?.id) Core.presence.set(state.user.id,'offline');
-    if(location.protocol!=='file:' && window.TDBAuthOnline) window.TDBAuthOnline.logout();
-    Core.auth.setCurrentUser(null);
-    state.user=null;
-    saveActiveRoom(null);
-    renderAuth('login');
+    OnlineGameBridge.stop();
+    if(location.protocol!=='file:'&&leavingRoom&&window.TDBOnline?.connected){
+      try{await window.TDBOnline.leaveRoom(leavingRoom)}catch{}
+    }
+    if(state.user?.id){
+      try{Core.presence.set(state.user.id,'offline')}catch{}
+    }
+    window.TDBOnline?.suspend?.();
+    if(location.protocol!=='file:'&&window.TDBAuthOnline){
+      await window.TDBAuthOnline.logout();
+    }
   }catch(err){
-    console.error('[TDB JOGOS] Falha no logout:',err);
-    if(location.protocol!=='file:' && window.TDBAuthOnline) window.TDBAuthOnline.logout();
-    Core.auth.setCurrentUser(null);
-    state.user=null;
-    saveActiveRoom(null);
+    console.warn('[TDB JOGOS] Logout remoto:',err);
+  }finally{
+    clearLocalSessionState();
+    state.rooms=Core.rooms.list();
+    state.friends=[];
+    state.social={incoming:[],outgoing:[],invites:[]};
+    window.TDBPlatformUI?.hideLoading?.();
     renderAuth('login');
   }
 }
@@ -1715,6 +1703,7 @@ function clearLocalSessionState(){
 }
 
 async function bootAuthenticatedApp(){
+  if(location.hash==='#admin')return;
   if(__tdbSessionBooting) return;
   __tdbSessionBooting=true;
 
@@ -1764,7 +1753,7 @@ async function bootAuthenticatedApp(){
 }
 
 window.addEventListener('tdb-session-expired',event=>{
-  if(location.protocol==='file:') return;
+  if(location.protocol==='file:'||window.__TDB_EXPLICIT_LOGOUT__===true) return;
   clearLocalSessionState();
   renderAuth('login');
   setTimeout(()=>toast(event.detail?.message||'Sua sessão online expirou. Entre novamente.'),80);

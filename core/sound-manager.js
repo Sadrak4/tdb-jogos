@@ -4,15 +4,34 @@ let ctx=null;
 let masterEnabled=true;
 let volumes={master:.55,ui:.42,game:.50,notification:.48};
 const lastPlayed=new Map();
+const pendingSounds=[];
 
 function audioContext(){
   if(!ctx){
     const C=window.AudioContext||window.webkitAudioContext;
     if(!C)return null;
-    ctx=new C();
+    try{ctx=new C()}catch{return null}
   }
-  if(ctx.state==='suspended')ctx.resume().catch(()=>{});
   return ctx;
+}
+let unlockPromise=null;
+async function unlockAudio(){
+  const c=audioContext();
+  if(!c)return false;
+  if(c.state==='running')return true;
+  if(unlockPromise)return unlockPromise;
+  unlockPromise=(async()=>{
+    try{
+      await c.resume();
+      // Um buffer silencioso confirma o desbloqueio em navegadores mais rígidos.
+      const buffer=c.createBuffer(1,1,22050);
+      const source=c.createBufferSource();
+      source.buffer=buffer;source.connect(c.destination);source.start(0);
+      return c.state==='running';
+    }catch{return false}
+    finally{unlockPromise=null}
+  })();
+  return unlockPromise;
 }
 function clamp(v,min=0,max=1){return Math.max(min,Math.min(max,Number(v)||0))}
 function configure(next={}){
@@ -25,7 +44,7 @@ function categoryGain(category,volume=1){
   if(!masterEnabled)return 0;
   const cat=volumes[category]??volumes.ui;
   // Final ceiling intentionally low to avoid harsh/loud browser audio.
-  return Math.min(.045,.045*volumes.master*cat*clamp(volume,0,1.4));
+  return Math.min(.09,.09*volumes.master*cat*clamp(volume,0,1.4));
 }
 function dedupe(key,ms=28){
   const now=performance.now(),prev=lastPlayed.get(key)||0;
@@ -35,6 +54,7 @@ function dedupe(key,ms=28){
 function tone({frequency=440,duration=.055,volume=.75,type='sine',category='ui',delay=0,attack=.004}={}){
   const c=audioContext(),level=categoryGain(category,volume);
   if(!c||!level)return;
+  if(c.state!=='running'){unlockAudio().then(ok=>{if(ok)tone({frequency,duration,volume,type,category,delay,attack})});return;}
   const t=c.currentTime+Math.max(0,delay);
   const osc=c.createOscillator(),gain=c.createGain();
   osc.type=type;osc.frequency.setValueAtTime(frequency,t);
@@ -46,6 +66,7 @@ function tone({frequency=440,duration=.055,volume=.75,type='sine',category='ui',
 function noise({duration=.05,volume=.55,category='game',delay=0,highpass=500}={}){
   const c=audioContext(),level=categoryGain(category,volume);
   if(!c||!level)return;
+  if(c.state!=='running'){unlockAudio().then(ok=>{if(ok)noise({duration,volume,category,delay,highpass})});return;}
   const length=Math.max(1,Math.floor(c.sampleRate*duration));
   const buffer=c.createBuffer(1,length,c.sampleRate),data=buffer.getChannelData(0);
   for(let i=0;i<length;i++)data[i]=(Math.random()*2-1)*(1-i/length);
@@ -92,11 +113,31 @@ const presets={
   musicAdd:()=>sequence([{frequency:500},{frequency:670}],{duration:.05,volume:.38,type:'sine',category:'ui'}),
   musicRemove:()=>tone({frequency:250,duration:.055,volume:.35,type:'triangle',category:'ui'})
 };
+function queuePendingSound(name,options){
+  if(pendingSounds.length>=8)pendingSounds.shift();
+  pendingSounds.push({name,options:{...options,dedupeMs:0}});
+}
+function flushPendingSounds(){
+  if(!masterEnabled||!ctx||ctx.state!=='running'||!pendingSounds.length)return;
+  const items=pendingSounds.splice(0);
+  items.forEach((item,index)=>setTimeout(()=>{
+    const fn=presets[item.name]||presets.click;
+    try{fn(item.options)}catch{}
+  },index*28));
+}
 function play(name='click',options={}){
-  if(!masterEnabled)return;
-  if(!dedupe(`${name}:${options.channel||'default'}`,options.dedupeMs??28))return;
+  if(!masterEnabled)return false;
+  if(!dedupe(`${name}:${options.channel||'default'}`,options.dedupeMs??28))return false;
   const fn=presets[name]||presets.click;
-  try{fn(options)}catch{}
+  const c=audioContext();
+  if(!c)return false;
+  const run=()=>{try{fn(options);return true}catch{return false}};
+  if(c.state==='running')return run();
+  unlockAudio().then(ok=>{
+    if(ok){run();flushPendingSounds()}
+    else queuePendingSound(name,options);
+  });
+  return true;
 }
 function inferClick(el){
   const text=String(el.textContent||'').trim().toLowerCase();
@@ -111,7 +152,17 @@ document.addEventListener('pointerup',event=>{
   if(el.dataset.sound==='none')return;
   play(el.dataset.sound||inferClick(el),{channel:'ui-click',dedupeMs:36});
 },{passive:true});
-document.addEventListener('pointerdown',()=>audioContext(),{once:true,passive:true});
-document.addEventListener('keydown',()=>audioContext(),{once:true});
-window.TDBSound={play,tone,noise,sequence,configure,unlock:audioContext,get enabled(){return masterEnabled},get volumes(){return{...volumes}}};
+const unlockFromGesture=()=>{if(masterEnabled)unlockAudio().then(ok=>{if(ok)flushPendingSounds()})};
+document.addEventListener('pointerdown',unlockFromGesture,{passive:true,capture:true});
+document.addEventListener('pointerup',unlockFromGesture,{passive:true,capture:true});
+document.addEventListener('touchstart',unlockFromGesture,{passive:true,capture:true});
+document.addEventListener('keydown',unlockFromGesture,{capture:true});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&masterEnabled&&ctx)unlockAudio()});
+window.TDBSound={
+  play,tone,noise,sequence,configure,unlock:unlockAudio,
+  test:async()=>{const ok=await unlockAudio();if(ok)play('success',{channel:'audio-test-direct',dedupeMs:0});return ok},
+  get enabled(){return masterEnabled},
+  get state(){return ctx?.state||'not-created'},
+  get volumes(){return{...volumes}}
+};
 })();

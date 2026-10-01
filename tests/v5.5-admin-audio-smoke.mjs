@@ -29,7 +29,7 @@ assert('player report block exists',app.includes('Reportar bug ou erro')&&app.in
 assert('sound manager loads before app',index.indexOf('core/sound-manager.js')<index.indexOf('app.js'));
 assert('admin client loads before admin panel',index.indexOf('core/admin-client.js')<index.indexOf('admin-panel.js'));
 assert('single AudioContext manager exists',sound.includes('let ctx=null')&&sound.includes('function audioContext()'));
-assert('low audio ceiling exists',sound.includes('Math.min(.045'));
+assert('low audio ceiling exists',sound.includes('Math.min(.09'));
 assert('game sound presets exist',sound.includes('cardPlay')&&sound.includes('chessCapture')&&sound.includes('victory'));
 assert('audio sliders exist',app.includes('masterVolume')&&app.includes('uiVolume')&&app.includes('gameVolume'));
 assert('ping latency is exposed',client.includes('latencyMs')&&app.includes('onlinePingPill'));

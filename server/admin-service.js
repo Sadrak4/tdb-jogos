@@ -260,25 +260,87 @@ export async function updateReport(reportId,{status,adminNote}={}){
 
 export async function operations(){
   await initSupabase();
-  if(!isSupabaseReady())return{rooms:[],maintenance:{enabled:false},errorVersions:[]};
+
+  let maintenance={enabled:false,message:'TDB em manutenção • voltamos em breve'};
+  try{
+    maintenance=await getSharedValue('app:maintenance',maintenance)||maintenance;
+  }catch(err){
+    console.warn('[TDB ADM] leitura da manutenção:',err?.message||err);
+  }
+
+  if(!isSupabaseReady()){
+    return{
+      rooms:[],
+      maintenance,
+      errorVersions:[],
+      warnings:['Supabase indisponível: controles de manutenção continuam visíveis, mas dados operacionais podem estar incompletos.']
+    };
+  }
+
   const db=getSupabaseClient();
-  const [roomsRes,logsRes,maintenance]=await Promise.all([
+  const [roomsRes,logsRes]=await Promise.all([
     db.from('tdb_rooms').select('code,game,owner_id,status,privacy,data,updated_at').order('updated_at',{ascending:false}).limit(150),
-    db.from('tdb_error_logs').select('context,created_at').order('created_at',{ascending:false}).limit(500),
-    getSharedValue('app:maintenance',{enabled:false,message:'TDB em manutenção • voltamos em breve'})
+    db.from('tdb_error_logs').select('context,created_at').order('created_at',{ascending:false}).limit(500)
   ]);
-  if(roomsRes.error)throw new Error(roomsRes.error.message);
-  if(logsRes.error)throw new Error(logsRes.error.message);
+
+  const warnings=[];
+  if(roomsRes.error)warnings.push(`Salas: ${roomsRes.error.message}`);
+  if(logsRes.error)warnings.push(`Logs: ${logsRes.error.message}`);
+
   const byVersion=new Map();
-  for(const row of logsRes.data||[]){const v=String(row.context?.version||'sem versão');byVersion.set(v,(byVersion.get(v)||0)+1)}
-  const errorVersions=[...byVersion.entries()].map(([version,count])=>({version,count})).sort((a,b)=>b.count-a.count);
-  const rooms=(roomsRes.data||[]).map(row=>({code:row.code,game:row.game,ownerId:row.owner_id,status:row.status,privacy:row.privacy,updated_at:row.updated_at,name:row.data?.name||row.code,players:row.data?.players?.length||0,spectators:row.data?.spectators?.length||0,emptyExpiresAt:row.data?.emptyExpiresAt||null}));
-  return{rooms,maintenance:maintenance||{enabled:false},errorVersions};
+  for(const row of logsRes.error?[]:(logsRes.data||[])){
+    const v=String(row.context?.version||'sem versão');
+    byVersion.set(v,(byVersion.get(v)||0)+1);
+  }
+  const errorVersions=[...byVersion.entries()]
+    .map(([version,count])=>({version,count}))
+    .sort((a,b)=>b.count-a.count);
+
+  const rooms=(roomsRes.error?[]:(roomsRes.data||[])).map(row=>({
+    code:row.code,
+    game:row.game,
+    ownerId:row.owner_id,
+    status:row.status,
+    privacy:row.privacy,
+    updated_at:row.updated_at,
+    name:row.data?.name||row.code,
+    players:row.data?.players?.length||0,
+    spectators:row.data?.spectators?.length||0,
+    emptyExpiresAt:row.data?.emptyExpiresAt||null
+  }));
+
+  return{rooms,maintenance,errorVersions,warnings};
 }
 
 export async function setMaintenance(enabled,message=''){
-  const value={enabled:!!enabled,message:String(message||'TDB em manutenção • voltamos em breve').slice(0,240),updatedAt:Date.now()};
+  await initSupabase();
+  if(process.env.VERCEL&&!isSupabaseReady()){
+    throw new Error('Supabase indisponível. Retome/conecte o projeto antes de alterar o modo manutenção.');
+  }
+
+  const value={
+    enabled:!!enabled,
+    message:String(message||'TDB em manutenção • voltamos em breve').trim().slice(0,240)||'TDB em manutenção • voltamos em breve',
+    updatedAt:Date.now(),
+    source:'admin'
+  };
+
   await setSharedValue('app:maintenance',value);
-  await audit(value.enabled?'maintenance_on':'maintenance_off',{details:value});
-  return value;
+
+  // Confirmação com pequenas tentativas para evitar falso erro após escrita no Supabase.
+  let stored=null;
+  for(let attempt=0;attempt<3;attempt++){
+    try{stored=await getSharedValue('app:maintenance',null)}catch{}
+    if(stored&&!!stored.enabled===value.enabled)break;
+    await new Promise(resolve=>setTimeout(resolve,90*(attempt+1)));
+  }
+
+  if(!stored||!!stored.enabled!==value.enabled){
+    throw new Error('A manutenção foi enviada, mas o servidor não conseguiu confirmar o novo estado.');
+  }
+
+  try{await audit(value.enabled?'maintenance_on':'maintenance_off',{details:stored})}
+  catch(err){console.warn('[TDB ADM] auditoria de manutenção:',err?.message||err)}
+
+  return stored;
 }

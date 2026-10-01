@@ -22,7 +22,20 @@ function ensureLayer(){
 }
 function showLoading(text='Sincronizando…',timeout=10000){ensureLayer();clearTimeout(loadingTimer);$('#tdbSyncText').textContent=text;$('#tdbSyncOverlay').classList.add('show');if(timeout)loadingTimer=setTimeout(hideLoading,timeout)}
 function hideLoading(){clearTimeout(loadingTimer);$('#tdbSyncOverlay')?.classList.remove('show')}
-function setMaintenance(value={}){ensureLayer();const box=$('#tdbMaintenanceOverlay');if(value?.enabled){box.innerHTML=`<div><img src="assets/logo-transparent.png" alt=""><span>MANUTENÇÃO</span><h1>${esc(value.message||'TDB em manutenção • voltamos em breve')}</h1><p>Seu login continua seguro. Partidas e salas ficam bloqueadas até a manutenção terminar.</p></div>`;box.classList.add('show')}else box.classList.remove('show')}
+function setMaintenance(value={}){
+  ensureLayer();
+  const box=$('#tdbMaintenanceOverlay');
+  // O painel ADM precisa permanecer totalmente utilizável para conseguir
+  // desligar a manutenção depois que ela for ativada.
+  if(location.hash==='#admin'){
+    box.classList.remove('show');
+    return;
+  }
+  if(value?.enabled){
+    box.innerHTML=`<div><img src="assets/logo-transparent.png" alt=""><span>MANUTENÇÃO</span><h1>${esc(value.message||'TDB em manutenção • voltamos em breve')}</h1><p>Seu login continua seguro. Partidas e salas ficam bloqueadas até a manutenção terminar.</p></div>`;
+    box.classList.add('show');
+  }else box.classList.remove('show');
+}
 function isGameScreen(){return !!document.querySelector('.blackjack-page,.chess-page,.truco-game,.truco-table,.music-page,.spectator-placeholder')}
 function refreshDock(){ensureLayer();const r=room(),dock=$('#tdbGameDock');if(!r||!isGameScreen()){dock.classList.remove('show');return}const spectators=(r.spectators||[]).length;dock.innerHTML=`<button onclick="TDBPlatformUI.toggleFullscreen()" title="Tela cheia">⛶</button><button onclick="TDBPlatformUI.openSocial()" title="Chat e reações">💬</button><span>👁 ${spectators}</span>`;dock.classList.add('show')}
 function toggleFullscreen(){if(!document.fullscreenElement){document.body.classList.add('tdb-game-focus');document.documentElement.requestFullscreen?.();}else{document.body.classList.remove('tdb-game-focus');document.exitFullscreen?.();}}
@@ -38,6 +51,7 @@ function tick(){applyGraphics();refreshDock();refreshReconnect()}
 window.addEventListener('tdb-online-status',e=>{setMaintenance(e.detail?.maintenance||{enabled:false});if(e.detail?.phase==='reconnecting')showLoading('Reconectando…',3500);else if(e.detail?.connected)hideLoading()});
 window.addEventListener('tdb-maintenance',e=>setMaintenance(e.detail||{enabled:true}));
 window.addEventListener('tdb-room-feed-update',e=>{if(room()?.code===e.detail?.roomCode)refreshFeed()});
+window.addEventListener('hashchange',()=>setMaintenance(window.TDBOnline?.maintenance||{enabled:false}));
 window.addEventListener('storage',applyGraphics);document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)document.body.classList.remove('tdb-game-focus')});
 new MutationObserver(()=>setTimeout(refreshDock,10)).observe(document.getElementById('app'),{childList:true,subtree:false});
 setInterval(tick,1000);reconnectTimer=setInterval(refreshReconnect,1000);

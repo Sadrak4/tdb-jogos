@@ -95,6 +95,6 @@ assert('Disconnect flow keeps 90-second reconnect window',maintenance.includes('
 assert('Reconnect service restores the player as online',maintenance.includes("p.connection='online'")&&maintenance.includes('delete p.reconnectUntil'));
 assert('Return-to-room lifecycle no longer carries ready state',!gameService.includes("ready:room.game==='music'"));
 assert('Fresh game starts without ready flags',!start.includes("some(p=>!p.ready)"));
-assert('Party caps coordinated clients at four',platform.includes('PARTY_MAX=4'));
+assert('Party is not part of the current platform build',!platform.includes('PARTY_MAX')&&!platform.includes('partyAction'));
 
 console.log('ALL V6.0 MULTI-CLIENT FLOW TESTS PASSED');

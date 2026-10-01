@@ -185,6 +185,18 @@
     {
       "source": "/api/admin/reports",
       "destination": "/api/router?route=admin/reports"
+    },
+    {
+      "source": "/api/platform/room-feed",
+      "destination": "/api/router?route=platform/room-feed"
+    },
+    {
+      "source": "/api/platform/music-profile",
+      "destination": "/api/router?route=platform/music-profile"
+    },
+    {
+      "source": "/api/admin/operations",
+      "destination": "/api/router?route=admin/operations"
     }
   ]
 }

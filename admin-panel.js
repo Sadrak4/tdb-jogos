@@ -105,8 +105,33 @@ async function renderLogs(type=adminState.logType){
     <div class="panel admin-log-list" id="adminLogList">${adminState.logs.length?adminState.logs.map(l=>logRow(l,type)).join(''):'<div class="empty-state">Nenhum log encontrado.</div>'}</div>`,'logs');
 }
 function applyLogFilters(){const version=document.getElementById('adminLogVersion')?.value||'all',days=document.getElementById('adminLogDate')?.value||'all';let rows=adminState.logs||[];if(version!=='all')rows=rows.filter(l=>String(l.context?.version||'')===version);if(days!=='all'){const cutoff=Date.now()-Number(days)*86400000;rows=rows.filter(l=>new Date(l.created_at).getTime()>=cutoff)}const box=document.getElementById('adminLogList');if(box)box.innerHTML=rows.length?rows.map(l=>logRow(l,adminState.logType)).join(''):'<div class="empty-state">Nenhum log neste filtro.</div>'}
-async function renderOperations(){adminState.operations=await A().operations();const o=adminState.operations||{},m=o.maintenance||{};root().innerHTML=shell(`<div class="admin-head"><div><h1>Operação</h1><p>Salas, manutenção e qualidade por versão.</p></div><span class="admin-status ${m.enabled?'bad':'good'}">${m.enabled?'MANUTENÇÃO ATIVA':'SISTEMA ONLINE'}</span></div><div class="panel admin-info-panel"><h2>Modo manutenção</h2><p class="muted">Bloqueia ações de jogo e sala, mas mantém login, status e painel administrativo acessíveis.</p><div class="admin-search"><input id="maintenanceMessage" value="${esc(m.message||'TDB em manutenção • voltamos em breve')}" maxlength="240"><button class="btn ${m.enabled?'btn-secondary':'btn-danger'}" onclick="TDBAdminUI.toggleMaintenance(${m.enabled?'false':'true'})">${m.enabled?'Desativar manutenção':'Ativar manutenção'}</button></div></div><div class="two-col"><div class="panel"><div class="panel-header"><h2>Salas recentes</h2><span>${(o.rooms||[]).length}</span></div><div class="panel-body admin-log-list">${(o.rooms||[]).map(r=>`<div class="admin-log-row"><time>${fmt(r.updated_at)}</time><span class="admin-log-source">${esc(r.game||'—')}</span><strong>${esc(r.name||r.code)}</strong><code>${esc(r.code)}</code><small>${r.players} jogador(es) • ${r.spectators} espectador(es) • ${esc(r.status)} • ${esc(r.privacy)}</small></div>`).join('')||'<div class="empty-state">Nenhuma sala.</div>'}</div></div><div class="panel"><div class="panel-header"><h2>Erros por versão</h2></div><div class="panel-body">${(o.errorVersions||[]).map(v=>`<div class="social-row"><strong>${esc(v.version)}</strong><span class="admin-status ${v.count>10?'bad':v.count>3?'warn':'good'}">${v.count} erro(s)</span></div>`).join('')||'<div class="empty-state">Sem erros recentes.</div>'}</div></div></div>`,'operations')}
-async function toggleMaintenance(enabled){const message=document.getElementById('maintenanceMessage')?.value||'';if(enabled&&!confirm('Ativar modo manutenção agora? Jogadores verão a tela de manutenção.'))return;try{await A().setMaintenance(enabled,message);adminToast(enabled?'Modo manutenção ativado.':'Modo manutenção desativado.');await renderOperations()}catch(err){adminToast(err.message,'error')}}
+async function renderOperations(){
+  adminState.operations=await A().operations();
+  const o=adminState.operations||{},m=o.maintenance||{};
+  const warnings=(o.warnings||[]).map(w=>`<div class="admin-operation-warning">${esc(w)}</div>`).join('');
+  root().innerHTML=shell(`<div class="admin-head"><div><h1>Operação</h1><p>Salas, manutenção e qualidade por versão.</p></div><span class="admin-status ${m.enabled?'bad':'good'}">${m.enabled?'MANUTENÇÃO ATIVA':'SISTEMA ONLINE'}</span></div>
+    ${warnings}
+    <div class="panel admin-info-panel"><h2>Modo manutenção</h2><p class="muted">Bloqueia ações de jogo e sala, mas mantém login, status e painel administrativo acessíveis.</p><div class="admin-search"><input id="maintenanceMessage" value="${esc(m.message||'TDB em manutenção • voltamos em breve')}" maxlength="240"><button id="maintenanceToggleBtn" class="btn ${m.enabled?'btn-secondary':'btn-danger'}" onclick="TDBAdminUI.toggleMaintenance(${m.enabled?'false':'true'})">${m.enabled?'Desativar manutenção':'Ativar manutenção'}</button></div><small class="muted">Estado confirmado pelo servidor: ${m.enabled?'ativo':'desativado'}${m.updatedAt?` • ${fmt(m.updatedAt)}`:''}</small></div>
+    <div class="two-col"><div class="panel"><div class="panel-header"><h2>Salas recentes</h2><span>${(o.rooms||[]).length}</span></div><div class="panel-body admin-log-list">${(o.rooms||[]).map(r=>`<div class="admin-log-row"><time>${fmt(r.updated_at)}</time><span class="admin-log-source">${esc(r.game||'—')}</span><strong>${esc(r.name||r.code)}</strong><code>${esc(r.code)}</code><small>${r.players} jogador(es) • ${r.spectators} espectador(es) • ${esc(r.status)} • ${esc(r.privacy)}</small></div>`).join('')||'<div class="empty-state">Nenhuma sala.</div>'}</div></div><div class="panel"><div class="panel-header"><h2>Erros por versão</h2></div><div class="panel-body">${(o.errorVersions||[]).map(v=>`<div class="social-row"><strong>${esc(v.version)}</strong><span class="admin-status ${v.count>10?'bad':v.count>3?'warn':'good'}">${v.count} erro(s)</span></div>`).join('')||'<div class="empty-state">Sem erros recentes.</div>'}</div></div></div>`,'operations')
+}
+async function toggleMaintenance(enabled){
+  const message=document.getElementById('maintenanceMessage')?.value||'';
+  if(enabled&&!confirm('Ativar modo manutenção agora? Jogadores comuns ficarão bloqueados até você desativar aqui.'))return;
+  const btn=document.getElementById('maintenanceToggleBtn');
+  if(btn){btn.disabled=true;btn.textContent=enabled?'Ativando…':'Desativando…'}
+  try{
+    const result=await A().setMaintenance(enabled,message);
+    const confirmed=!!result?.maintenance?.enabled===!!enabled;
+    if(!confirmed)throw new Error('O servidor não confirmou a alteração da manutenção.');
+    window.TDBPlatformUI?.setMaintenance?.({enabled:false});
+    adminToast(enabled?'Modo manutenção ativado. O ADM continua liberado para você.':'Modo manutenção desativado.');
+    await renderOperations();
+    await window.TDBOnline?.refreshHealth?.();
+  }catch(err){
+    if(btn){btn.disabled=false;btn.textContent=enabled?'Ativar manutenção':'Desativar manutenção'}
+    adminToast(err.message||'Não foi possível alterar a manutenção.','error');
+  }
+}
 async function openTab(tab){
   adminState.tab=tab;
   try{

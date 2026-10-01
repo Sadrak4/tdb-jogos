@@ -42,8 +42,8 @@ assert('Chess records animation after rendering',
 
 assert('Music has dedicated 6.0.1 responsive fix',
   musicCss.includes('v6.0.1 — Music responsive stability'));
-assert('Music desktop main uses three explicit rows',
-  musicCss.includes('minmax(118px,.78fr)')&&musicCss.includes('minmax(90px,.46fr)'));
+assert('Music v6.0.2 uses player plus always-visible library',
+  musicCss.includes('v6.0.2 — Music anti-flicker')&&musicCss.includes('grid-template-rows:minmax(0,auto) minmax(150px,1fr)'));
 assert('Music queue and history scroll inside their cards',
   musicCss.includes('#musicHistory')&&musicCss.includes('overflow-y:auto'));
 assert('Music controls wrap instead of disappearing',
@@ -60,6 +60,6 @@ assert('Music can favorite from queue/history',
 assert('Music favorite list says saved to account',
   music.includes('salvo na sua conta'));
 
-assert('Health reports 6.0.1',health.includes("version:'6.0.1'"));
+assert('Health reports current stable version',health.includes("version:'6.1.0'"));
 
 console.log('ALL V6.0.1 UX FIX TESTS PASSED');

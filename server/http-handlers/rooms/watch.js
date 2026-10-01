@@ -1,7 +1,6 @@
 import { getRoomPrivate,setRoomPrivate,backendStatus } from '../../realtime-store.js';
 import { requireApiUser,sendApiError } from '../../api-auth.js';
 import { areFriends,hasValidRoomInvite } from '../../social-service.js';
-import { partyCanFollowRoom } from '../../platform-service.js';
 
 function publicRoom(room){
   const copy=structuredClone(room);

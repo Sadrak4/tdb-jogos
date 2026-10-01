@@ -1,15 +1,59 @@
-# TDB JOGOS v6.0.1 — UX / MUSIC FIXES
+# TDB JOGOS v6.1 — TDB LOUNGE + SCREEN SHARE
 
-Esta versão é uma correção de experiência antes da próxima grande atualização gráfica.
+A antiga área **TDB Music** agora é **TDB Lounge**. O identificador interno continua `music` para preservar compatibilidade, mas a sala agora reúne música, chat e compartilhamento de tela.
 
-## Correções principais
+## Compartilhamento de tela
 
-- Truco joga a carta diretamente no clique.
-- Sistema `PRONTO` foi removido de todos os jogos e do backend.
-- Corrigida repetição infinita da animação da última jogada no Xadrez.
-- TDB Music recebeu correção responsiva para fila, histórico, player e controles em zoom 100%.
-- Favoritos do Music são persistentes por conta e armazenam a URL canônica do YouTube.
+- escolha tela inteira, janela ou aba pelo seletor nativo do navegador;
+- uma transmissão simultânea por Lounge nesta versão;
+- quem não clicar em **Visualizar transmissão** não recebe a mídia;
+- quem assiste pode fechar ou colocar em tela cheia sem afetar os demais;
+- áudio da aba/tela é incluído quando navegador e sistema oferecem a opção;
+- WebRTC transporta a mídia; Supabase é usado somente para sinalização;
+- STUN funciona por padrão e TURN pode ser configurado depois para redes corporativas/restritas.
+
+Não há SQL novo.
+
+---
+
+# TDB JOGOS v6.0.2 — STABILITY FIXES
+
+Esta é a última rodada de correções antes da atualização gráfica.
+
+## O que foi corrigido agora
+
+- Party/Grupo removido por enquanto.
+- Logout sem piscar a tela e sem falso aviso de sessão expirada.
+- Aba **Operação / manutenção** do ADM reforçada e desacoplada de consultas secundárias.
+- Manutenção agora confirma persistência antes de informar sucesso.
+- TDB Music recebeu nova proteção contra flicker da fila.
+- **Fila / Histórico / Favoritas** agora ficam na mesma biblioteca central.
+- Favoritos permanecem vinculados à conta e armazenam a URL canônica do YouTube.
+- Favoritos usam resposta visual imediata + confirmação do servidor.
+- Áudio global recebeu desbloqueio/rearme mais robusto para navegadores.
 - Nenhuma migração SQL nova.
+
+## Favoritos do TDB Music
+
+O armazenamento oficial usa uma chave por usuário:
+
+```text
+music-favorites:<TDB-ID>
+```
+
+A sala não é parte dessa chave. Portanto, trocar de sala não troca a coleção de favoritos da conta.
+
+O navegador mantém somente um cache por conta para abrir a interface rapidamente; o servidor continua sendo a fonte oficial.
+
+## Operação / manutenção
+
+A aba administrativa permanece utilizável durante manutenção. A ativação usa o armazenamento compartilhado do servidor e verifica a gravação antes de confirmar.
+
+Em produção, se o Supabase estiver pausado ou indisponível, o painel informa o problema em vez de mostrar um sucesso falso.
+
+## Banco
+
+Não há alteração de schema nesta versão.
 
 ---
 
@@ -27,13 +71,10 @@ A v6.0 transforma o TDB JOGOS em uma plataforma social mais completa sem reintro
 - modo espectador mais visível, com contagem e botão **Assistir** no lobby;
 - tela de `Entrando na sala`, `Sincronizando partida` e `Reconectando`.
 
-### Lobby, amigos e Party
+### Lobby e amigos
 - resumo do lobby com jogadores online, salas abertas e amigos ativos;
 - status detalhado de amigos: Truco, Xadrez, Blackjack, TDB Music, sala, ausente e offline;
 - perfil rápido do amigo com convite para sala;
-- Party de até 4 amigos;
-- líder pode anunciar a sala atual e os membros recebem opção para acompanhar;
-- Party pode acompanhar o líder inclusive em sala `Somente convite`, sem abrir acesso a terceiros.
 
 ### Chat e reações
 - chat de texto por sala;
@@ -72,7 +113,7 @@ A v6.0 transforma o TDB JOGOS em uma plataforma social mais completa sem reintro
 
 ## Banco de dados
 
-A v6.0 **não exige SQL novo**. Party, chat, reações, favoritos, playlists e manutenção usam estruturas/tabelas já existentes, principalmente `tdb_shared`.
+A linha v6 não exige SQL novo para chat, reações, favoritos, playlists e manutenção; esses recursos usam estruturas/tabelas já existentes, principalmente `tdb_shared`.
 
 ---
 

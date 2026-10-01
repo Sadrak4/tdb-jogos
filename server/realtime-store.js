@@ -311,8 +311,8 @@ export async function setSharedValue(key,value){
     if(error) throw new Error(error.message);
   }else MEMORY.shared.set(key,clone(value));
 
-  const roomCode=key.startsWith('game:')?key.slice(5):key.startsWith('music:')?key.slice(6):null;
-  const topic=key.startsWith('game:')?'game':key.startsWith('music:')?'music':'shared';
+  const roomCode=key.startsWith('game:')?key.slice(5):key.startsWith('music:')?key.slice(6):key.startsWith('screen:')?key.slice(7):null;
+  const topic=key.startsWith('game:')?'game':key.startsWith('music:')?'music':key.startsWith('screen:')?'screenshare':'shared';
   await emitEvent(topic,roomCode,'set');
   return value;
 }

@@ -1,0 +1,42 @@
+import fs from 'fs';
+function read(rel){return fs.readFileSync(new URL(`../${rel}`,import.meta.url),'utf8')}
+function assert(name,cond){if(!cond)throw new Error(`FAIL: ${name}`);console.log('OK',name)}
+const app=read('app.js');
+const registry=read('core/game-registry.js');
+const router=read('server/http-router.js');
+const online=read('core/online-client.js');
+const service=read('server/screen-share-service.js');
+const handler=read('server/http-handlers/platform/screen-share.js');
+const music=read('games/music/music.js');
+const screen=read('games/music/screen-share.js');
+const css=read('games/music/music.css');
+const realtime=read('server/realtime-store.js');
+const social=read('server/social-service.js');
+const index=read('index.html');
+const health=read('server/http-handlers/health.js');
+
+assert('TDB Music is visually renamed to TDB Lounge',app.includes("name: 'TDB Lounge'")&&registry.includes("name: 'TDB Lounge'"));
+assert('Lounge advertises music chat and screen share',app.includes('Música, chat e compartilhamento de tela'));
+assert('Screen share endpoint is registered',router.includes("['platform/screen-share',platformScreenShare]"));
+assert('Online client exposes screen share state/action',online.includes('screenShareState')&&online.includes('screenShareAction'));
+assert('Realtime recognizes screenshare topic',realtime.includes("key.startsWith('screen:')?'screenshare'"));
+assert('Server only allows screen share inside Lounge rooms',service.includes("room.game!=='music'"));
+assert('Only one broadcaster can own the room stream',service.includes('já está compartilhando a tela'));
+assert('Screen share uses account/room membership validation',service.includes('isMember(room,user.id)'));
+assert('Viewer only gets its own WebRTC offer',service.includes('selfViewer')&&service.includes('includeOffer:true'));
+assert('Broadcaster gets viewer answers',service.includes('includeAnswer:true'));
+assert('Default ICE config includes STUN',service.includes('stun:stun.l.google.com:19302'));
+assert('Optional TURN configuration is supported',service.includes('SCREEN_SHARE_TURN_URLS'));
+assert('Client uses getDisplayMedia',screen.includes('getDisplayMedia'));
+assert('User can choose not to watch without receiving stream',screen.includes('Visualizar transmissão')&&screen.includes("type:'WATCH'"));
+assert('Viewer can close independently',screen.includes('stopWatching'));
+assert('Broadcaster can stop for everybody',screen.includes('stopShare'));
+assert('Screen selection requests video and optional audio',screen.includes('audio:true')&&screen.includes('frameRate'));
+assert('Viewer has fullscreen action',screen.includes('requestFullscreen'));
+assert('Lounge mounts screen share UI',music.includes('loungeScreenSharePanel')&&music.includes('TDBScreenShare?.mount'));
+assert('Lounge stops screen share when leaving',music.includes('TDBScreenShare?.leaveRoom'));
+assert('Screen share client module is loaded',index.includes('games/music/screen-share.js'));
+assert('Screen share has dedicated responsive styling',css.includes('v6.1 — TDB Lounge / compartilhamento de tela'));
+assert('Friend status uses TDB Lounge name',social.includes('No TDB Lounge'));
+assert('Health reports 6.1.0',health.includes("version:'6.1.0'"));
+console.log('ALL V6.1 LOUNGE SCREEN SHARE STATIC TESTS PASSED');

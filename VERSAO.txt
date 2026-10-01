@@ -1,34 +1,34 @@
-TDB JOGOS v6.0.1 — UX / MUSIC FIXES
+TDB JOGOS v6.1 — TDB Lounge + Compartilhamento de Tela
 
-TRUCO
-- clicar na carta agora joga imediatamente
-- botão "Jogar carta" foi removido
-- para jogar escondida: clique em "Esconder carta" e depois escolha a carta
-- Mão de Ferro continua jogando escondido automaticamente
+TDB LOUNGE
+- TDB Music foi renomeado visualmente para TDB Lounge
+- o id interno continua `music` para preservar banco/lifecycle
+- música, chat e compartilhamento de tela ficam na mesma sala
 
-SISTEMA PRONTO
-- removido dos jogos e das salas
-- host pode iniciar assim que houver jogadores suficientes
-- Blackjack pode iniciar com 1 jogador
-- Xadrez exige 2 jogadores
-- Truco exige 2 ou 4 conforme a sala
-- requisito PRONTO removido também do backend, evitando erro HTTP ao iniciar Blackjack
+COMPARTILHAMENTO DE TELA
+- botão Compartilhar tela dentro do Lounge
+- navegador permite escolher monitor inteiro, janela ou aba
+- captura usa getDisplayMedia do navegador
+- áudio da tela/aba é enviado quando o navegador/sistema disponibiliza essa opção
+- somente 1 transmissão ativa por sala nesta primeira versão
+- quem não clicar em Visualizar transmissão não recebe o vídeo
+- viewer pode fechar sem encerrar a transmissão para os outros
+- transmissor vê quantidade de espectadores/solicitações
+- botão Tela cheia para quem assiste
+- ao parar pelo navegador ou pelo TDB, a transmissão encerra
+- se transmissor cair, heartbeat expira o estado automaticamente
 
-XADREZ
-- animação da última jogada toca apenas uma vez
-- selecionar/clicar em uma peça não reinicia a animação anterior
+TECNOLOGIA
+- WebRTC P2P para mídia
+- Supabase/tdb_shared apenas para sinalização, nunca para transportar vídeo
+- STUN público configurado por padrão
+- suporte opcional a TURN via variáveis de ambiente para redes restritas
 
-TDB MUSIC
-- layout responsivo refeito para não depender de zoom do navegador
-- player, controles, fila e histórico se ajustam automaticamente à altura disponível
-- fila compacta e rolável quando houver muitas músicas
-- histórico recente também é compacto e rolável
-- controles permanecem visíveis em notebooks/monitores baixos
-- favoritos ficam salvos por CONTA, não por sala
-- favorito salva URL canônica do YouTube
-- favoritos continuam disponíveis em outras salas/sessões da mesma conta
-- fila e histórico também possuem botão de favoritar
-- histórico permite adicionar a música novamente à fila
+TURN OPCIONAL
+SCREEN_SHARE_STUN_URLS
+SCREEN_SHARE_TURN_URLS
+SCREEN_SHARE_TURN_USERNAME
+SCREEN_SHARE_TURN_CREDENTIAL
 
 BANCO
-- nenhuma migração SQL nova necessária
+- nenhuma migração SQL nova

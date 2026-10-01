@@ -4,7 +4,6 @@ import {
 } from './realtime-store.js';
 import * as Auth from './auth-service.js';
 
-const PARTY_MAX=4;
 const ROOM_CHAT_MAX=50;
 const ROOM_REACTION_MAX=24;
 const MUSIC_FAVORITES_MAX=100;
@@ -16,9 +15,6 @@ function now(){return Date.now()}
 function cleanText(v,max=280){return String(v||'').trim().replace(/\s+/g,' ').slice(0,max)}
 function roomChatKey(code){return `roomchat:${String(code||'').toUpperCase()}`}
 function roomReactionKey(code){return `roomreactions:${String(code||'').toUpperCase()}`}
-function partyKey(id){return `party:${id}`}
-function partyMemberKey(userId){return `party-member:${userId}`}
-function partyInvitesKey(userId){return `party-invites:${userId}`}
 function musicFavoritesKey(userId){return `music-favorites:${userId}`}
 function musicPresetsKey(userId){return `music-presets:${userId}`}
 function musicStateKey(code){return `music:${String(code||'').toUpperCase()}`}
@@ -87,132 +83,6 @@ export async function sendRoomReaction(code,user,emoji){
   await setSharedValue(roomReactionKey(room.code),list.slice(-ROOM_REACTION_MAX));
   await emitEvent('roomfeed',room.code,'reaction');
   return entry;
-}
-
-async function getPartyMembership(userId){
-  const membership=await getSharedValue(partyMemberKey(userId),null);
-  return membership?.partyId||null;
-}
-async function getPartyById(id){
-  if(!id)return null;
-  const party=await getSharedValue(partyKey(id),null);
-  return party&&Array.isArray(party.members)?party:null;
-}
-async function saveParty(party){
-  party.updatedAt=now();
-  await setSharedValue(partyKey(party.id),party);
-  await emitEvent('party',party.roomCode||null,'update');
-  return party;
-}
-async function hydrateParty(party,userId){
-  if(!party)return null;
-  const invites=await getSharedValue(partyInvitesKey(userId),[]);
-  return{...clone(party),isLeader:party.leaderId===userId,invites:(Array.isArray(invites)?invites:[]).filter(i=>Number(i.expiresAt||0)>now())};
-}
-
-
-export async function partyCanFollowRoom(userId,roomCode,ownerId=null){
-  const partyId=await getPartyMembership(userId);
-  const party=await getPartyById(partyId);
-  if(!party)return false;
-  const code=String(roomCode||'').toUpperCase();
-  return party.roomCode===code
-    && (!ownerId||party.leaderId===ownerId)
-    && party.members.some(m=>m.id===userId);
-}
-
-export async function partySummaryForUser(userId){
-  const partyId=await getPartyMembership(userId);
-  const party=await getPartyById(partyId);
-  const invites=await getSharedValue(partyInvitesKey(userId),[]);
-  if(!party){
-    if(partyId)await setSharedValue(partyMemberKey(userId),null);
-    return{party:null,invites:(Array.isArray(invites)?invites:[]).filter(i=>Number(i.expiresAt||0)>now())};
-  }
-  return{party:await hydrateParty(party,userId),invites:(Array.isArray(invites)?invites:[]).filter(i=>Number(i.expiresAt||0)>now())};
-}
-
-export async function partyAction(user,action={}){
-  const type=String(action.type||'').toUpperCase();
-  const currentId=await getPartyMembership(user.id);
-  let party=await getPartyById(currentId);
-
-  if(type==='CREATE'){
-    if(party)return await hydrateParty(party,user.id);
-    const id=`PTY-${now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
-    party={id,leaderId:user.id,members:[safeUser(user)],roomCode:null,game:null,createdAt:now(),updatedAt:now()};
-    await setSharedValue(partyMemberKey(user.id),{partyId:id,joinedAt:now()});
-    await saveParty(party);
-    return await hydrateParty(party,user.id);
-  }
-
-  if(type==='INVITE'){
-    if(!party){
-      party=await partyAction(user,{type:'CREATE'});
-      party=await getPartyById(party.id);
-    }
-    if(party.leaderId!==user.id)throw new Error('Somente o líder do grupo pode convidar.');
-    if(party.members.length>=PARTY_MAX)throw new Error('O grupo já está cheio.');
-    const targetId=String(action.userId||'').toUpperCase();
-    if(!targetId||targetId===user.id)throw new Error('Jogador inválido.');
-    if(!(await areFriends(user.id,targetId)))throw new Error('Só é possível convidar amigos para o grupo.');
-    if(await getPartyMembership(targetId))throw new Error('Esse amigo já está em outro grupo.');
-    const target=await Auth.findUserById(targetId);
-    if(!target)throw new Error('Jogador não encontrado.');
-    const invites=await getSharedValue(partyInvitesKey(targetId),[]);
-    const list=(Array.isArray(invites)?invites:[]).filter(i=>Number(i.expiresAt||0)>now()&&i.partyId!==party.id);
-    list.push({id:`PIN-${now()}-${Math.random().toString(36).slice(2,7)}`,partyId:party.id,from:safeUser(user),expiresAt:now()+10*60*1000,createdAt:now()});
-    await setSharedValue(partyInvitesKey(targetId),list.slice(-12));
-    await emitEvent('party',null,'invite');
-    return await hydrateParty(party,user.id);
-  }
-
-  if(type==='RESPOND'){
-    const inviteId=String(action.inviteId||'');
-    const invites=await getSharedValue(partyInvitesKey(user.id),[]);
-    const list=Array.isArray(invites)?invites:[];
-    const invite=list.find(i=>i.id===inviteId&&Number(i.expiresAt||0)>now());
-    if(!invite)throw new Error('Convite de grupo não encontrado ou expirado.');
-    await setSharedValue(partyInvitesKey(user.id),list.filter(i=>i.id!==inviteId));
-    if(!action.accept){await emitEvent('party',null,'rejected');return null;}
-    if(await getPartyMembership(user.id))throw new Error('Você já está em um grupo.');
-    party=await getPartyById(invite.partyId);
-    if(!party)throw new Error('Esse grupo não existe mais.');
-    if(party.members.length>=PARTY_MAX)throw new Error('O grupo ficou cheio.');
-    party.members.push(safeUser(user));
-    await setSharedValue(partyMemberKey(user.id),{partyId:party.id,joinedAt:now()});
-    await saveParty(party);
-    return await hydrateParty(party,user.id);
-  }
-
-  if(type==='LEAVE'){
-    if(!party)return null;
-    party.members=party.members.filter(m=>m.id!==user.id);
-    await setSharedValue(partyMemberKey(user.id),null);
-    if(!party.members.length){
-      await setSharedValue(partyKey(party.id),null);
-      await emitEvent('party',null,'disband');
-      return null;
-    }
-    if(party.leaderId===user.id)party.leaderId=party.members[0].id;
-    await saveParty(party);
-    return null;
-  }
-
-  if(type==='SET_ROOM'){
-    if(!party)throw new Error('Você não está em um grupo.');
-    if(party.leaderId!==user.id)throw new Error('Somente o líder pode mover o grupo.');
-    const code=String(action.roomCode||'').toUpperCase();
-    if(code){
-      const room=await getRoomPrivate(code);
-      if(!room||!(room.players||[]).some(p=>p.id===user.id))throw new Error('Entre na sala antes de chamar o grupo.');
-      party.roomCode=room.code;party.game=room.game;party.roomName=room.name;
-    }else{party.roomCode=null;party.game=null;party.roomName=null;}
-    await saveParty(party);
-    return await hydrateParty(party,user.id);
-  }
-
-  throw new Error('Ação de grupo inválida.');
 }
 
 export async function musicProfile(user){

@@ -808,3 +808,235 @@
   gap:4px;
   align-items:center;
 }
+
+
+/* =========================================================
+   v6.0.2 — Music anti-flicker + always-visible library
+   ========================================================= */
+.music-library-head{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:7px;
+}
+.music-library-head h2{margin:0;font-size:17px}
+.music-library-head p{margin:2px 0 0;color:#777;font-size:9px}
+.music-library-tabs{
+  display:flex;
+  gap:5px;
+  flex:0 0 auto;
+}
+.music-library-tabs button{
+  border:1px solid rgba(255,255,255,.07);
+  background:#111;
+  color:#898989;
+  border-radius:9px;
+  padding:6px 9px;
+  cursor:pointer;
+  font:700 9px/1 inherit;
+  white-space:nowrap;
+}
+.music-library-tabs button b{
+  display:inline-grid;
+  place-items:center;
+  min-width:18px;
+  height:18px;
+  margin-left:4px;
+  border-radius:999px;
+  background:rgba(255,255,255,.05);
+  color:#bbb;
+  font-size:8px;
+}
+.music-library-tabs button.active{
+  border-color:rgba(220,177,61,.48);
+  background:rgba(220,177,61,.08);
+  color:#e0c276;
+}
+.music-library-panel{
+  display:none;
+  min-height:0;
+  flex:1 1 auto;
+  overflow:hidden;
+}
+.music-library-panel.active{
+  display:flex;
+  flex-direction:column;
+}
+.music-library-panel>.music-queue,
+.music-library-panel>.music-mini-list{
+  min-height:0;
+  height:100%;
+  max-height:none!important;
+  flex:1 1 auto;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  scrollbar-gutter:stable;
+}
+.music-queue-item{
+  animation:none!important;
+}
+.music-favorite-row.is-favorite,
+.music-mini-actions .is-favorite,
+#musicFavoriteBtn.is-favorite{
+  color:#f0c95e!important;
+  border-color:rgba(235,190,76,.36)!important;
+}
+@media (min-width:851px){
+  .music-main{
+    grid-template-rows:minmax(0,auto) minmax(150px,1fr)!important;
+    overflow:hidden!important;
+  }
+  .music-library-card{
+    min-height:0!important;
+    height:100%!important;
+    display:flex!important;
+    flex-direction:column!important;
+    overflow:hidden!important;
+  }
+  .music-player-card{
+    flex:0 0 auto!important;
+  }
+  .music-add-panel,
+  .music-sidebar{
+    min-height:0!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+  }
+}
+@media (min-width:851px) and (max-height:900px){
+  .music-player-wrap{
+    height:clamp(135px,23dvh,205px)!important;
+    min-height:125px!important;
+  }
+  .music-now-header{
+    grid-template-columns:48px minmax(0,1fr)!important;
+    gap:7px!important;
+    margin-bottom:4px!important;
+  }
+  .music-now-art{width:48px!important}
+  .music-now-copy h1{font-size:15px!important;margin:0!important}
+  .music-now-copy>p{font-size:8px!important;margin-bottom:2px!important}
+  .music-now-badges>span{font-size:6px!important;min-height:16px!important}
+  .music-progress{margin-top:4px!important}
+  .music-vote-progress{margin-top:3px!important;padding:3px 6px!important}
+  .music-controls{padding-top:4px!important;gap:4px!important}
+  .music-controls .btn{
+    padding:6px 7px!important;
+    font-size:9px!important;
+    min-height:30px;
+  }
+  .music-player-card{padding:7px 9px!important}
+  .music-library-card{padding:8px 9px!important}
+}
+@media (max-width:1100px) and (min-width:851px){
+  .music-main{
+    min-height:560px!important;
+    height:calc(100dvh - var(--topbar-h) - 18px)!important;
+    grid-template-rows:minmax(0,auto) minmax(180px,1fr)!important;
+  }
+  .music-add-panel{
+    grid-column:1/-1!important;
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    height:auto!important;
+    overflow:visible!important;
+  }
+}
+@media (max-width:620px){
+  .music-library-head{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+  .music-library-tabs{width:100%}
+  .music-library-tabs button{flex:1}
+}
+
+/* =========================================================
+   v6.1 — TDB Lounge / compartilhamento de tela
+   ========================================================= */
+.lounge-screen-share-block{
+  border-bottom-color:rgba(212,171,65,.20)!important;
+}
+.lounge-screen-share-panel{
+  display:grid;
+  gap:8px;
+}
+.lounge-share-state{
+  min-height:86px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:4px;
+  padding:11px;
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:12px;
+  background:linear-gradient(180deg,rgba(255,255,255,.025),rgba(255,255,255,.01));
+  text-align:center;
+}
+.lounge-share-state strong{font-size:11px;color:#ece4d0}
+.lounge-share-state>span:not(.lounge-screen-icon){font-size:9px;color:#777;line-height:1.45}
+.lounge-share-state.unavailable{border-color:rgba(205,96,96,.20)}
+.lounge-share-state.warning{border-color:rgba(219,177,65,.28);background:rgba(128,91,22,.08)}
+.lounge-screen-icon{font-size:25px;color:#d6b455;line-height:1}
+.lounge-share-live-head{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 9px;
+  border:1px solid rgba(222,176,68,.22);
+  border-radius:11px;
+  background:rgba(219,174,60,.055);
+}
+.lounge-share-live-head>div{min-width:0}
+.lounge-share-live-head strong{display:block;font-size:9px;color:#ebd08b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lounge-share-live-head small{display:block;margin-top:2px;color:#7f887f;font-size:8px;line-height:1.35}
+.lounge-live-dot{
+  width:9px;height:9px;border-radius:50%;flex:0 0 auto;
+  background:#e14a43;box-shadow:0 0 0 4px rgba(225,74,67,.10),0 0 12px rgba(225,74,67,.32);
+  animation:loungeLivePulse 1.35s ease-in-out infinite alternate;
+}
+@keyframes loungeLivePulse{from{opacity:.62;transform:scale(.92)}to{opacity:1;transform:scale(1.08)}}
+.lounge-screen-preview{
+  width:100%;aspect-ratio:16/9;object-fit:contain;
+  border-radius:10px;background:#020202;border:1px solid rgba(255,255,255,.06);
+}
+.lounge-share-buttons{display:grid;gap:6px}
+
+.lounge-screen-modal{
+  position:fixed;inset:0;z-index:10050;
+  display:none;place-items:center;padding:18px;
+  background:rgba(0,0,0,.78);backdrop-filter:blur(12px);
+}
+.lounge-screen-modal.visible{display:grid}
+.lounge-screen-window{
+  width:min(1280px,96vw);max-height:94vh;
+  display:grid;grid-template-rows:auto minmax(0,1fr);
+  overflow:hidden;border-radius:16px;
+  border:1px solid rgba(222,177,64,.36);
+  background:#070807;box-shadow:0 26px 90px rgba(0,0,0,.62);
+}
+.lounge-screen-window-head{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);
+  background:linear-gradient(180deg,#111311,#0b0c0b);
+}
+.lounge-screen-window-head span{display:block;color:#c79d3d;font-size:7px;font-weight:900;letter-spacing:.14em}
+.lounge-screen-window-head strong{display:block;margin-top:2px;color:#f0eadc;font-size:11px}
+.lounge-screen-window-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.lounge-screen-video-wrap{
+  position:relative;min-height:280px;background:#000;display:grid;place-items:center;overflow:hidden;
+}
+#loungeScreenRemoteVideo{width:100%;height:100%;max-height:calc(94vh - 54px);object-fit:contain;background:#000}
+.lounge-screen-remote-status{
+  position:absolute;inset:0;display:grid;place-items:center;
+  color:#d7bc76;font-size:12px;font-weight:800;letter-spacing:.08em;
+  background:radial-gradient(circle at 50% 50%,rgba(35,50,43,.24),rgba(0,0,0,.70));
+}
+
+@media(max-width:850px){
+  .lounge-screen-window{width:98vw;border-radius:12px}
+  .lounge-screen-window-head{align-items:flex-start}
+  .lounge-screen-video-wrap{min-height:210px}
+}
