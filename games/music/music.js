@@ -98,6 +98,8 @@ async function sendOnlineMusic(action){
   musicState=next;
   renderDynamic();
   syncPlayer();
+  if(action.type==='ADD_TRACK') window.TDBSound?.play?.('musicAdd',{channel:'music-action'});
+  if(action.type==='REMOVE') window.TDBSound?.play?.('musicRemove',{channel:'music-action'});
   return true;
 }
 
@@ -196,6 +198,7 @@ async function addYoutubeLink(){
 
   saveMusicState(next);
   if(input) input.value='';
+  window.TDBSound?.play?.('musicAdd',{channel:'music-action'});
   toast('Adicionado à fila.');
 }
 
@@ -438,6 +441,7 @@ async function removeMusic(index){
 
   next.changedAt=Date.now();
   saveMusicState(next);
+  window.TDBSound?.play?.('musicRemove',{channel:'music-action'});
 }
 
 

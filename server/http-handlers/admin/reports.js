@@ -1,0 +1,2 @@
+import * as Admin from '../../admin-service.js';import { requireAdmin,sendAdminError } from '../../admin-auth.js';
+export default async function handler(req,res){try{await requireAdmin(req);if(req.method==='GET'){return res.json({ok:true,reports:await Admin.listReports(req.query?.status||'all')})}if(req.method==='POST'){const report=await Admin.updateReport(req.body?.reportId,{status:req.body?.status,adminNote:req.body?.adminNote});return res.json({ok:true,report})}return res.status(405).json({error:'Método inválido'})}catch(err){sendAdminError(res,err)}}

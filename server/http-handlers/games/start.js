@@ -1,6 +1,7 @@
 import { getRoomPrivate,setRoomPrivate,backendStatus } from '../../realtime-store.js';
 import * as Games from '../../game-service.js';
 import { requireApiUser,sendApiError } from '../../api-auth.js';
+function publicRoom(room){const copy=structuredClone(room);copy.hasPassword=!!copy.password;delete copy.password;return copy}
 
 export default async function handler(req,res){
   if(req.method!=='POST') return res.status(405).json({error:'Método inválido'});
@@ -28,7 +29,7 @@ export default async function handler(req,res){
     const state=await Games.startGame(room);
     res.json({
       ok:true,
-      room,
+      room:publicRoom(room),
       state:Games.viewFor(state,user.id,'player'),
       serverTime:Date.now()
     });

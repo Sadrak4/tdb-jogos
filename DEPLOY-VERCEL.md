@@ -1,49 +1,28 @@
-# DEPLOY — TDB JOGOS v5.4
+# DEPLOY — TDB JOGOS v5.8 BLACKJACK PREMIUM
 
-## 1. Atualizar os arquivos
+## Supabase
 
-No computador onde está o repositório `Sadrak4/tdb-jogos`:
+A v5.7 não adiciona tabelas ou colunas novas.
 
-1. extraia `TDB-JOGOS-v5.4-GAMEPLAY-LIFECYCLE-FIX.zip`;
-2. abra a pasta clonada `tdb-jogos`;
-3. substitua os arquivos antigos pelos da v5.4.
+Se o schema da v5.5 já está aplicado e `/api/health` retorna `schemaReady:true`, não precisa executar SQL novamente.
 
-A pasta `api` deve conter somente:
+## Atualizar o projeto
 
-```text
-api/
-└── router.js
-```
-
-## 2. Supabase
-
-A v5.4 **não cria tabelas novas**.
-
-Se você já executou com sucesso o `SUPABASE-SCHEMA.sql` da v5.2, não precisa executar SQL novamente.
-
-Não apague nem recrie `tdb_users`, `tdb_sessions`, `tdb_friends` ou outras tabelas existentes.
-
-## 3. GitHub / Vercel
-
-No GitHub Desktop use:
+1. extraia `TDB-JOGOS-v5.7-BLACKJACK-PREMIUM.zip`;
+2. copie todo o conteúdo por cima da pasta clonada `tdb-jogos`;
+3. confirme que `api/` continua contendo apenas `router.js`;
+4. abra o GitHub Desktop;
+5. faça o commit:
 
 ```text
-TDB JOGOS v5.4 Gameplay Lifecycle Fix
+TDB JOGOS v5.6 Blackjack
 ```
 
-Depois:
+6. `Commit to main`;
+7. `Push origin`;
+8. aguarde o deploy automático da Vercel.
 
-`Commit to main` → `Push origin`
-
-Como a Vercel está ligada ao repositório, o novo deploy deve iniciar automaticamente.
-
-Também é possível usar:
-
-```bash
-npx vercel --prod
-```
-
-## 4. Verificar o backend
+## Health
 
 Abra:
 
@@ -56,64 +35,77 @@ Esperado:
 ```json
 {
   "ok": true,
-  "version": "5.4.0",
+  "version": "5.6.0",
   "supabase": true,
   "schemaReady": true,
   "readyForMultiplayer": true
 }
 ```
 
-## 5. Teste multiplayer recomendado
+## Teste recomendado
 
-### Truco 1x1
+### 1 jogador
 
-- PC 1 cria a sala.
-- PC 2 entra.
-- cada computador deve mostrar sua própria mão embaixo;
-- o outro jogador aparece em cima;
-- somente o dono de cada mão enxerga suas cartas;
-- os dois precisam conseguir jogar quando chegar sua vez.
+1. crie uma sala de Blackjack;
+2. abra a mesa;
+3. confirme uma aposta;
+4. teste Pedir e Parar;
+5. complete algumas rodadas.
 
-### Truco 2x2
+### entrada durante a rodada
 
-Com quatro contas:
+1. PC A começa sozinho;
+2. enquanto PC A está com cartas, PC B entra;
+3. PC B deve ver `Aguardando próxima rodada`;
+4. a rodada de A termina;
+5. quando as apostas abrirem, B deve poder apostar e participar.
 
-- cada jogador se vê embaixo;
-- parceiro fica em cima;
-- adversários ficam nas laterais;
-- mãos adversárias ficam ocultas;
-- Mão de 11 e Mão de Ferro devem respeitar suas regras.
+### 3 jogadores
 
-### Xadrez
+1. entre com três contas;
+2. confirme apostas;
+3. valide que os turnos passam em sequência;
+4. teste Double e Split;
+5. confira que o dealer joga apenas depois de todos terminarem.
 
-- cada lado deve mover sem a seleção desaparecer por atualização de relógio;
-- a peça deve responder imediatamente ao clique;
-- o servidor confirma a jogada;
-- pretas devem enxergar seu próprio lado embaixo.
+### privacidade
 
-### Final da partida
+Antes da fase do dealer, nenhum navegador deve receber a face da carta fechada do dealer.
 
-Em Truco e Xadrez:
 
-1. termine uma partida;
-2. clique `Voltar à sala`;
-3. confirme que o resultado antigo não reabre;
-4. host inicia `Nova partida`;
-5. confirme que um novo jogo começa para todos.
+# Atualização v5.7
 
-### TDB Music
+A v5.7 não exige SQL novo.
 
-- crie uma sala Music;
-- outro jogador entra;
-- ambos devem ver a mesma fila;
-- a sala continua disponível/joinable enquanto o player está aberto.
+1. Substitua os arquivos do projeto pelos da v5.7.
+2. Commit sugerido:
+   `TDB JOGOS v5.8 Blackjack Premium UI`
+3. Push origin.
+4. Aguarde a Vercel concluir o deploy.
+5. Confirme em `/api/health` que a versão é `5.7.0`.
 
-## 6. Segurança
+Teste recomendado:
+- abrir Blackjack em resolução 1366x768 ou maior;
+- confirmar que mesa + controles aparecem sem rolagem vertical;
+- entrar com 2 ou 3 contas;
+- confirmar que todos veem as cartas públicas dos colegas;
+- confirmar aposta e observar fichas indo para a mesa;
+- testar Double e Split;
+- terminar a rodada e observar retorno das fichas quando houver pagamento.
 
-Nunca envie ao GitHub:
 
-- `SUPABASE_SECRET_KEY`;
-- `.env.local`;
-- tokens privados.
+# Atualização v5.8
 
-Esses valores continuam nas Environment Variables da Vercel.
+Não há SQL novo.
+
+Commit sugerido:
+`TDB JOGOS v5.8 Truco Room Lifecycle`
+
+Depois do deploy, confirme em `/api/health` que a versão é `5.8.0`.
+
+Teste recomendado:
+- terminar uma rodada de Truco e confirmar que as cartas ficam visíveis por ~1,8s;
+- sair como último jogador de uma sala;
+- confirmar que ela continua aparecendo por 5 minutos;
+- entrar novamente antes do prazo e confirmar que o novo jogador vira host;
+- deixar outra sala vazia e confirmar que ela some depois do prazo.

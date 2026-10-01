@@ -1,192 +1,205 @@
-# TDB JOGOS v5.4 — Gameplay + Lifecycle Fix
+# TDB JOGOS v5.8 — BLACKJACK PREMIUM
 
-A v5.2 consolida a base online do TDB JOGOS antes da adição de novos jogos.
+A v5.7 mantém o módulo completo de Blackjack e refaz a experiência visual para uma mesa premium, compacta e independente do Truco.
 
-## Principais novidades
+## Conceito da mesa
 
-### Conexão e reconexão
-- estados visuais: `CONECTANDO…`, `ONLINE`, `ONLINE • FALLBACK`, `RECONECTANDO…` e `OFFLINE`;
-- heartbeat periódico;
-- retorno automático à sala/partida após atualizar a página ou uma queda curta;
-- tolerância de reconexão de **90 segundos**;
-- jogador aparece como `Reconectando (Xs)` durante a tolerância;
-- se o prazo acabar em Truco/Xadrez competitivo, a partida é encerrada por abandono.
+- 1 a 3 jogadores humanos contra um único dealer automático;
+- a mesa pode começar com apenas 1 jogador;
+- um segundo ou terceiro jogador pode entrar com a rodada em andamento;
+- quem entra no meio da rodada aparece como **Aguardando próxima rodada** e começa automaticamente quando a rodada seguinte abrir;
+- a sala permanece aberta/joinable enquanto houver vaga.
 
-### Host migratório
-- saída explícita do host transfere a sala;
-- host desconectado por mais de 90 segundos é removido e a sala escolhe novo host;
-- preferência por jogador que esteja online.
+## Regras implementadas
 
-### Amigos e social
-- busca por **nome** ou `TDB-XXXXXXXX`;
-- pedido de amizade;
-- aceitar/recusar pedido;
-- pedidos enviados;
-- convite de sala para amigos;
-- aceitar convite entra diretamente na sala;
-- presença: Online, Jogando, TDB Music, Reconectando e Offline.
+- Ás vale 1 ou 11 automaticamente;
+- J, Q e K valem 10;
+- Blackjack natural = Ás + carta de valor 10 nas duas cartas originais;
+- Blackjack natural paga 3:2;
+- vitória normal paga 1:1;
+- empate devolve a aposta;
+- dealer para em qualquer 17, inclusive soft 17;
+- Pedir (Hit);
+- Parar (Stand);
+- Dobrar (Double Down): dobra a aposta, compra exatamente 1 carta e encerra a mão;
+- Separar (Split): cartas de mesmo valor podem ser separadas;
+- cartas de valor 10 (10/J/Q/K) são compatíveis para split;
+- até 3 mãos por jogador;
+- split de ases recebe somente uma carta adicional por mão e para automaticamente;
+- 1, 2 ou 4 baralhos no shoe;
+- reshuffle automático quando o shoe fica baixo.
 
-### Segurança / estabilidade
-- proteção contra clique duplo no cliente;
-- `actionId` para idempotência;
-- `expectedVersion` nas ações de partida;
-- estado de Truco/Xadrez validado pelo servidor;
-- rate limit por rota;
-- logs de erro de servidor e cliente no Supabase;
-- limpeza automática de presença/salas/sessões/eventos/logs antigos.
+## Fichas virtuais
 
-### Histórico competitivo
-Somente partidas com **jogadores reais** contam.
+As fichas são apenas da própria mesa e não representam dinheiro real.
 
-Partidas contra bots:
-- continuam disponíveis para teste;
-- não somam vitória;
-- não somam derrota;
-- não entram no ranking.
+Ao criar uma sala, o host escolhe:
 
-O perfil mostra:
-- partidas jogadas;
-- vitórias;
-- derrotas;
-- empates;
-- partidas recentes;
-- PGN das partidas de Xadrez.
+- aposta mínima: 10 / 25 / 50;
+- fichas iniciais: 500 / 1.000 / 2.000;
+- tempo por decisão: 15 / 20 / 30 segundos ou sem limite;
+- shoe: 1 / 2 / 4 baralhos.
 
-### Ranking global
-Na tela de cada jogo aparece o TOP 3.
+Se um jogador ficar sem fichas suficientes, pode fazer uma recarga gratuita para o valor inicial da mesa entre rodadas.
 
-- Truco: ranking separado em **1x1** e **2x2**;
-- Xadrez: ranking **1x1**;
-- classificação principal: quantidade de vitórias;
-- desempate: taxa de vitória e derrotas.
+## Multiplayer autoritativo
 
-### TDB Music
-- fila compartilhada validada pelo servidor;
-- quem adicionou cada música;
-- limite de músicas por pessoa;
-- usuário pode remover/reordenar suas próprias músicas;
-- host pode reorganizar tudo;
-- votação para pular;
-- host pode bloquear/liberar controles;
-- mostra quem tocou, pausou, pulou ou alterou a fila;
-- sincronização com tolerância maior para evitar ficar corrigindo o player toda hora.
+O navegador não embaralha nem decide cartas.
 
-### Truco Online
-- servidor é autoridade;
-- Mão de 11 com decisão da dupla;
-- parceiro vê as cartas da própria equipe na Mão de 11;
-- Mão de Ferro mantém todas as mãos ocultas;
-- timer por jogada controlado pelo servidor;
-- timeout joga uma carta aberta automaticamente;
-- reconexão e abandono de 90s;
-- espectador nunca recebe mãos privadas.
+O servidor controla:
 
-### Xadrez Online
-- relógio calculado pelo servidor;
-- promoção permite escolher Dama, Torre, Bispo ou Cavalo;
-- PGN;
-- reconexão e abandono;
-- **sem empate automático por repetição**;
-- continuam válidos xeque-mate, afogamento, acordo, desistência, timeout etc.
+- shoe e embaralhamento;
+- cartas;
+- carta fechada do dealer;
+- apostas;
+- ordem dos turnos;
+- timer;
+- Hit / Stand / Double / Split;
+- dealer;
+- pagamentos;
+- passagem para a rodada seguinte.
 
-## Arquitetura de dados
+O cliente apenas solicita a ação e desenha a resposta oficial.
+
+## Privacidade
+
+Antes da vez do dealer, a carta fechada é redigida no `viewFor()` do servidor. O navegador recebe `null` no lugar da carta real, então não é apenas um efeito visual.
+
+As mãos dos jogadores são públicas como em uma mesa física de Blackjack.
+
+## Entrada durante a rodada
+
+Quando um usuário entra enquanto `playerTurns`, `dealerTurn` ou `roundEnd` está em andamento:
+
+1. ele entra na sala normalmente;
+2. recebe o estado público da rodada atual;
+3. fica marcado como `waitingNextRound`;
+4. não recebe cartas nem interfere na rodada atual;
+5. quando a próxima fase de apostas abre, passa automaticamente a ser elegível.
+
+## Reconexão
+
+A mesa usa o sistema de presença/reconexão já existente no TDB JOGOS.
+
+- assento fica reservado durante a tolerância;
+- se o jogador desconectar na vez dele, o timer pode encerrar a decisão com Stand automático;
+- após expirar a tolerância global, o usuário é removido da sala sem encerrar a mesa dos demais.
+
+## Design
+
+O Blackjack possui arquivos próprios:
 
 ```text
-Supabase persistente
-├── usuários / perfil
-├── sessões
-├── amigos / pedidos
-├── convites
-├── histórico / resultados
-├── ranking
-└── logs
+games/blackjack/
+├── blackjack.js
+└── blackjack.css
 
-Estado online
-├── salas
-├── presença
-├── partidas
-├── TDB Music
-└── eventos Realtime
+server/
+└── blackjack-engine.js
 ```
 
-## Importante ao atualizar da v5.0/v5.1
+Visual:
 
-A v5.2 adiciona novas tabelas.
+- feltro verde profundo;
+- preto/grafite;
+- dourado metálico;
+- cartas próprias em CSS;
+- dealer centralizado no topo;
+- usuário local sempre destacado na parte inferior;
+- outros jogadores posicionados nas laterais;
+- painel de regras e atividade separado;
+- interface de aposta própria;
+- destaque dourado na mão ativa.
 
-Depois de publicar os arquivos, execute **novamente o arquivo completo**:
+## Áudio
 
-`SUPABASE-SCHEMA.sql`
+Foram adicionados presets discretos ao SoundManager:
 
-no Supabase SQL Editor.
+- distribuição;
+- compra de carta;
+- Stand;
+- Double;
+- Split;
+- flip do dealer;
+- estouro;
+- vitória;
+- derrota.
 
-O SQL usa `create table if not exists`, então ele mantém as tabelas e contas existentes e adiciona as estruturas da v5.2.
+Os sons continuam respeitando os controles de volume da v5.5.
 
-## Testes incluídos
+## Banco de dados
 
-- `tests/online-engine-smoke.mjs`
-- `tests/v5.2-engine-smoke.mjs`
+A v5.6 não cria tabelas novas.
 
-Os testes v5.2 verificam:
-- Xadrez sem empate automático por repetição;
-- promoção para Cavalo;
-- Mão de 11;
-- visibilidade das cartas da dupla;
-- Mão de Ferro;
-- timer server-side do Truco;
-- privacidade do espectador.
+Se o `SUPABASE-SCHEMA.sql` da v5.5 já foi executado, **não execute uma migração nova apenas por causa do Blackjack**.
+
+## Testes adicionados
+
+- `tests/v5.6-blackjack-engine-smoke.mjs`
+- `tests/v5.6-blackjack-service-smoke.mjs`
+- `tests/v5.6-blackjack-static-smoke.mjs`
+
+Eles cobrem, entre outros casos:
+
+- uma pessoa iniciando a mesa;
+- Ás/soft hand;
+- reserva da aposta;
+- carta fechada do dealer;
+- entrada durante rodada;
+- Split;
+- Double;
+- Split de ases;
+- dealer em soft 17;
+- pagamento 3:2;
+- ativação do jogador novo na rodada seguinte;
+- integração com `game-service`.
 
 
-## v5.3 — correções de produção
+## v5.7 — Blackjack Premium UI
 
-A v5.3 corrige os problemas de interface encontrados depois da v5.2:
+A v5.7 mantém a engine e as regras da v5.6, mas substitui a apresentação do Blackjack por uma mesa própria e mais próxima de uma interface de cassino premium.
 
-- nenhuma sincronização de fundo chama mais `renderLobby()`, `drawGamePage()` ou `renderWaitingRoom()`;
-- lobby, amigos e lista de salas recebem somente patches nos blocos que mudaram;
-- Xadrez online reaproveita o tabuleiro montado e atualiza as peças sem recriar a tela inteira;
-- Truco/Xadrez passam a ter estados `playing-truco` e `playing-chess`, separados de `waiting`;
-- testes com bots desligam o sincronizador online e usam `bot-truco` / `bot-chess`;
-- ao voltar do teste com bot, a sala online original é restaurada;
-- convidar amigos abre um modal por cima da sala, sem navegar para Amigos;
-- convite recebido aparece em um aviso flutuante por 10 segundos e continua salvo em Amigos.
+### Mudanças visuais
+
+- viewport desktop sem necessidade de rolagem vertical;
+- dealer no topo e jogador local na parte inferior;
+- até dois colegas nas laterais;
+- cartas dos colegas visíveis e com tamanho legível;
+- shoe do dealer;
+- rails e felt em preto, verde profundo e dourado;
+- fichas 3D próximas de cada jogador;
+- área central de apostas;
+- seletor de aposta usando fichas, em vez de botões simples;
+- painel de regras e atividade compactos.
+
+### Animação das fichas
+
+Eventos de aposta agora carregam o valor no estado público da partida.
+
+Quando um jogador:
+- confirma a aposta;
+- dobra;
+- separa;
+
+uma pilha de fichas é animada da área daquele jogador até a sua posição de aposta na mesa.
+
+Quando a rodada paga fichas de volta, existe uma animação inversa da mesa para o jogador.
+
+### Privacidade
+
+No Blackjack as mãos dos jogadores são públicas na mesa. Somente a carta fechada do dealer continua oculta até a fase correta.
 
 ### Banco
 
-A v5.3 não adiciona tabelas novas. Se o `SUPABASE-SCHEMA.sql` da v5.2 já foi executado, não é necessário rodá-lo novamente apenas por causa desta correção.
+Nenhuma migração nova é necessária na v5.7.
 
 
-## v5.4 — revisão de Truco, Xadrez, Music e ciclo de partidas
+## v5.8 — Truco Reveal + Room Grace
 
-### Truco
-A interface não usa mais o host/seat 0 como referência visual para todos. O servidor mantém seats reais, mas cada navegador rotaciona apenas a apresentação:
+### Delay visual no Truco
+Quando todos jogam a carta de uma rodada, o servidor entra em `resolving` e mantém as cartas na mesa por cerca de 1,8 segundo antes de limpar a mesa. Durante esse intervalo não há novo turno nem contagem de tempo.
 
-- você embaixo;
-- 1x1: rival em cima;
-- 2x2: parceiro em cima e adversários nas laterais.
+### Salas vazias
+Quando o último jogador sai de uma sala real, ela permanece no lobby por 5 minutos. Durante esse período outro jogador ainda pode entrar e se torna o novo host. A entrada cancela a expiração. Se ninguém entrar, a sala é removida pelo cleanup.
 
-O 1x1 também teve um erro estrutural corrigido: seats 0 e 2 eram opostos visualmente, mas o cálculo antigo podia colocá-los na mesma equipe.
-
-Cada resposta do servidor contém `localSeat` individualmente. Fora da Mão de 11, cada jogador recebe somente sua própria mão. Cartas escondidas já jogadas também não carregam a face real para os clientes.
-
-### Xadrez
-A seleção da peça agora é estado local da interface. Atualizações que só mudam relógio não apagam a seleção e não recriam o tabuleiro inteiro.
-
-Jogadas online usam atualização otimista:
-1. a peça se move imediatamente;
-2. a API valida;
-3. o estado oficial confirma;
-4. em rejeição, o cliente faz rollback e busca o estado correto.
-
-### Ciclo de partida
-O fluxo é:
-
-`Sala -> Partida -> Resultado -> Voltar à sala -> Nova partida`
-
-`Voltar à sala` interrompe o polling daquele jogo no navegador e reabre a sala.
-
-`Nova partida` cria um `matchId` novo. O cliente distingue um rematch realmente mais novo de uma resposta atrasada do jogo antigo.
-
-### TDB Music
-Music permanece uma sala compartilhada aberta e não entra no fluxo competitivo `open -> playing -> finished`.
-
-### Banco
-Nenhuma tabela nova foi adicionada na v5.4. O schema Supabase da v5.2 continua válido.
+A v5.8 não exige alteração de banco.

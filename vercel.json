@@ -139,12 +139,52 @@
       "destination": "/api/router?route=invites/respond"
     },
     {
-      "source": "/api/ranking",
-      "destination": "/api/router?route=ranking"
-    },
-    {
       "source": "/api/logs/client",
       "destination": "/api/router?route=logs/client"
+    },
+    {
+      "source": "/api/reports/create",
+      "destination": "/api/router?route=reports/create"
+    },
+    {
+      "source": "/api/admin/login",
+      "destination": "/api/router?route=admin/login"
+    },
+    {
+      "source": "/api/admin/session",
+      "destination": "/api/router?route=admin/session"
+    },
+    {
+      "source": "/api/admin/logout",
+      "destination": "/api/router?route=admin/logout"
+    },
+    {
+      "source": "/api/admin/overview",
+      "destination": "/api/router?route=admin/overview"
+    },
+    {
+      "source": "/api/admin/users",
+      "destination": "/api/router?route=admin/users"
+    },
+    {
+      "source": "/api/admin/reset-password",
+      "destination": "/api/router?route=admin/reset-password"
+    },
+    {
+      "source": "/api/admin/ban",
+      "destination": "/api/router?route=admin/ban"
+    },
+    {
+      "source": "/api/admin/revoke-sessions",
+      "destination": "/api/router?route=admin/revoke-sessions"
+    },
+    {
+      "source": "/api/admin/logs",
+      "destination": "/api/router?route=admin/logs"
+    },
+    {
+      "source": "/api/admin/reports",
+      "destination": "/api/router?route=admin/reports"
     }
   ]
 }

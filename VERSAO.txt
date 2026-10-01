@@ -1,39 +1,22 @@
-TDB JOGOS v5.4 — Gameplay + Lifecycle Fix
+TDB JOGOS v5.8 — Truco Reveal + Room Grace
 
 TRUCO
-- cada jogador recebe e vê apenas a própria mão
-- você sempre aparece embaixo da sua própria tela
-- 1x1: adversário em cima
-- 2x2: parceiro em cima e adversários nas laterais
-- equipes 1x1 corrigidas
-- jogadores não-host conseguem jogar normalmente
-- carta escondida também é redigida do estado enviado ao navegador
-- Mão de 11, Mão de Ferro e Truco/6/9/12 revisados
-- vencedor da rodada inicia corretamente a próxima
-- bot/local independente do multiplayer
+- a última carta da rodada permanece visível por aproximadamente 1,8s
+- o servidor mantém as cartas na mesa durante a fase resolving
+- o timer fica pausado durante essa exibição
+- o resultado da rodada já aparece enquanto as cartas ainda estão visíveis
+- cliente local usa o mesmo delay visual
+- correção adicional: empate usa corretamente o jogador que abriu a rodada
 
-XADREZ
-- seleção não some com snapshots apenas de relógio
-- snapshots de relógio não recriam as 64 casas
-- movimento online com resposta visual imediata
-- servidor continua autoridade das regras
-- rollback automático em jogada rejeitada
-- jogador de pretas vê suas peças embaixo
-- promoção, PGN, relógio e reconexão preservados
+SALAS
+- quando o último jogador sai, a sala não some imediatamente
+- sala fica visível e pode ser retomada por 5 minutos
+- sala vazia mostra aviso de expiração aproximada
+- quem entrar numa sala vazia dentro do prazo se torna o novo host
+- entrada cancela automaticamente a expiração
+- após 5 minutos vazia, a sala é ocultada/removida pelo cleanup
+- salas de simulação/bot continuam sendo removidas imediatamente
 
-CICLO DE PARTIDA
-- Voltar à sala permanece na sala
-- resultado antigo não reabre automaticamente
-- Nova partida cria estado e matchId novos
-- rematch funciona com jogadores reais e bot/local
-- clientes aceitam rematch novo e ignoram resposta atrasada do match anterior
-- iniciar nova partida pela sala não consulta primeiro o estado terminal antigo
-
-TDB MUSIC
-- abrir/criar sala não usa lifecycle competitivo
-- sala permanece aberta/joinable
-- host e convidados compartilham a mesma fila
-
-SUPABASE
-- nenhuma tabela nova nesta versão
-- schema da v5.2 continua suficiente
+BANCO
+- nenhuma tabela nova
+- nenhuma migração SQL necessária

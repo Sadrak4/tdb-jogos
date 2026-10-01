@@ -1,0 +1,20 @@
+import {setRoomPrivate,getRoomPrivate} from '../server/realtime-store.js';
+import * as Games from '../server/game-service.js';
+function assert(name,condition){if(!condition)throw new Error(`FAIL: ${name}`);console.log('OK',name)}
+const host={id:'TDB-SRVHOST1',username:'Host',avatar:'H',connection:'online'};
+const guest={id:'TDB-SRVGUEST',username:'Guest',avatar:'G',connection:'online'};
+let room={code:'BLJ-SRV1',game:'blackjack',name:'Server BJ',owner:'Host',ownerId:host.id,status:'open',privacy:'public',password:'',blackjackTurnTimer:20,blackjackMinBet:25,blackjackStartingChips:1000,blackjackDecks:1,players:[host],spectators:[]};
+await setRoomPrivate(room);
+let state=await Games.startGame(room);
+assert('game-service starts blackjack',state.game==='blackjack'&&state.phase==='betting');
+assert('blackjack table is non-terminal session',Games.isTerminal(state)===false);
+let view=Games.viewFor(state,host.id,'player');
+assert('host receives player blackjack view',view.localPlayerId===host.id);
+state=await Games.applyAction(room.code,host.id,{type:'PLACE_BET',amount:25});
+assert('server action deals blackjack round',state.phase==='playerTurns'||state.phase==='dealerTurn');
+room=await getRoomPrivate(room.code);room.players.push(guest);await setRoomPrivate(room);
+state=await Games.refreshGame(room.code);
+const gv=Games.viewFor(state,guest.id,'player');
+assert('late guest is recognized as player',gv.localPlayerId===guest.id);
+assert('late guest waits next round',gv.players.find(p=>p.id===guest.id)?.waitingNextRound===true);
+console.log('ALL V5.6 BLACKJACK SERVICE TESTS PASSED');

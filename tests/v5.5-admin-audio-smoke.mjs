@@ -1,0 +1,37 @@
+import fs from 'fs';
+function assert(name,condition){if(!condition)throw new Error(`FAIL: ${name}`);console.log('OK',name)}
+const app=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
+const index=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const router=fs.readFileSync(new URL('../server/http-router.js',import.meta.url),'utf8');
+const auth=fs.readFileSync(new URL('../server/auth-service.js',import.meta.url),'utf8');
+const admin=fs.readFileSync(new URL('../server/admin-service.js',import.meta.url),'utf8');
+const schema=fs.readFileSync(new URL('../SUPABASE-SCHEMA.sql',import.meta.url),'utf8');
+const client=fs.readFileSync(new URL('../core/online-client.js',import.meta.url),'utf8');
+const sound=fs.readFileSync(new URL('../core/sound-manager.js',import.meta.url),'utf8');
+const adminPanel=fs.readFileSync(new URL('../admin-panel.js',import.meta.url),'utf8');
+
+assert('ranking UI removed',!app.includes('Ranking global')&&!app.includes('gameRankingPanel'));
+assert('ranking API removed',!router.includes("['ranking'")&&!client.includes('getRanking('));
+assert('profile history kept',app.includes('Histórico competitivo')&&app.includes('getProfileHistory'));
+assert('existing friend notification setting kept',app.includes('friendNotifications'));
+assert('admin login is server routed',router.includes("['admin/login',adminLogin]"));
+assert('admin user management routes exist',router.includes("['admin/users',adminUsers]")&&router.includes("['admin/ban',adminBan]")&&router.includes("['admin/reset-password',adminResetPassword]"));
+assert('report route exists',router.includes("['reports/create',reportCreate]"));
+assert('admin stores only a derived password verifier',admin.includes('ADMIN_PASSWORD_HASH')&&admin.includes('ADMIN_PASSWORD_SALT'));
+assert('admin uses scrypt hash verification',admin.includes('scryptSync')&&admin.includes('timingSafeEqual'));
+assert('normal account name adm is reserved',auth.includes("normalize(username)==='adm'"));
+assert('banned account login is blocked',auth.includes('if(user.banned)'));
+assert('v5.5 schema has reports',schema.includes('create table if not exists public.tdb_reports'));
+assert('v5.5 schema has admin sessions',schema.includes('create table if not exists public.tdb_admin_sessions'));
+assert('v5.5 schema has admin audit',schema.includes('create table if not exists public.tdb_admin_audit_logs'));
+assert('v5.5 schema has banned user field',schema.includes('add column if not exists banned boolean'));
+assert('player report block exists',app.includes('Reportar bug ou erro')&&app.includes('submitBugReport'));
+assert('sound manager loads before app',index.indexOf('core/sound-manager.js')<index.indexOf('app.js'));
+assert('admin client loads before admin panel',index.indexOf('core/admin-client.js')<index.indexOf('admin-panel.js'));
+assert('single AudioContext manager exists',sound.includes('let ctx=null')&&sound.includes('function audioContext()'));
+assert('low audio ceiling exists',sound.includes('Math.min(.045'));
+assert('game sound presets exist',sound.includes('cardPlay')&&sound.includes('chessCapture')&&sound.includes('victory'));
+assert('audio sliders exist',app.includes('masterVolume')&&app.includes('uiVolume')&&app.includes('gameVolume'));
+assert('ping latency is exposed',client.includes('latencyMs')&&app.includes('onlinePingPill'));
+assert('admin UI includes accounts/reports/logs',adminPanel.includes('Gerenciar contas')&&adminPanel.includes('Reportes')&&adminPanel.includes('Auditoria'));
+console.log('ALL V5.5 ADMIN/AUDIO TESTS PASSED');

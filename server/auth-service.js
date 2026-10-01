@@ -29,6 +29,7 @@ function friendKey(userId){return `local:friends:${userId}`}
 
 export async function register(username,password,avatar=null){
   username=String(username||'').trim();
+  if(normalize(username)==='adm') throw new Error('Esse nome de usuário é reservado.');
   if(username.length<3) throw new Error('Usuário precisa de pelo menos 3 caracteres.');
   if(String(password||'').length<4) throw new Error('Senha precisa de pelo menos 4 caracteres.');
 
@@ -86,6 +87,7 @@ export async function login(username,password){
 
     if(error) throw new Error(error.message);
     if(!user) throw new Error('Usuário ou senha inválidos.');
+    if(user.banned) throw new Error(`Conta suspensa${user.banned_reason?`: ${user.banned_reason}`:''}.`);
 
     const hp=hashPassword(password,user.salt);
     const a=Buffer.from(hp.hash,'hex');
@@ -144,6 +146,10 @@ export async function session(token){
       .maybeSingle();
 
     if(userError) throw new Error(userError.message);
+    if(user?.banned){
+      await db.from('tdb_sessions').delete().eq('token',token);
+      return null;
+    }
     return user?safeUser(user):null;
   }
 

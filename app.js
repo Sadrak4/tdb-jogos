@@ -14,21 +14,20 @@ if(!Core){
   throw new Error('TDBCore não foi carregado antes do app.js');
 }
 
-const DEFAULT_SETTINGS = { sound: true, friendNotifications: true };
+const DEFAULT_SETTINGS = { sound: true, friendNotifications: true, masterVolume: 55, uiVolume: 42, gameVolume: 50, notificationVolume: 48 };
 
 const state = {
   user: Core.auth.currentUser(),
   users: Core.auth.users(),
   friends: Core.storage.get('tbd_friends', []),
   rooms: Core.rooms.list(),
-  settings: Core.storage.get('tbd_settings', DEFAULT_SETTINGS),
+  settings: {...DEFAULT_SETTINGS,...Core.storage.get('tbd_settings', DEFAULT_SETTINGS)},
   view: 'login',
   selectedGame: null,
   activeRoom: Core.rooms.active(),
   roomFilter: 'all',
   social: {incoming:[],outgoing:[],invites:[]},
   userSearch: [],
-  rankings: {},
   profileHistory: null,
   actionLocks: new Set(),
   botReturnRoom: null,
@@ -55,7 +54,7 @@ window.addEventListener('tdb-online-sync',event=>{
       if(state.view==='waiting'){
         patchWaitingRoom(previousOwner!==latest.ownerId);
 
-        if(latest.status==='playing' && ['truco','chess'].includes(latest.game) && OnlineGameBridge.roomCode!==latest.code){
+        if(latest.status==='playing' && ['truco','chess','blackjack'].includes(latest.game) && OnlineGameBridge.roomCode!==latest.code){
           OnlineGameBridge.start(latest,'player');
         }
       }
@@ -71,9 +70,6 @@ window.addEventListener('tdb-online-sync',event=>{
     refreshSocialData(false);
   }
 
-  if(syncKind==='ranking' && state.selectedGame){
-    refreshRanking(state.selectedGame,true);
-  }
 
   // IMPORTANT: never call renderLobby(), drawGamePage() or renderWaitingRoom()
   // from background synchronization. Rebuilding #app caused the v5.2 flicker.
@@ -82,6 +78,8 @@ window.addEventListener('tdb-online-sync',event=>{
 window.addEventListener('tdb-online-status',event=>{
   const detail=event.detail||{};
   const el=document.getElementById('onlineStatusPill');
+  const ping=document.getElementById('onlinePingPill');
+  if(ping) ping.textContent=Number.isFinite(detail.latencyMs)?`${detail.latencyMs} ms`:'';
   if(!el) return;
   el.classList.remove('online','warning','connecting','offline');
   const phase=detail.phase||'connecting';
@@ -130,17 +128,21 @@ window.addEventListener('tdb-game-state',event=>{
   }else if(gameState.game==='truco'){
     state.view='playing-truco';
     applyOnlineTrucoState(gameState,OnlineGameBridge.role);
+  }else if(gameState.game==='blackjack'){
+    state.view='playing-blackjack';
+    window.applyOnlineBlackjackState?.(gameState,state.activeRoom,OnlineGameBridge.role);
   }
 });
 
 const games = {
   truco: { name: 'Truco', symbol: '🃏', subtitle: 'Blefe, parceria e resenha.', players: 4, minPlayers: 2, prefix: 'TRC' },
-  blackjack: { name: 'Blackjack', symbol: '♠️', subtitle: 'Mesa casual com dealer automático.', players: 5, minPlayers: 1, prefix: 'BLJ' },
+  blackjack: { name: 'Blackjack', symbol: '♠️', subtitle: 'Mesa premium contra dealer automático.', players: 3, minPlayers: 1, prefix: 'BLJ' },
   chess: { name: 'Xadrez', symbol: '♟️', subtitle: 'Partidas rápidas 1x1 entre amigos.', players: 2, minPlayers: 2, prefix: 'XDR' },
   music: { name: 'TDB Music', symbol: '🎵', subtitle: 'Ouça YouTube em uma fila compartilhada.', players: 20, minPlayers: 1, prefix: 'MUS' }
 };
 
 Core.sound.setEnabled(state.settings.sound);
+window.TDBSound?.configure?.({enabled:state.settings.sound,master:(state.settings.masterVolume??55)/100,ui:(state.settings.uiVolume??42)/100,game:(state.settings.gameVolume??50)/100,notification:(state.settings.notificationVolume??48)/100});
 
 
 function migrateUsers() {
@@ -175,6 +177,7 @@ function saveRooms(){ Core.rooms.replace(state.rooms); }
 function saveSettings(){
   Core.storage.set('tbd_settings', state.settings);
   Core.sound.setEnabled(state.settings.sound);
+window.TDBSound?.configure?.({enabled:state.settings.sound,master:(state.settings.masterVolume??55)/100,ui:(state.settings.uiVolume??42)/100,game:(state.settings.gameVolume??50)/100,notification:(state.settings.notificationVolume??48)/100});
 }
 function saveSession(user){
   state.user=user;
@@ -212,14 +215,12 @@ function toast(msg){
 }
 function playUiSound(freq=460,duration=.055){
   if(!state.settings.sound) return;
-  try {
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    const osc=ctx.createOscillator(), gain=ctx.createGain();
-    osc.frequency.value=freq; gain.gain.value=.025;
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(); gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+duration);
-    osc.stop(ctx.currentTime+duration);
-  } catch {}
+  if(window.TDBSound?.tone){
+    return window.TDBSound.tone({frequency:freq,duration,volume:.5,type:'triangle',category:'ui'});
+  }
+  try{
+    window.TDBCore?.sound?.tone?.({frequency:freq,duration,volume:.018,type:'triangle'});
+  }catch{}
 }
 function currentStatus(){
   if(state.activeRoom){
@@ -257,6 +258,7 @@ function finishMatch(matchId,reason='finished'){
   const matches=Core.matches.list(); const m=matches.find(x=>x.matchId===matchId); if(!m) return;
   m.status='finished'; m.finishedAt=Date.now(); m.finishReason=reason; Core.matches.replace(matches);
 }
+const EMPTY_ROOM_TTL_MS=5*60*1000;
 function destroyRoomAndMatch(roomCode,reason='empty'){
   const m=getActiveMatchByRoom(roomCode); if(m) finishMatch(m.matchId,reason); removeLocalRoom(roomCode);
 }
@@ -280,7 +282,7 @@ async function watchRoom(code){
   if(!room) return toast('Sala não encontrada.');
   if(room.status!=='playing') return toast('Essa partida ainda não começou.');
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess'].includes(room.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess','blackjack'].includes(room.game)){
     if(!ensureOnlineMultiplayerReady()) return;
 
     const remoteRoom=await window.TDBOnline.watchRoom(code);
@@ -357,17 +359,27 @@ function cleanupEmptyLocalRooms(){
   if(Core.mode==='online') return;
   const before=state.rooms.length;
   const activeCode=state.activeRoom?.code || null;
+  const now=Date.now();
 
   state.rooms=state.rooms.filter(room=>{
     const humans=humanPlayers(room);
 
     if(room.simulation) return false;
 
-    // Any local room with no real player is garbage/simulation.
-    if(humans.length===0) return false;
+    if(humans.length===0){
+      if(!room.emptySince){
+        room.emptySince=now;
+        room.emptyExpiresAt=now+EMPTY_ROOM_TTL_MS;
+        room.status='open';
+        room.owner='';
+        room.ownerId=null;
+      }
+      return now<Number(room.emptyExpiresAt||0);
+    }
 
-    // A local room left "playing" from an old test should disappear
-    // unless it is the match this browser is currently inside.
+    delete room.emptySince;
+    delete room.emptyExpiresAt;
+
     if(room.status==='playing' && room.code!==activeCode && room.game!=='music') return false;
 
     return true;
@@ -375,7 +387,6 @@ function cleanupEmptyLocalRooms(){
 
   if(state.rooms.length!==before) saveRooms();
 }
-
 function getAllRooms(gameKey){
   cleanupEmptyLocalRooms();
   return state.rooms
@@ -386,6 +397,7 @@ function getAllRooms(gameKey){
 function roomCapacity(room){
   if(!room) return 0;
   if(room.game==='truco') return Number(room.trucoSeats||4);
+  if(room.game==='blackjack') return 3;
   if(room.game==='music') return Number(room.musicCapacity||20);
   return games[room.game].players;
 }
@@ -433,6 +445,7 @@ function renderAuth(mode='login'){
         </form>
         ${isRegister?`<div class="mini-note">Não pedimos e-mail nesta versão. Seu identificador público será algo como <strong>TBD-7X4K92</strong>.</div>`:''}
         <div class="auth-switch">${isRegister?'Já tem uma conta?':'Ainda não tem uma conta?'} <button class="link-btn" id="switchAuth">${isRegister?'Entrar':'Criar conta'}</button></div>
+        <div class="auth-admin-link"><a href="#admin" class="link-btn">Administração</a></div>
       </div>
     </section>
   </section>`;
@@ -454,7 +467,7 @@ function renderAuth(mode='login'){
           const user=await window.TDBAuthOnline.register(username,password,null);
           saveSession(user);
           state.user=user;
-          playUiSound(620);
+          window.TDBSound?.play?.('success',{channel:'auth-success',dedupeMs:120});
           await window.TDBOnline?.refreshSnapshot?.();
           setTimeout(renderLobby,120);
           return;
@@ -468,7 +481,7 @@ function renderAuth(mode='login'){
       state.users.push(user);
       saveUsers();
       saveSession(user);
-      playUiSound(620);
+      window.TDBSound?.play?.('success',{channel:'auth-success',dedupeMs:120});
       setTimeout(renderLobby,180);
       return;
     }
@@ -478,7 +491,7 @@ function renderAuth(mode='login'){
         const user=await window.TDBAuthOnline.login(username,password);
         saveSession(user);
         state.user=user;
-        playUiSound(620);
+        window.TDBSound?.play?.('success',{channel:'auth-success',dedupeMs:120});
         await window.TDBOnline?.refreshSnapshot?.();
         setTimeout(()=>{
           if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===user.id)) renderWaitingRoom();
@@ -493,7 +506,7 @@ function renderAuth(mode='login'){
     const user=state.users.find(u=>(u.username||'').toLowerCase()===username.toLowerCase()&&u.password===password);
     if(!user) return toast('Nome de usuário ou senha incorretos.');
     saveSession(user);
-    playUiSound(620);
+    window.TDBSound?.play?.('success',{channel:'auth-success',dedupeMs:120});
     setTimeout(()=>{
       if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===user.id)) renderWaitingRoom();
       else renderLobby();
@@ -513,7 +526,7 @@ function topbar(active='home'){
       </nav>
     </div>
     <div class="topbar-right">
-      <span id="onlineStatusPill" class="online-status-pill ${window.TDBOnline?.readyForMultiplayer?'online':window.TDBOnline?.phase==='reconnecting'||window.TDBOnline?.phase==='connecting'?'connecting':'offline'}">${window.TDBOnline?.readyForMultiplayer?(window.TDBOnline?.realtime?'ONLINE':'ONLINE • FALLBACK'):window.TDBOnline?.phase==='reconnecting'?'RECONECTANDO…':window.TDBOnline?.phase==='connecting'?'CONECTANDO…':'OFFLINE'}</span>
+      <span id="onlineStatusPill" class="online-status-pill ${window.TDBOnline?.readyForMultiplayer?'online':window.TDBOnline?.phase==='reconnecting'||window.TDBOnline?.phase==='connecting'?'connecting':'offline'}">${window.TDBOnline?.readyForMultiplayer?(window.TDBOnline?.realtime?'ONLINE':'ONLINE • FALLBACK'):window.TDBOnline?.phase==='reconnecting'?'RECONECTANDO…':window.TDBOnline?.phase==='connecting'?'CONECTANDO…':'OFFLINE'}</span><span id="onlinePingPill" class="online-ping-pill">${Number.isFinite(window.TDBOnline?.latencyMs)?`${window.TDBOnline.latencyMs} ms`:''}</span>
       <div class="profile-mini" onclick="renderProfile()" style="cursor:pointer">
         <div class="avatar">${escapeHtml(state.user?.avatar||initials(state.user?.username))}</div>
         <div class="profile-lines"><strong>${escapeHtml(state.user?.username||'Jogador')}</strong><small>${escapeHtml(state.user?.id||'')}</small></div>
@@ -557,9 +570,20 @@ function exitActiveContext(reason='leave'){
     room.players=(room.players||[]).filter(p=>p.id!==state.user?.id);
     const humans=humanPlayers(room);
 
-    // Any bot-only room dies immediately when the last real player leaves.
+    // Salas de simulação/bot continuam temporárias. Salas reais vazias
+    // permanecem no lobby por 5 minutos e podem ser retomadas por outro jogador.
     if(humans.length===0){
-      destroyRoomAndMatch(room.code,reason);
+      if(room.simulation){
+        destroyRoomAndMatch(room.code,reason);
+      }else{
+        room.players=[];
+        room.status='open';
+        room.owner='';
+        room.ownerId=null;
+        room.emptySince=Date.now();
+        room.emptyExpiresAt=room.emptySince+EMPTY_ROOM_TTL_MS;
+        syncLocalRoom(room);
+      }
       saveActiveRoom(null);
       return;
     }
@@ -630,6 +654,9 @@ function waitingHostActions(room){
   if(room.game==='chess'){
     return `<button class="btn btn-secondary" onclick="launchChessBot()">Testar com bot</button>
       <button class="btn btn-primary" onclick="startGame()">Iniciar partida</button>`;
+  }
+  if(room.game==='blackjack'){
+    return `<button class="btn btn-primary" onclick="startGame()">Abrir mesa de Blackjack</button>`;
   }
   if(room.game==='music'){
     return `<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Music</button>`;
@@ -780,49 +807,9 @@ async function inviteFriend(id){
 }
 
 
-function rankingRowsHtml(rows=[]){
-  return rows.length?rows.slice(0,3).map((r,i)=>`<div class="ranking-row"><b class="rank-pos">${['🥇','🥈','🥉'][i]||i+1}</b><div class="avatar">${escapeHtml(r.avatar||initials(r.username))}</div><div><strong>${escapeHtml(r.username)}</strong><small>${r.wins} vitória${r.wins===1?'':'s'} • ${r.played} partida${r.played===1?'':'s'} • ${r.winRate}%</small></div></div>`).join(''):`<div class="muted">Ainda não há vitórias reais registradas neste modo.</div>`;
-}
-function renderRankingPlaceholder(key){
-  if(key==='music') return `<div class="panel ranking-panel"><div class="panel-header"><h2>Comunidade TDB Music</h2></div><div class="panel-body"><p class="muted">TDB Music não possui ranking competitivo.</p></div></div>`;
-  if(key==='truco'){
-    return `<div class="panel ranking-panel">
-      <div class="panel-header"><div><h2>Ranking global • Truco</h2><p class="muted">Somente partidas contra jogadores reais contam.</p></div><span class="badge open">TOP 3</span></div>
-      <div class="panel-body">
-        <h3>1x1</h3><div class="ranking-list">${rankingRowsHtml(state.rankings['truco:1v1']||[])}</div>
-        <h3 style="margin-top:20px">2x2</h3><div class="ranking-list">${rankingRowsHtml(state.rankings['truco:2v2']||[])}</div>
-      </div>
-    </div>`;
-  }
-  const mode=key==='chess'?'1v1':null;
-  const rows=state.rankings[mode?`${key}:${mode}`:key]||[];
-  return `<div class="panel ranking-panel"><div class="panel-header"><div><h2>Ranking global • ${escapeHtml(games[key]?.name||key)}</h2><p class="muted">Somente vitórias contra jogadores reais contam.</p></div><span class="badge open">TOP 3</span></div><div class="panel-body ranking-list">${rankingRowsHtml(rows)}</div></div>`;
-}
-async function refreshRanking(key,render=true){
-  if(!window.TDBOnline?.connected||key==='music') return;
-  try{
-    if(key==='truco'){
-      const [one,two]=await Promise.all([
-        window.TDBOnline.getRanking('truco','1v1'),
-        window.TDBOnline.getRanking('truco','2v2')
-      ]);
-      state.rankings['truco:1v1']=one;
-      state.rankings['truco:2v2']=two;
-    }else if(key==='chess'){
-      state.rankings['chess:1v1']=await window.TDBOnline.getRanking('chess','1v1');
-    }else{
-      state.rankings[key]=await window.TDBOnline.getRanking(key);
-    }
-    if(render&&state.view==='game'&&state.selectedGame===key){
-      const el=document.getElementById('gameRankingPanel');if(el)el.innerHTML=renderRankingPlaceholder(key);
-    }
-  }catch(err){console.warn('[Ranking]',err)}
-}
-
 function renderGame(key){
   state.selectedGame=key; state.view='game'; state.roomFilter='all';
   drawGamePage();
-  refreshRanking(key,true);
 }
 function drawGamePage(){
   const key=state.selectedGame, g=games[key];
@@ -833,7 +820,6 @@ function drawGamePage(){
       <div class="game-head"><div class="big-symbol">${g.symbol}</div><div><h1>${g.name}</h1><p>${g.subtitle} • até ${g.players} jogadores</p></div></div>
       <div class="room-actions"><button class="btn btn-primary" onclick="openCreateRoom()">+ Criar jogo</button><button class="btn btn-secondary" onclick="openJoinCode()">Entrar com código</button><button class="btn btn-dark" onclick="goHome()">Voltar</button></div>
     </div>
-    <div id="gameRankingPanel" class="ranking-wrap">${renderRankingPlaceholder(key)}</div>
     <div class="filter-row">
       <button class="filter-chip ${state.roomFilter==='all'?'active':''}" onclick="setRoomFilter('all')">Todas</button>
       <button class="filter-chip ${state.roomFilter==='open'?'active':''}" onclick="setRoomFilter('open')">Abertas</button>
@@ -846,7 +832,7 @@ function drawGamePage(){
       </div>
       <aside class="panel side-info"><div class="panel-header"><h2>Como funciona</h2></div><div class="panel-body">
         <h3>Salas abertas</h3><p>Você pode entrar enquanto houver vaga. Sala privada pode pedir senha.</p>
-        <h3 style="margin-top:22px;">${key==='chess'?'Xadrez Tradicional':key==='music'?'Sala compartilhada':'Em andamento'}</h3><p>${key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='music'?'Todos adicionam vídeos do YouTube na fila e compartilham os controles da sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
+        <h3 style="margin-top:22px;">${key==='chess'?'Xadrez Tradicional':key==='blackjack'?'Blackjack TDB':key==='music'?'Sala compartilhada':'Em andamento'}</h3><p>${key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='blackjack'?'Até 3 jogadores contra o dealer. Pedir, parar, dobrar e separar, com entrada durante a rodada para jogar na próxima.':key==='music'?'Todos adicionam vídeos do YouTube na fila e compartilham os controles da sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
         <h3 style="margin-top:22px;">Seu jogo</h3><ul><li>Crie uma sala.</li><li>Compartilhe o código.</li><li>Convide amigos.</li></ul>
       </div></aside>
     </div>
@@ -855,15 +841,17 @@ function drawGamePage(){
 function setRoomFilter(filter){ state.roomFilter=filter; drawGamePage(); }
 function roomRow(room){
   const g=games[room.game], cap=roomCapacity(room), open=room.status==='open', full=(room.players?.length||0)>=cap;
-  const joinable=room.game==='music' ? !full : (open&&!full);
-  return `<div class="room-row">
-    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • Host: ${escapeHtml(room.owner)} ${room.privacy==='private'?'🔒':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='music'?' • 🎵 compartilhada':''}</span></div>
+  const joinable=['music','blackjack'].includes(room.game) ? !full : (open&&!full);
+  const empty=!(room.players||[]).length;
+  const emptyLeft=empty&&room.emptyExpiresAt?Math.max(0,Math.ceil((Number(room.emptyExpiresAt)-Date.now())/60000)):0;
+  const ownerLabel=empty?'Sala vazia':`Host: ${escapeHtml(room.owner||'—')}`;
+  return `<div class="room-row ${empty?'room-empty-grace':''}">
+    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • ${ownerLabel} ${room.privacy==='private'?'🔒':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='music'?' • 🎵 compartilhada':room.game==='blackjack'?' • até 3 vs dealer':''}${empty&&emptyLeft?` • expira em ~${emptyLeft} min`:''}</span></div>
     <div class="room-stat"><strong>${room.players?.length||0}/${cap}</strong><span>${room.game==='music'?'Ouvintes':'Jogadores'}</span></div>
-    <div><span class="badge ${open?'open':'playing'}">${room.game==='music'?(open?'Aberta':'Tocando'):open?'Aberta':'Em andamento'}</span></div>
+    <div><span class="badge ${open?'open':'playing'}">${empty?'Vazia':room.game==='music'?(open?'Aberta':'Tocando'):room.game==='blackjack'?(open?'Aberta':'Rodada em andamento'):open?'Aberta':'Em andamento'}</span></div>
     <button class="btn ${joinable?'btn-primary':'btn-dark'}" ${joinable?`onclick="requestJoinRoom('${room.code}')"`:'disabled'}>${joinable?'Entrar':full?'Cheia':'Jogando'}</button>
   </div>`;
 }
-
 function openCreateRoom(){
   const g=games[state.selectedGame];
   document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="modalBackdrop"><div class="modal">
@@ -891,6 +879,12 @@ function openCreateRoom(){
             <option value="black">Pretas</option>
           </select>
         </div>`:''}
+      ${state.selectedGame==='blackjack'?`
+        <div class="field"><label>Tempo por decisão</label><select id="blackjackTurnTimer" class="select"><option value="15">15 segundos</option><option value="20" selected>20 segundos</option><option value="30">30 segundos</option><option value="0">Sem limite</option></select></div>
+        <div class="field"><label>Aposta mínima</label><select id="blackjackMinBet" class="select"><option value="10">10 fichas</option><option value="25" selected>25 fichas</option><option value="50">50 fichas</option></select></div>
+        <div class="field"><label>Fichas iniciais</label><select id="blackjackStartingChips" class="select"><option value="500">500</option><option value="1000" selected>1.000</option><option value="2000">2.000</option></select></div>
+        <div class="field"><label>Baralhos no shoe</label><select id="blackjackDecks" class="select"><option value="1">1 baralho</option><option value="2">2 baralhos</option><option value="4" selected>4 baralhos</option></select></div>
+        <div class="mini-note">Dealer para em qualquer 17 • Blackjack paga 3:2 • até 3 jogadores.</div>`:''}
       ${state.selectedGame==='music'?`
         <div class="field"><label>Quem controla o player</label>
           <select id="musicControl" class="select">
@@ -962,11 +956,15 @@ async function createRoom(){
     const musicControl=state.selectedGame==='music' ? (document.getElementById('musicControl')?.value||'everyone') : null;
     const musicSkipMode=state.selectedGame==='music' ? (document.getElementById('musicSkipMode')?.value||'vote') : null;
     const musicQueueLimit=state.selectedGame==='music' ? Number(document.getElementById('musicQueueLimit')?.value||5) : null;
+    const blackjackTurnTimer=state.selectedGame==='blackjack' ? Number(document.getElementById('blackjackTurnTimer')?.value||20) : null;
+    const blackjackMinBet=state.selectedGame==='blackjack' ? Number(document.getElementById('blackjackMinBet')?.value||25) : null;
+    const blackjackStartingChips=state.selectedGame==='blackjack' ? Number(document.getElementById('blackjackStartingChips')?.value||1000) : null;
+    const blackjackDecks=state.selectedGame==='blackjack' ? Number(document.getElementById('blackjackDecks')?.value||4) : null;
 
     const candidate={
       code:genRoomCode(state.selectedGame),game:state.selectedGame,name,
       owner:state.user.username,ownerId:state.user.id,privacy,password,status:'open',
-      turnTimer,trucoSeats,chessClock,chessColor,musicControl,musicSkipMode,musicQueueLimit,
+      turnTimer,trucoSeats,chessClock,chessColor,musicControl,musicSkipMode,musicQueueLimit,blackjackTurnTimer,blackjackMinBet,blackjackStartingChips,blackjackDecks,
       players:[{username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online'}],
       spectators:[],createdAt:Date.now()
     };
@@ -986,7 +984,7 @@ async function createRoom(){
     saveActiveRoom(room);
     state.selectedGame=room.game;
     state.view=room.game==='music'?'music':'waiting';
-    closeModal(); playUiSound(560);
+    closeModal(); window.TDBSound?.play?.('roomJoin',{channel:'room-create',dedupeMs:120});
     if(room.game==='music') return openMusicRoom();
     renderWaitingRoom();
     return true;
@@ -1010,9 +1008,10 @@ window.addEventListener('tdb-room-join-result',event=>{
   closeModal();
 
   // Set the destination before realtime room updates can redraw the room list.
-  state.view=room.game==='music'?'music':'waiting';
+  state.view=room.game==='music'?'music':room.game==='blackjack'&&room.status==='playing'?'playing-blackjack':'waiting';
 
   if(room.game==='music') return openMusicRoom();
+  if(room.game==='blackjack'&&room.status==='playing'){OnlineGameBridge.start(room,'player');return;}
   renderWaitingRoom();
 });
 
@@ -1049,12 +1048,20 @@ function joinRoom(code,password=''){
   const source=typeof code==='object' ? code : getRoomByCode(code);
   const room=structuredClone(source);
   if(!room) return toast('Sala não encontrada.');
-  if(room.status!=='open' && room.game!=='music') return toast('Essa partida já está em andamento.');
+  if(room.status!=='open' && !['music','blackjack'].includes(room.game)) return toast('Essa partida já está em andamento.');
   if(room.password && room.password!==password) return toast('Senha incorreta.');
 
   if(!room.players.some(p=>p.id===state.user.id)){
     if(room.players.length>=roomCapacity(room)) return toast('A sala está cheia.');
-    room.players.push({username:state.user.username,id:state.user.id,avatar:state.user.avatar});
+    const wasEmpty=room.players.length===0;
+    room.players.push({username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online'});
+    if(wasEmpty){
+      room.owner=state.user.username;
+      room.ownerId=state.user.id;
+      room.status='open';
+      delete room.emptySince;
+      delete room.emptyExpiresAt;
+    }
     updateStoredRoom(room);
   }else{
     saveActiveRoom(room);
@@ -1062,7 +1069,7 @@ function joinRoom(code,password=''){
 
   state.selectedGame=room.game;
   closeModal();
-  playUiSound(520);
+  window.TDBSound?.play?.('roomJoin',{channel:'room-join',dedupeMs:120});
 
   if(room.game==='music'){
     state.view='music';
@@ -1128,7 +1135,7 @@ function renderWaitingRoom(){
   if(!state.activeRoom) return renderLobby();
   state.view='waiting';
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && !state.activeRoom.simulation && state.activeRoom.status==='playing' && ['truco','chess'].includes(state.activeRoom.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && !state.activeRoom.simulation && state.activeRoom.status==='playing' && ['truco','chess','blackjack'].includes(state.activeRoom.game)){
     OnlineGameBridge.start(state.activeRoom,'player');
   }
 
@@ -1140,6 +1147,7 @@ function renderWaitingRoom(){
   const meta=
     room.game==='truco' ? ` • ${cap===2?'1x1':'2x2'}` :
     room.game==='chess' ? ` • 1x1 • ${room.chessClock?Math.floor(room.chessClock/60)+' min':'Sem relógio'}` :
+    room.game==='blackjack' ? ` • até 3 jogadores • dealer automático` :
     room.game==='music' ? ` • fila compartilhada` : '';
 
   const hostActions=waitingHostActions(room);
@@ -1226,16 +1234,16 @@ async function startGame(){
 
   if(room.game==='music') return openMusicRoom();
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess'].includes(room.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess','blackjack'].includes(room.game)){
     if(!ensureOnlineMultiplayerReady()) return;
 
-    const required=room.game==='truco'?roomCapacity(room):2;
+    const required=room.game==='truco'?roomCapacity(room):room.game==='chess'?2:1;
     if((room.players?.length||0)<required){
       return toast(`${g.name} precisa de ${required} jogador${required>1?'es':''}.`);
     }
 
     room.status='playing';
-    state.view=room.game==='truco'?'playing-truco':'playing-chess';
+    state.view=room.game==='truco'?'playing-truco':room.game==='chess'?'playing-chess':'playing-blackjack';
     updateStoredRoom(room);
     setPresence('playing',{roomCode:room.code,game:room.game});
     // Prepare the bridge identity, but do not start polling yet.
@@ -1243,7 +1251,7 @@ async function startGame(){
     OnlineGameBridge.stop();
     OnlineGameBridge.roomCode=room.code;
     OnlineGameBridge.role='player';
-    playUiSound(700,.09);
+    window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
 
     const ok=await window.TDBOnline.startGame(room.code);
     if(!ok){
@@ -1268,7 +1276,7 @@ async function startGame(){
     updateStoredRoom(room);
     upsertMatch({matchId:`TRUCO-${Date.now()}`,roomCode:room.code,game:'truco',status:'playing',players:structuredClone(room.players),createdAt:Date.now()});
     setPresence('playing',{roomCode:room.code,game:'truco'});
-    playUiSound(700,.09);
+    window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
     return startTrucoGame(room,false);
   }
 
@@ -1279,14 +1287,16 @@ async function startGame(){
     updateStoredRoom(room);
     upsertMatch({matchId:`CHESS-${Date.now()}`,roomCode:room.code,game:'chess',status:'playing',players:structuredClone(room.players),createdAt:Date.now()});
     setPresence('playing',{roomCode:room.code,game:'chess'});
-    playUiSound(700,.09);
+    window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
     return window.startChessGame?.(room,false);
   }
+
+  if(room.game==='blackjack') return toast('O Blackjack usa o servidor online para manter o dealer e o baralho sincronizados.');
 
   if((room.players?.length||0)<g.minPlayers) return toast(`Aguarde pelo menos ${g.minPlayers} jogador${g.minPlayers>1?'es':''}.`);
   room.status='playing';
   updateStoredRoom(room);
-  playUiSound(700,.09);
+  window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
   toast(`Partida de ${g.name} iniciada.`);
   renderWaitingRoom();
 
@@ -1373,6 +1383,7 @@ async function acceptRoomInviteToast(inviteId){
     saveActiveRoom(room);
     toast('Convite aceito.');
     if(room.game==='music') return openMusicRoom();
+    if(room.game==='blackjack'&&room.status==='playing'){state.view='playing-blackjack';OnlineGameBridge.start(room,'player');return;}
     state.view='waiting';
     return renderWaitingRoom();
   }
@@ -1427,7 +1438,7 @@ async function respondRoomInvite(inviteId,accept){
   await refreshSocialData(false);
   if(accept&&r.room){
     const room=r.room;const i=state.rooms.findIndex(x=>x.code===room.code);if(i>=0)state.rooms[i]=room;else state.rooms.push(room);
-    state.selectedGame=room.game;saveActiveRoom(room);toast('Convite aceito.');if(room.game==='music')return openMusicRoom();return renderWaitingRoom();
+    state.selectedGame=room.game;saveActiveRoom(room);toast('Convite aceito.');if(room.game==='music')return openMusicRoom();if(room.game==='blackjack'&&room.status==='playing'){state.view='playing-blackjack';OnlineGameBridge.start(room,'player');return;}return renderWaitingRoom();
   }
   if(accept&&r.roomCode){toast('Convite aceito. Entrando na sala…');return requestJoinRoom(r.roomCode)}
   toast('Convite recusado.');
@@ -1488,21 +1499,71 @@ async function saveProfile(){
   toast('Perfil atualizado.'); renderProfile();
 }
 
+function audioSlider(title,desc,key,value){
+  return `<div class="panel setting-row audio-setting"><div><h3>${title}</h3><p>${desc}</p></div><div class="audio-slider-wrap"><input type="range" min="0" max="100" step="1" value="${Number(value??50)}" oninput="updateAudioSetting('${key}',this.value,this.nextElementSibling)"><output>${Number(value??50)}%</output></div></div>`;
+}
 function renderSettings(){
   state.view='settings';
   app.innerHTML=`${topbar('settings')}<section class="dashboard fade-in">
-    <div class="page-head"><div><h1 class="page-title">Configurações</h1><p class="muted">Ajustes básicos do TDB JOGOS.</p></div></div>
+    <div class="page-head"><div><h1 class="page-title">Configurações</h1><p class="muted">Áudio, interface e suporte do TDB JOGOS.</p></div></div>
     <div class="settings-stack">
-      ${settingRow('Sons da interface','Cliques e sons leves ao entrar em uma sala.','sound',state.settings.sound)}
+      ${settingRow('Sons do TDB JOGOS','Ativa cliques, efeitos de partidas e alertas sonoros.','sound',state.settings.sound)}
+      ${audioSlider('Volume geral','Limite mestre de todos os efeitos. O padrão é propositalmente baixo.','masterVolume',state.settings.masterVolume??55)}
+      ${audioSlider('Interface','Botões, navegação, confirmação e retorno.','uiVolume',state.settings.uiVolume??42)}
+      ${audioSlider('Jogos','Cartas do Truco e movimentos do Xadrez.','gameVolume',state.settings.gameVolume??50)}
+      ${audioSlider('Alertas sonoros','Efeitos curtos de avisos.','notificationVolume',state.settings.notificationVolume??48)}
+      <div class="panel setting-row"><div><h3>Testar áudio</h3><p>Toca um efeito curto no volume atual.</p></div><button class="btn btn-secondary" onclick="testCurrentAudio()">Testar som</button></div>
       ${settingRow('Avisos de amigos','Preparado para avisar quando amigos ficarem online.','friendNotifications',state.settings.friendNotifications)}
       <div class="panel setting-row"><div><h3>Tela cheia</h3><p>Use o navegador em modo imersivo.</p></div><button class="btn btn-secondary" onclick="toggleFullscreen()">Alternar tela cheia</button></div>
+      <div class="panel report-panel">
+        <div class="panel-header"><div><h2>Reportar bug ou erro</h2><p class="muted">O reporte vai diretamente para o painel administrativo.</p></div><span class="badge open">SUPORTE</span></div>
+        <div class="panel-body report-form">
+          <div class="field"><label>Tipo</label><select id="reportCategory" class="select"><option value="bug">Bug</option><option value="error">Erro</option><option value="other">Outro problema</option></select></div>
+          <div class="field"><label>Descreva o que aconteceu</label><textarea id="reportMessage" rows="5" maxlength="4000" placeholder="Ex.: Entrei no Truco 2x2, cliquei em... e aconteceu..."></textarea></div>
+          <div class="report-context-note">O sistema envia junto apenas contexto técnico útil: tela atual, jogo, sala, versão e navegador.</div>
+          <button class="btn btn-primary" id="sendReportBtn" onclick="submitBugReport()">Enviar reporte</button>
+        </div>
+      </div>
     </div>
   </section>`;
 }
 function settingRow(title,desc,key,value){
   return `<div class="panel setting-row"><div><h3>${title}</h3><p>${desc}</p></div><label class="switch"><input type="checkbox" ${value?'checked':''} onchange="toggleSetting('${key}',this.checked)"><span class="slider"></span></label></div>`;
 }
-function toggleSetting(key,val){ state.settings[key]=val; saveSettings(); if(key==='sound'&&val) playUiSound(); toast('Configuração salva.'); }
+function toggleSetting(key,val){ state.settings[key]=val; saveSettings(); if(key==='sound'&&val) window.TDBSound?.play?.('confirm'); toast('Configuração salva.'); }
+function updateAudioSetting(key,value,output){
+  state.settings[key]=Math.max(0,Math.min(100,Number(value)||0));
+  if(output) output.textContent=`${state.settings[key]}%`;
+  saveSettings();
+}
+function testCurrentAudio(){
+  if(!state.settings.sound) return toast('Ative os sons primeiro.');
+  window.TDBSound?.play?.('success',{channel:'audio-test',dedupeMs:0});
+}
+async function submitBugReport(){
+  if(!window.TDBOnline?.connected) return toast('É preciso estar online para enviar um reporte.');
+  const category=document.getElementById('reportCategory')?.value||'bug';
+  const message=document.getElementById('reportMessage')?.value.trim()||'';
+  if(message.length<8) return toast('Descreva o problema com um pouco mais de detalhe.');
+  const btn=document.getElementById('sendReportBtn');if(btn){btn.disabled=true;btn.textContent='Enviando…'}
+  try{
+    await window.TDBOnline.submitReport(category,message,{
+      view:state.view,
+      game:state.selectedGame||state.activeRoom?.game||null,
+      roomCode:state.activeRoom?.code||null,
+      version:'5.6.0',
+      onlinePhase:window.TDBOnline?.phase||null,
+      latencyMs:window.TDBOnline?.latencyMs??null,
+      browser:navigator.userAgent.slice(0,500)
+    });
+    document.getElementById('reportMessage').value='';
+    window.TDBSound?.play?.('success');
+    toast('Reporte enviado para a administração.');
+  }catch(err){
+    window.TDBSound?.play?.('error');
+    toast(err.message||'Não foi possível enviar o reporte.');
+  }finally{if(btn){btn.disabled=false;btn.textContent='Enviar reporte'}}
+}
 
 function logout(){
   try{
@@ -1574,8 +1635,8 @@ async function bootAuthenticatedApp(){
       state.activeRoom=reconnect.room;state.selectedGame=reconnect.room.game;Core.rooms.setActive(reconnect.room);
       __tdbSessionBooting=false;
       if(reconnect.room.game==='music') return openMusicRoom();
-      if(reconnect.room.status==='playing'&&['chess','truco'].includes(reconnect.room.game)){
-        state.view=reconnect.room.game==='truco'?'playing-truco':'playing-chess';
+      if(reconnect.room.status==='playing'&&['chess','truco','blackjack'].includes(reconnect.room.game)){
+        state.view=reconnect.room.game==='truco'?'playing-truco':reconnect.room.game==='chess'?'playing-chess':'playing-blackjack';
         OnlineGameBridge.start(reconnect.room,reconnect.role||'player');
         if(reconnect.state){
           window.dispatchEvent(new CustomEvent('tdb-game-state',{detail:{roomCode:reconnect.room.code,state:reconnect.state}}));
@@ -1591,7 +1652,7 @@ async function bootAuthenticatedApp(){
 
   __tdbSessionBooting=false;
   if(state.user){
-    if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===state.user.id)) return renderWaitingRoom();
+    if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===state.user.id)){if(state.activeRoom.game==='blackjack'&&state.activeRoom.status==='playing'){state.view='playing-blackjack';OnlineGameBridge.start(state.activeRoom,'player');return;}return renderWaitingRoom();}
     return renderLobby();
   }
   renderAuth('login');
@@ -1637,6 +1698,9 @@ window.respondRoomInvite=respondRoomInvite;
 window.copyRecentPgn=copyRecentPgn;
 window.saveProfile=saveProfile;
 window.renderSettings=renderSettings;
+window.updateAudioSetting=updateAudioSetting;
+window.testCurrentAudio=testCurrentAudio;
+window.submitBugReport=submitBugReport;
 window.toggleSetting=toggleSetting;
 window.inviteFriend=inviteFriend;
 window.logout=logout;
@@ -1665,48 +1729,9 @@ let trucoTimerInterval = null;
 
 
 
-function playDealSound(step=0){
-  if(!state.settings.sound) return;
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    const osc=ctx.createOscillator();
-    const gain=ctx.createGain();
-    osc.type='triangle';
-    osc.frequency.value=190 + (step%4)*12;
-    gain.gain.setValueAtTime(.018,ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.045);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime+.045);
-  }catch{}
-}
-function playCardSound(){
-  if(!state.settings.sound) return;
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    const osc=ctx.createOscillator(), gain=ctx.createGain();
-    osc.type='triangle'; osc.frequency.value=150;
-    gain.gain.setValueAtTime(.035,ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.07);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(); osc.stop(ctx.currentTime+.07);
-  }catch{}
-}
-function playTrucoSound(){
-  if(!state.settings.sound) return;
-  try{
-    const ctx=new (window.AudioContext||window.webkitAudioContext)();
-    [260,390].forEach((f,i)=>{
-      const osc=ctx.createOscillator(), gain=ctx.createGain();
-      osc.type='square'; osc.frequency.value=f;
-      gain.gain.setValueAtTime(.025,ctx.currentTime+i*.045);
-      gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.18+i*.045);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(ctx.currentTime+i*.045); osc.stop(ctx.currentTime+.18+i*.045);
-    });
-  }catch{}
-}
+function playDealSound(step=0){ if(!state.settings.sound)return; window.TDBSound?.play?.('cardDeal',{channel:`deal-${step}`,dedupeMs:0}); }
+function playCardSound(hidden=false){ if(!state.settings.sound)return; window.TDBSound?.play?.(hidden?'cardHidden':'cardPlay',{channel:'card-play',dedupeMs:20}); }
+function playTrucoSound(){ if(!state.settings.sound)return; window.TDBSound?.play?.('truco',{channel:'truco-call',dedupeMs:80}); }
 function startTrucoWithBots(){
   if(!state.activeRoom || state.activeRoom.game!=='truco') return;
   OnlineGameBridge.stop();
@@ -1741,6 +1766,8 @@ function startTrucoWithBots(){
 function applyOnlineTrucoState(serverState,role='player'){
   const previousSelected=truco?.selectedCard ?? null;
   const previousVersion=Number(truco?.version||0);
+  const previousWinner=truco?.winner ?? null;
+  const previousTrickResultCount=Number(truco?.trickResults?.length||0);
 
   truco=structuredClone(serverState);
   truco.onlineMode=true;
@@ -1783,6 +1810,19 @@ function applyOnlineTrucoState(serverState,role='player'){
   if(truco.pendingRaise && truco.pendingRaise.bySeat!==undefined){
     truco.pendingRaise.byPlayer=truco.pendingRaise.bySeat;
     truco.pendingRaise.votes=truco.pendingRaise.responses||{};
+  }
+
+  const newResultCount=Number(truco.trickResults?.length||0);
+  if(truco.phase==='resolving' && newResultCount>previousTrickResultCount){
+    const winner=truco.trickResults[newResultCount-1];
+    const mine=localTrucoTeam();
+    setTimeout(()=>showRoundFlash(
+      winner==='tie'?'EMPATE NA RODADA':winner===mine?(truco.mode==='1v1'?'VOCÊ VENCEU A RODADA':'NOSSA DUPLA VENCEU A RODADA'):(truco.mode==='1v1'?'ADVERSÁRIO VENCEU A RODADA':'ELES VENCERAM A RODADA')
+    ),30);
+  }
+
+  if(previousWinner===null && truco.winner!==null && !truco.spectatorMode){
+    window.TDBSound?.play?.(truco.winner===localTrucoTeam()?'victory':'defeat',{channel:'truco-result',dedupeMs:500});
   }
 
   renderTruco();
@@ -2290,8 +2330,9 @@ function updateTrucoScreen(){
   set('trucoRoundDots',renderRoundDots());
 
   const currentPlayer=playerBySeat(truco.current);
-  text('trucoTurnName',truco.winner!==null ? 'Partida encerrada' : `Vez de ${currentPlayer?.username||'Jogador'}`);
-  text('trucoTurnSub',room.turnTimer?`Tempo: ${room.turnTimer}s por jogada`:'Sem limite de tempo');
+  const resolving=truco.phase==='resolving';
+  text('trucoTurnName',truco.winner!==null ? 'Partida encerrada' : resolving ? 'Conferindo a rodada…' : `Vez de ${currentPlayer?.username||'Jogador'}`);
+  text('trucoTurnSub',resolving?'As cartas ficam na mesa por um instante':room.turnTimer?`Tempo: ${room.turnTimer}s por jogada`:'Sem limite de tempo');
   set('trucoTimerSlot',room.turnTimer && truco.phase==='playing'
       ? `<div class="timer-ring" style="margin-left:auto;margin-top:8px">${truco.timerLeft||room.turnTimer}</div>` : '');
 
@@ -2521,11 +2562,11 @@ function applyPlayCard({playerIdx,cardIdx,hidden=false}){
   truco.selectedCard=null;
   const actingPlayer=playerBySeat(playerIdx);
   logTruco(`${actingPlayer?.username||'Jogador'} ${hidden?'jogou uma carta escondida':`jogou ${cardText(card)}`}.`);
-  playCardSound();
+  playCardSound(hidden);
   if(truco.trickCards.length===truco.activeSeats.length){
     truco.phase='resolving';
     renderTruco();
-    setTimeout(resolveTrick,650);
+    setTimeout(resolveTrick,1800);
   } else {
     truco.current=nextActiveSeat(playerIdx);
     renderTruco();
@@ -2549,6 +2590,7 @@ function resolveTrick(){
   const localTeam=localTrucoTeam();
   logTruco(`Rodada ${truco.round+1}: ${winner==='tie'?'empate':winner===localTeam?(truco.mode==='1v1'?'você':'nossa dupla'):(truco.mode==='1v1'?'adversário':'adversários')}.`);
   showRoundFlash(winner==='tie'?'EMPATE NA RODADA':winner===localTeam?(truco.mode==='1v1'?'VOCÊ VENCEU A RODADA':'NOSSA DUPLA VENCEU A RODADA'):(truco.mode==='1v1'?'ADVERSÁRIO VENCEU A RODADA':'ELES VENCERAM A RODADA'));
+  if(winner!=='tie') window.TDBSound?.play?.(winner===localTeam?'roundWin':'roundLose',{channel:'truco-round',dedupeMs:100});
   truco.discardCount += truco.activeSeats.length;
   const handWinner=evaluateHandWinner();
   if(handWinner!==null) return awardHand(handWinner);
@@ -2600,6 +2642,7 @@ function awardHand(team){
   if(truco.scores[0]>=12 || truco.scores[1]>=12){
     truco.winner=truco.scores[0]>=12?0:1;
     truco.phase='finished';
+    window.TDBSound?.play?.(truco.winner===localTrucoTeam()?'victory':'defeat',{channel:'truco-result',dedupeMs:500});
     return renderTruco();
   }
   truco.phase='hand-end';

@@ -1,0 +1,2 @@
+import * as Admin from '../../admin-service.js';import { requireAdmin,sendAdminError } from '../../admin-auth.js';
+export default async function handler(req,res){if(req.method!=='POST')return res.status(405).json({error:'Método inválido'});try{await requireAdmin(req);const user=await Admin.setUserBan(req.body?.userId,!!req.body?.banned,req.body?.reason||'');res.json({ok:true,user})}catch(err){sendAdminError(res,err)}}

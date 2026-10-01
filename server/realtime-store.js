@@ -52,16 +52,19 @@ export async function initSupabase(){
     try{
       supabaseClient=createClient(url,secret,{
         auth:{persistSession:false,autoRefreshToken:false},
-        global:{headers:{'X-Client-Info':'tdb-jogos-server/5.2'}}
+        global:{headers:{'X-Client-Info':'tdb-jogos-server/5.6'}}
       });
       const checks=await Promise.all([
         supabaseClient.from('tdb_rooms').select('code',{head:true,count:'exact'}).limit(1),
         supabaseClient.from('tdb_game_results').select('match_id',{head:true,count:'exact'}).limit(1),
         supabaseClient.from('tdb_friend_requests').select('sender_id',{head:true,count:'exact'}).limit(1),
-        supabaseClient.from('tdb_room_invites').select('id',{head:true,count:'exact'}).limit(1)
+        supabaseClient.from('tdb_room_invites').select('id',{head:true,count:'exact'}).limit(1),
+        supabaseClient.from('tdb_reports').select('id',{head:true,count:'exact'}).limit(1),
+        supabaseClient.from('tdb_admin_sessions').select('token',{head:true,count:'exact'}).limit(1),
+        supabaseClient.from('tdb_users').select('id,banned',{head:true,count:'exact'}).limit(1)
       ]);
       const schemaError=checks.find(x=>x.error)?.error;
-      if(schemaError){supabaseReady=true;schemaReady=false;lastError=`Schema v5.2 pendente: ${schemaError.message}`;return false;}
+      if(schemaError){supabaseReady=true;schemaReady=false;lastError=`Schema v5.5 pendente: ${schemaError.message}`;return false;}
 
 
       supabaseReady=true;
@@ -142,12 +145,13 @@ export async function snapshot(){
       if(r.error) throw new Error(r.error.message);
     }
 
+    const now=Date.now();
     const rooms=(roomsRes.data||[]).map(row=>{
       const room=clone(row.data||{});
       room.hasPassword=!!room.password;
       delete room.password;
       return room;
-    });
+    }).filter(room=>!room.emptyExpiresAt || Number(room.emptyExpiresAt)>now);
 
     const matches=(matchesRes.data||[]).map(row=>clone(row.data||{}));
 
@@ -164,12 +168,13 @@ export async function snapshot(){
     return {rooms,matches,presence,shared,supabase:true};
   }
 
+  const now=Date.now();
   const rooms=[...MEMORY.rooms.values()].map(room=>{
     const copy=clone(room);
     copy.hasPassword=!!copy.password;
     delete copy.password;
     return copy;
-  });
+  }).filter(room=>!room.emptyExpiresAt || Number(room.emptyExpiresAt)>now);
   const matches=[...MEMORY.matches.values()].map(clone);
   const presence=Object.fromEntries([...MEMORY.presence.entries()].map(([k,v])=>[k,clone(v)]));
   const shared={};

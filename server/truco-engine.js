@@ -1,6 +1,7 @@
 const RANKS=['4','5','6','7','Q','J','K','A','2','3'];
 const SUITS=['diamonds','spades','hearts','clubs'];
 const SUIT_POWER={diamonds:1,spades:2,hearts:3,clubs:4};
+export const TRICK_REVEAL_MS=1800;
 
 function clone(v){return structuredClone(v)}
 function nextRank(rank){return RANKS[(RANKS.indexOf(rank)+1)%RANKS.length]}
@@ -48,14 +49,16 @@ function createTrucoState(room){
     dealer:activeSeats[activeSeats.length-1],current:null,round:0,handValue:1,
     trickCards:[],trickResults:[],hands:{},vira:null,manilhaRank:null,
     pendingRaise:null,eleven:null,ironHand:false,logs:[],version:1,
-    turnTimer:Number(room.turnTimer||0),turnDeadlineAt:null,lastAutoAction:null
+    turnTimer:Number(room.turnTimer||0),turnDeadlineAt:null,lastAutoAction:null,
+    trickResolveAt:null,pendingTrick:null
   };
   dealHand(s);
   return s;
 }
 function armDeadline(s){
   const seconds=Number(s.turnTimer||0);
-  s.turnDeadlineAt=seconds>0 && s.phase!=='finished'?Date.now()+seconds*1000:null;
+  const actionable=['playing','raise-response','eleven'].includes(s.phase);
+  s.turnDeadlineAt=seconds>0 && actionable?Date.now()+seconds*1000:null;
 }
 function dealHand(s){
   const d=shuffle(deck40());
@@ -63,7 +66,7 @@ function dealHand(s){
   for(const seat of s.activeSeats) s.hands[seat]=[];
   for(let r=0;r<3;r++) for(const seat of s.activeSeats) s.hands[seat].push(d.shift());
   s.vira=d.shift(); s.manilhaRank=nextRank(s.vira.rank);
-  s.round=0;s.trickCards=[];s.trickResults=[];s.handValue=1;s.pendingRaise=null;
+  s.round=0;s.trickCards=[];s.trickResults=[];s.handValue=1;s.pendingRaise=null;s.trickResolveAt=null;s.pendingTrick=null;
   s.dealer=nextSeat(s.activeSeats,s.dealer);
   s.current=nextSeat(s.activeSeats,s.dealer);
   s.ironHand=s.scores[0]===11&&s.scores[1]===11;
@@ -85,7 +88,7 @@ function handWinnerFromResults(results,forehandTeam){
   if(b!=='tie') return b;
   return forehandTeam;
 }
-function resolveTrick(s){
+function beginResolveTrick(s,now=Date.now()){
   let best=null,tie=false;
   for(const tc of s.trickCards){
     if(!best){best=tc;tie=false;continue}
@@ -94,17 +97,29 @@ function resolveTrick(s){
     else if(cmp===0) tie=true;
   }
   const result=tie?'tie':teamForSeat(s,best.seat);
-  s.trickResults.push(result);
-  const lead=s.current;
+  const lead=s.trickCards[0]?.seat ?? s.current;
   const trickWinnerSeat=tie?lead:best.seat;
+  s.trickResults.push(result);
+  s.pendingTrick={result,winnerSeat:trickWinnerSeat};
+  s.trickResolveAt=now+TRICK_REVEAL_MS;
+  s.phase='resolving';
+  s.turnDeadlineAt=null;
+}
+function finalizeResolvedTrick(s){
+  if(s.phase!=='resolving'||!s.pendingTrick)return;
+  const trickWinnerSeat=s.pendingTrick.winnerSeat;
   s.round++;
   s.trickCards=[];
+  s.trickResolveAt=null;
+  s.pendingTrick=null;
   const forehand=teamForSeat(s,nextSeat(s.activeSeats,s.dealer));
   const hw=handWinnerFromResults(s.trickResults,forehand);
   if(hw!==null || s.round>=3){
     awardHand(s,hw===null?forehand:hw,s.handValue);
   }else{
     s.current=trickWinnerSeat;
+    s.phase='playing';
+    armDeadline(s);
   }
 }
 function awardHand(s,team,points){
@@ -124,7 +139,7 @@ function actionPlay(s,seat,{cardIdx,hidden=false}){
   if(!card) throw new Error('Carta inválida.');
   hand.splice(cardIdx,1);
   s.trickCards.push({seat,card,hidden:!!hidden});
-  if(s.trickCards.length===s.activeSeats.length) resolveTrick(s);
+  if(s.trickCards.length===s.activeSeats.length) beginResolveTrick(s);
   else s.current=nextSeat(s.activeSeats,seat);
 }
 function nextRaise(v){return v===1?3:v===3?6:v===6?9:v===9?12:null}
@@ -183,6 +198,13 @@ export function applyTrucoAction(state,seat,action){
 }
 export function tick(state,now=Date.now()){
   let s=clone(state);
+  if(s.phase==='resolving'){
+    if(Number(s.trickResolveAt||0)>0 && now>=Number(s.trickResolveAt||0)){
+      finalizeResolvedTrick(s);
+      s.version=(s.version||0)+1;
+    }
+    return s;
+  }
   if(!s.turnTimer||!s.turnDeadlineAt||now<s.turnDeadlineAt||s.phase==='finished') return s;
   try{
     if(s.phase==='playing'){
