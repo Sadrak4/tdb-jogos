@@ -11,11 +11,12 @@ let chessClockTimer=null;
 let lastClockTick=0;
 let pendingOnlineMove=null;
 let lastAnimatedMoveKey=null;
+let chessDragSource=null;
 
 function byColor(color){ return chess.players[color]; }
 function localColor(){
   if(!chess || !state.user) return null;
-  if(chess.onlineMode) return chess.localColor||null;
+  if(chess.onlineMode) return chess.localColor||(chess.spectatorMode?'white':null);
   if(chess.players.white.id===state.user.id) return 'white';
   if(chess.players.black.id===state.user.id) return 'black';
   return chess.spectatorMode ? 'white' : null;
@@ -304,10 +305,17 @@ function updateChessUI(){
   if(turnBanner){
     const inCheck=chess.status==='playing'&&E.isInCheck(chess,chess.turn);
     const mine=chess.turn===lc;
-    turnBanner.className=`chess-turn-banner ${mine?'mine':'theirs'} ${inCheck?'check-alert':''}`;
-    turnBanner.innerHTML=chess.status==='playing'
-      ? `<strong>${inCheck?'XEQUE • ':''}${mine?'SUA VEZ':'AGUARDANDO ADVERSÁRIO'}</strong><span>${mine?'Escolha uma peça e faça sua jogada.':`${escapeHtml(byColor(chess.turn)?.username||'Adversário')} está jogando.`}</span>`
-      : `<strong>${escapeHtml(statusText().toUpperCase())}</strong>`;
+    if(chess.spectatorMode){
+      turnBanner.className=`chess-turn-banner theirs ${inCheck?'check-alert':''}`;
+      turnBanner.innerHTML=chess.status==='playing'
+        ? `<strong>${inCheck?'XEQUE • ':''}ASSISTINDO AO VIVO</strong><span>Vez de ${escapeHtml(byColor(chess.turn)?.username||'Jogador')}.</span>`
+        : `<strong>${escapeHtml(statusText().toUpperCase())}</strong>`;
+    }else{
+      turnBanner.className=`chess-turn-banner ${mine?'mine':'theirs'} ${inCheck?'check-alert':''}`;
+      turnBanner.innerHTML=chess.status==='playing'
+        ? `<strong>${inCheck?'XEQUE • ':''}${mine?'SUA VEZ':'AGUARDANDO ADVERSÁRIO'}</strong><span>${mine?'Escolha uma peça e faça sua jogada.':`${escapeHtml(byColor(chess.turn)?.username||'Adversário')} está jogando.`}</span>`
+        : `<strong>${escapeHtml(statusText().toUpperCase())}</strong>`;
+    }
   }
   document.getElementById('chessOverlay').innerHTML=renderOverlay();
   updateClockDisplays();
@@ -339,6 +347,8 @@ function renderBoard(){
   const cols=orientation==='black'?[7,6,5,4,3,2,1,0]:[0,1,2,3,4,5,6,7];
   const legal=new Set(chess.legalMoves.map(m=>`${m.to.r},${m.to.c}`));
   const selected=chess.selectedSquare;
+  const mine=localColor();
+  const canInteract=!chess.spectatorMode&&chess.status==='playing'&&chess.turn===mine&&!pendingOnlineMove;
   const last=chess.lastMove;
   const moveCount=chess.moveHistory?.length||0;
   const lastMoveKey=last?`${moveCount}:${last.from.r},${last.from.c}>${last.to.r},${last.to.c}:${last.notation||''}`:'';
@@ -359,10 +369,13 @@ function renderBoard(){
       const moveY=isLastDestination?(last.from.r-last.to.r)*orientationSign:0;
       const rankLabel=(c===cols[0]) ? `<span class="rank-label">${8-r}</span>` : '';
       const fileLabel=(r===rows[rows.length-1]) ? `<span class="file-label">${E.FILES[c].toUpperCase()}</span>` : '';
+      const draggable=!!(p&&canInteract&&p.color===mine);
       html+=`<button class="chess-square ${dark?'dark':'light'} ${sel?'selected':''} ${isLegal?'legal':''} ${isLast?'last':''} ${isLastDestination?'last-destination':''} ${kingCheck?'check':''}"
-        onclick="clickChessSquare(${r},${c})">
+        data-r="${r}" data-c="${c}"
+        onclick="clickChessSquare(${r},${c})"
+        ondragover="chessDragOver(event,${r},${c})" ondragleave="chessDragLeave(event)" ondrop="dropChessPiece(event,${r},${c})">
         ${rankLabel}${fileLabel}
-        ${p?`<span class="chess-piece ${p.color} ${isLastDestination&&animateLastMove?'piece-arrive':''}" ${isLastDestination&&animateLastMove?`style="--move-x:${moveX};--move-y:${moveY}"`:''}>${E.displayPiece(p)}</span>`:''}
+        ${p?`<span class="chess-piece ${p.color} ${draggable?'chess-draggable':''} ${isLastDestination&&animateLastMove?'piece-arrive':''}" ${draggable?`draggable="true" ondragstart="startChessDrag(event,${r},${c})" ondragend="endChessDrag(event)"`:''} ${isLastDestination&&animateLastMove?`style="--move-x:${moveX};--move-y:${moveY}"`:''}>${E.displayPiece(p)}</span>`:''}
         ${isLegal?`<i class="legal-dot ${p?'capture':''}"></i>`:''}
       </button>`;
     }
@@ -370,6 +383,41 @@ function renderBoard(){
   board.innerHTML=html;
   if(animateLastMove)lastAnimatedMoveKey=lastMoveKey;
 }
+
+function clearChessDragClasses(){
+  document.querySelectorAll('.chess-square.drag-origin,.chess-square.drag-target,.chess-square.drag-over').forEach(el=>el.classList.remove('drag-origin','drag-target','drag-over'));
+}
+function startChessDrag(event,r,c){
+  if(!chess||chess.status!=='playing'||chess.spectatorMode||pendingOnlineMove){event.preventDefault();return}
+  const mine=localColor(),piece=chess.board?.[r]?.[c];
+  if(chess.turn!==mine||!piece||piece.color!==mine){event.preventDefault();return}
+  chessDragSource={r,c};
+  chess.selectedSquare={r,c};
+  chess.legalMoves=E.legalMovesFrom(chess,r,c);
+  if(!chess.legalMoves.length){chessDragSource=null;event.preventDefault();return}
+  try{event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',`${r},${c}`)}catch{}
+  clearChessDragClasses();
+  document.querySelector(`.chess-square[data-r="${r}"][data-c="${c}"]`)?.classList.add('drag-origin');
+  for(const move of chess.legalMoves){document.querySelector(`.chess-square[data-r="${move.to.r}"][data-c="${move.to.c}"]`)?.classList.add('drag-target')}
+  chessMoveSound('select');
+}
+function chessDragOver(event,r,c){
+  if(!chessDragSource||!chess?.legalMoves?.some(m=>m.to.r===r&&m.to.c===c))return;
+  event.preventDefault();
+  try{event.dataTransfer.dropEffect='move'}catch{}
+  event.currentTarget?.classList.add('drag-over');
+}
+function chessDragLeave(event){event.currentTarget?.classList.remove('drag-over')}
+async function dropChessPiece(event,r,c){
+  if(!chessDragSource)return;
+  const legal=chess?.legalMoves?.some(m=>m.to.r===r&&m.to.c===c);
+  if(!legal){clearChessDragClasses();chessDragSource=null;return}
+  event.preventDefault();
+  clearChessDragClasses();
+  chessDragSource=null;
+  await clickChessSquare(r,c);
+}
+function endChessDrag(){clearChessDragClasses();chessDragSource=null}
 
 async function clickChessSquare(r,c){
   if(!chess || chess.status!=='playing' || chess.spectatorMode) return;
@@ -595,29 +643,30 @@ function renderHistory(){
 }
 
 function renderOverlay(){
-  if(chess.status==='playing' && chess.drawOffer && chess.drawOffer!==localColor()){
+  if(!chess.spectatorMode && chess.status==='playing' && chess.drawOffer && chess.drawOffer!==localColor()){
     return `<div class="draw-offer-toast"><div><strong>Proposta de empate</strong><span>O adversário ofereceu empate. Você pode responder ou simplesmente jogar.</span></div><div class="choices"><button class="btn btn-primary" onclick="acceptChessDraw()">Aceitar</button><button class="btn btn-dark" onclick="declineChessDraw()">Recusar</button></div></div>`;
   }
+  const winnerName=escapeHtml(byColor(chess.winner)?.username||'Jogador');
   if(chess.status==='checkmate'){
-    return resultModal('XEQUE-MATE',chess.winner===localColor()?'Você venceu a partida.':'Seu adversário venceu a partida.');
+    return resultModal('XEQUE-MATE',chess.spectatorMode?`${winnerName} venceu a partida.`:(chess.winner===localColor()?'Você venceu a partida.':'Seu adversário venceu a partida.'));
   }
   if(chess.status==='stalemate' || chess.status==='draw'){
     return resultModal('EMPATE',chess.drawReason==='afogamento'?'Afogamento: o rei não está em xeque, mas não possui nenhuma jogada legal.':chess.drawReason||'Partida empatada.');
   }
   if(chess.status==='resigned'){
-    return resultModal('PARTIDA ENCERRADA',chess.winner===localColor()?'O adversário desistiu.':'Você desistiu.');
+    return resultModal('PARTIDA ENCERRADA',chess.spectatorMode?`${winnerName} venceu por desistência.`:(chess.winner===localColor()?'O adversário desistiu.':'Você desistiu.'));
   }
   if(chess.status==='timeout'){
-    return resultModal('TEMPO ESGOTADO',chess.winner===localColor()?'Você venceu por tempo.':'Você perdeu por tempo.');
+    return resultModal('TEMPO ESGOTADO',chess.spectatorMode?`${winnerName} venceu por tempo.`:(chess.winner===localColor()?'Você venceu por tempo.':'Você perdeu por tempo.'));
   }
   if(chess.status==='abandoned'){
-    return resultModal('PARTIDA ENCERRADA',chess.winner===localColor()?'Você venceu por abandono.':'A partida terminou por abandono.');
+    return resultModal('PARTIDA ENCERRADA',chess.spectatorMode?`${winnerName} venceu por abandono.`:(chess.winner===localColor()?'Você venceu por abandono.':'A partida terminou por abandono.'));
   }
   return '';
 }
 
 function resultModal(title,text){
-  const canRematch=!chess.onlineMode || chess.room?.ownerId===state.user.id;
+  const canRematch=!chess.spectatorMode && (!chess.onlineMode || chess.room?.ownerId===state.user.id);
   const plies=chess.moveHistory?.length||0;
   const moves=Math.ceil(plies/2);
   const duration=Math.max(0,Math.floor((Date.now()-Number(chess.startedAt||Date.now()))/1000));
@@ -742,6 +791,11 @@ window.startChessGame=startChessGame;
 window.copyChessPgn=copyChessPgn;
 window.startChessWithBot=startChessWithBot;
 window.clickChessSquare=clickChessSquare;
+window.startChessDrag=startChessDrag;
+window.chessDragOver=chessDragOver;
+window.chessDragLeave=chessDragLeave;
+window.dropChessPiece=dropChessPiece;
+window.endChessDrag=endChessDrag;
 window.offerChessDraw=offerChessDraw;
 window.acceptChessDraw=acceptChessDraw;
 window.declineChessDraw=declineChessDraw;

@@ -12,6 +12,7 @@ export default async function handler(req,res){
     const code=String(req.body?.roomCode||'').toUpperCase();
     const room=await getRoomPrivate(code);
     if(!room) throw new Error('Sala não encontrada.');
+    if(room.game==='blackjack') return res.status(503).json({ok:false,error:'Blackjack está em manutenção temporária.',code:'GAME_MAINTENANCE'});
     if(room.ownerId!==user.id) throw new Error('Somente o host pode iniciar.');
 
     const current=await Games.getGame(code);

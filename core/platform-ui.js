@@ -1,6 +1,6 @@
 (function(){
 'use strict';
-let feedTimer=null,reconnectTimer=null,lastReactionIds=new Set(),loadingTimer=null;
+let feedTimer=null,reconnectTimer=null,lastReactionIds=new Set(),loadingTimer=null,lastMaintenance={enabled:false};
 const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 function user(){return window.TDBCore?.auth?.currentUser?.()||null}
@@ -11,6 +11,7 @@ function ensureLayer(){
   if(document.getElementById('tdbPlatformLayer'))return;
   const el=document.createElement('div');el.id='tdbPlatformLayer';el.innerHTML=`
     <div id="tdbMaintenanceOverlay" class="tdb-maintenance-overlay"></div>
+    <div id="tdbAdminMaintenanceBar" class="tdb-admin-maintenance-bar"></div>
     <div id="tdbSyncOverlay" class="tdb-sync-overlay"><div><span class="tdb-sync-spinner"></span><strong id="tdbSyncText">Sincronizando…</strong></div></div>
     <div id="tdbReconnectWatch" class="tdb-reconnect-watch"></div>
     <div id="tdbGameDock" class="tdb-game-dock"></div>
@@ -24,17 +25,30 @@ function showLoading(text='Sincronizando…',timeout=5000){ensureLayer();clearTi
 function hideLoading(){clearTimeout(loadingTimer);$('#tdbSyncOverlay')?.classList.remove('show')}
 function setMaintenance(value={}){
   ensureLayer();
-  const box=$('#tdbMaintenanceOverlay');
-  // O painel ADM precisa permanecer totalmente utilizável para conseguir
-  // desligar a manutenção depois que ela for ativada.
-  if(location.hash==='#admin'){
-    box.classList.remove('show');
+  lastMaintenance=value||{enabled:false};
+  const box=$('#tdbMaintenanceOverlay'),bar=$('#tdbAdminMaintenanceBar');
+  const inAdmin=location.hash==='#admin';
+  const adminBypass=!!value?.enabled&&!!value?.adminBypass&&!inAdmin;
+  box.classList.remove('show');bar.classList.remove('show');
+  if(inAdmin||!value?.enabled)return;
+  if(adminBypass){
+    bar.innerHTML=`<div><strong>🛠 MODO MANUTENÇÃO ATIVO</strong><span>Somente administradores podem usar o TDB agora.</span></div><div class="tdb-admin-maintenance-actions"><button onclick="TDBPlatformUI.openAdmin()">Painel ADM</button><button class="danger" onclick="TDBPlatformUI.endMaintenance()">Encerrar manutenção</button></div>`;
+    bar.classList.add('show');
     return;
   }
-  if(value?.enabled){
-    box.innerHTML=`<div><img src="assets/logo-transparent.png" alt=""><span>MANUTENÇÃO</span><h1>${esc(value.message||'TDB em manutenção • voltamos em breve')}</h1><p>Seu login continua seguro. Partidas e salas ficam bloqueadas até a manutenção terminar.</p></div>`;
-    box.classList.add('show');
-  }else box.classList.remove('show');
+  box.innerHTML=`<div><img src="assets/logo-transparent.png" alt=""><span>MANUTENÇÃO</span><h1>${esc(value.message||'TDB em manutenção • voltamos em breve')}</h1><p>Seu login continua seguro. Partidas e salas ficam bloqueadas até a manutenção terminar.</p><button class="tdb-maintenance-admin-link" onclick="TDBPlatformUI.openAdmin()">Acesso administrativo</button></div>`;
+  box.classList.add('show');
+}
+function openAdmin(){location.hash='#admin'}
+async function endMaintenance(){
+  if(!window.TDBAdmin?.hasToken)return openAdmin();
+  if(!confirm('Encerrar o modo manutenção e liberar o TDB para todos os usuários?'))return;
+  try{
+    const result=await window.TDBAdmin.setMaintenance(false,lastMaintenance?.message||'TDB em manutenção • voltamos em breve',{allowAdminAccess:true});
+    lastMaintenance=result?.maintenance||{enabled:false};
+    await window.TDBOnline?.refreshHealth?.();
+    window.toast?.('Modo manutenção encerrado. TDB liberado para os usuários.');
+  }catch(err){window.toast?.(err.message||'Não foi possível encerrar a manutenção.');openAdmin()}
 }
 function isGameScreen(){return !!document.querySelector('.blackjack-page,.chess-page,.truco-game,.truco-table,.music-page,.spectator-placeholder')}
 function refreshDock(){ensureLayer();const r=room(),dock=$('#tdbGameDock');if(!r||!isGameScreen()){dock.classList.remove('show');return}const spectators=(r.spectators||[]).length;dock.innerHTML=`<button onclick="TDBPlatformUI.toggleFullscreen()" title="Tela cheia">⛶</button><button onclick="TDBPlatformUI.openSocial()" title="Chat e reações">💬</button><span>👁 ${spectators}</span>`;dock.classList.add('show')}
@@ -60,5 +74,5 @@ new MutationObserver(()=>setTimeout(()=>{
 },10)).observe(document.getElementById('app'),{childList:true,subtree:false});
 setInterval(tick,1000);reconnectTimer=setInterval(refreshReconnect,1000);
 ensureLayer();applyGraphics();setMaintenance(window.TDBOnline?.maintenance||{enabled:false});
-window.TDBPlatformUI={showLoading,hideLoading,setMaintenance,openSocial,closeSocial,react,refreshFeed,toggleFullscreen,applyGraphics,refreshDock};
+window.TDBPlatformUI={showLoading,hideLoading,setMaintenance,openAdmin,endMaintenance,openSocial,closeSocial,react,refreshFeed,toggleFullscreen,applyGraphics,refreshDock};
 })();

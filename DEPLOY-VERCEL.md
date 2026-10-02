@@ -1,55 +1,23 @@
-# DEPLOY — TDB v7.1.4 FINAL REVIEW
+# DEPLOY — TDB v7.1.6 LOBBY / LIVE / UX
 
-## Banco
+## Banco de dados
+Nenhum SQL novo nesta versão. Não rode uma migration adicional se `public.tdb_users.banner` já foi criado anteriormente.
 
-A linha v7.1.x usa apenas uma migration nova:
+## Publicação
+1. Extraia `TDB-v7.1.6-LOBBY-LIVE-UX.zip`.
+2. Substitua os arquivos do repositório atual pelos arquivos extraídos.
+3. Abra o GitHub Desktop e confira as alterações.
+4. Commit sugerido: `TDB v7.1.6 - Lobby Live UX`.
+5. Faça **Push origin**.
+6. Aguarde o Vercel ficar **Ready**.
+7. Abra `/api/health` e confirme `"version": "7.1.6"`.
 
-`SUPABASE-MIGRATION-v7.1.0.sql`
-
-Ela adiciona `banner text` em `public.tdb_users` com `IF NOT EXISTS`.
-
-Se essa migration já foi executada no Supabase correto do TDB, **não rode SQL adicional** para a v7.1.4.
-
-## Publicar
-
-1. Abra o repositório do TDB no GitHub Desktop.
-2. Faça `Fetch origin` e `Pull origin` se houver atualização remota.
-3. Extraia `TDB-v7.1.4-FINAL-REVIEW.zip`.
-4. Copie os arquivos por cima do repositório atual.
-5. Commit sugerido:
-
-```text
-TDB v7.1.4 Final Review
-```
-
-6. Faça `Commit to main`.
-7. Clique em `Push origin`.
-8. Aguarde o deploy da Vercel ficar `Ready`.
-
-## Conferir versão
-
-Abra o endpoint `/api/health` do seu domínio TDB.
-
-Esperado:
-
-```json
-{
-  "app": "TDB",
-  "version": "7.1.4"
-}
-```
-
-## Teste obrigatório após deploy
-
-Faça em zoom 100% e, se possível, também em uma resolução de notebook:
-
-1. **Truco:** Vira grande e central; a carta jogada pelo adversário superior não pode cobrir a Vira.
-2. **Xadrez:** tabuleiro grande; painel direito inteiro; histórico com rolagem; jogar algumas sequências contra o BOT.
-3. **TDB Lobby/Música:** painel de compartilhamento/adicionar música inteiro; fila e player visíveis; testar adicionar música e votação para pular.
-4. **Blackjack:** apostar, pedir, parar e testar dobrar/separar quando disponíveis; cartas não podem se sobrepor.
-5. **Perfil:** abrir o próprio perfil, banner, perfil de amigo e convite para sala.
-6. **Admin:** conferir métricas, usuários, salas, reportes e logs.
-
-## Compatibilidade
-
-Os identificadores internos de música continuam usando `music` / `lounge-*` para manter compatibilidade com salas, backend e banco existentes. O nome exibido ao usuário continua **TDB Lobby**.
+## Checklist rápido após deploy
+- Criar uma sala e confirmar **Voltar ao lobby** e **Apagar sala agora** para o host.
+- Iniciar Truco/Xadrez em outra conta e confirmar que a partida aparece em **Ao vivo agora** e abre com **Assistir**.
+- No Truco com bot, pedir Truco e conferir a espera + resposta no canto superior direito.
+- No Xadrez, testar clique-clique e arrastar/soltar apenas em casas permitidas.
+- Abrir TDB Lobby/Música em 100%, 125% e resolução de notebook e conferir que nenhum painel direito fica cortado.
+- Durante compartilhamento, usar **Trocar tela / janela / aba**.
+- Confirmar que Blackjack mostra manutenção e não abre o navegador/criação de salas.
+- Recolher a barra lateral e restaurá-la pelo controle lateral.

@@ -1,23 +1,12 @@
-# TDB v7.1.4 — Final Review
+# TDB v7.1.6 — Lobby, Ao Vivo e UX
 
-Versão consolidada da linha v7.1.x, baseada na v7.0.1 Gameplay Fix.
+Versão baseada na **v7.1.5** e pronta para substituir diretamente a versão atualmente publicada.
 
-## Principais entregas
-- Perfil 2.0 + perfil público de amigos + convites para sala.
-- Presença detalhada e módulo de inatividade separado.
-- Truco com Vira maior e carta superior sem cobrir o centro da mesa.
-- Xadrez com tabuleiro maior, painel direito completo, histórico rolável e BOT anti-loop reforçado.
-- TDB Lobby/Música com fila compartilhada, votação, permissões e layout sem corte lateral.
-- Blackjack com interface de cassino, apostas/fichas, ações destacadas e animações.
-- Admin 2.0 com métricas, contas, banimentos, reportes, logs, manutenção e salas.
-- Correções de responsividade consolidadas na última camada CSS.
+Principais pontos: exclusão imediata de sala pelo host, botão voltar na sala de espera, correção/visibilidade do modo espectador, resposta de Truco mais legível, Xadrez com drag-and-drop e tabuleiro maior, TDB Lobby/Música responsivo com troca da origem compartilhada, Blackjack temporariamente em manutenção e barra lateral recolhível.
 
-Veja `REVISAO-FINAL-v7.1.4.md` para a lista completa.
+O **Modo Manutenção com acesso administrativo da v7.1.5 continua incluído**.
+
+Leia `ATUALIZACAO-v7.1.6.md` para a lista completa.
 
 ## Supabase
-A única migration necessária na linha v7.1.x é `SUPABASE-MIGRATION-v7.1.0.sql`, que adiciona a coluna `banner` em `public.tdb_users`.
-
-Se você já executou essa migration, não precisa rodar nenhum SQL novo para a v7.1.4.
-
-## Deploy
-Substitua os arquivos do repositório por esta versão, faça Commit + Push no GitHub Desktop e aguarde o deploy automático do Vercel.
+Nenhum SQL novo para a v7.1.6. Se a coluna `banner` da v7.1.0 já existe em `public.tdb_users`, não altere o banco.

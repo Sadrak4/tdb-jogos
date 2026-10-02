@@ -1,12 +1,14 @@
 {
   "name": "tdb",
-  "version": "7.1.4",
+  "version": "7.1.6",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "test:audit": "node tests/v7.1.4-final-audit-smoke.mjs"
+    "test:audit": "node tests/v7.1.6-lobby-live-ux-smoke.mjs",
+    "test:maintenance": "node tests/v7.1.5-maintenance-admin-smoke.mjs",
+    "test:v716": "node tests/v7.1.6-lobby-live-ux-smoke.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

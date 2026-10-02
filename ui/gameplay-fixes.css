@@ -581,3 +581,131 @@ body.tdb-game-focus.tdb-v7 .music-screen{
 .tdb-v7 .bj-bet-nudge:not(:disabled){
   cursor:pointer!important;
 }
+
+/* =========================================================
+   TDB v7.1.6 — Lobby / live / interaction audit
+   ========================================================= */
+
+/* Sidebar can be collapsed without changing the current page. */
+@media (min-width:901px){
+  .tdb-v7 .sidebar-toggle{
+    position:absolute;z-index:4;right:-14px;top:50%;transform:translateY(-50%);
+    width:28px;height:48px;border-radius:0 12px 12px 0;
+    border:1px solid rgba(216,181,104,.25);border-left:0;
+    background:rgba(12,15,13,.98);color:#d8b568;cursor:pointer;
+    display:grid;place-items:center;box-shadow:9px 0 22px rgba(0,0,0,.28)
+  }
+  .tdb-v7 .sidebar-toggle span{font-size:22px;line-height:1;transition:transform .18s ease}
+  .tdb-v7.tdb-sidebar-collapsed{--v7-nav:34px!important}
+  .tdb-v7.tdb-sidebar-collapsed .topbar{padding:0!important;width:34px!important;overflow:visible!important}
+  .tdb-v7.tdb-sidebar-collapsed .topbar-left,
+  .tdb-v7.tdb-sidebar-collapsed .topbar-right{display:none!important}
+  .tdb-v7.tdb-sidebar-collapsed .sidebar-toggle{right:-1px;border-left:1px solid rgba(216,181,104,.25);border-radius:0 12px 12px 0}
+  .tdb-v7.tdb-sidebar-collapsed .sidebar-toggle span{transform:rotate(180deg)}
+}
+@media (max-width:900px){.tdb-v7 .sidebar-toggle{display:none!important}}
+
+/* Waiting lobby: explicit return and host-owned immediate deletion. */
+.tdb-v7 .waiting-card{position:relative!important}
+.tdb-v7 .waiting-back-button{
+  position:absolute;left:14px;top:14px;z-index:5;
+  display:inline-flex;align-items:center;gap:7px;
+  border:1px solid rgba(255,255,255,.08);border-radius:11px;
+  background:rgba(8,10,9,.88);color:#ddd5c4;padding:8px 10px;
+  font:inherit;font-size:10px;font-weight:800;cursor:pointer;backdrop-filter:blur(10px)
+}
+.tdb-v7 .waiting-back-button:hover{border-color:rgba(216,181,104,.3);color:#efd493}
+.tdb-v7 .waiting-back-button .tdb-icon{width:15px;height:15px}
+.tdb-v7 .waiting-hero{padding-top:62px!important}
+.tdb-v7 .waiting-actions{flex-wrap:wrap!important}
+
+/* Live matches are visible inside each game's room browser too. */
+.tdb-v7 .game-live-strip{margin:12px 0 18px;padding:14px;border:1px solid rgba(216,181,104,.12);border-radius:18px;background:rgba(255,255,255,.012)}
+.tdb-v7 .game-live-strip .section-title{margin:0 0 10px!important}
+.tdb-v7 .game-live-strip .live-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+
+/* Blackjack intentionally disabled until its rebuild is ready. */
+.tdb-v7 .game-card-maintenance{cursor:not-allowed!important;filter:saturate(.55)}
+.tdb-v7 .game-card-maintenance .game-art{opacity:.42!important}
+.tdb-v7 .game-card-maintenance .game-count.maintenance{color:#f0c76f!important;border-color:rgba(240,199,111,.24)!important;background:rgba(240,199,111,.08)!important}
+.tdb-v7 .game-card-maintenance::after{content:"EM MANUTENÇÃO";position:absolute;right:16px;top:16px;padding:6px 8px;border-radius:999px;background:#17130b;border:1px solid rgba(216,181,104,.25);color:#e4c47a;font-size:8px;font-weight:900;letter-spacing:.1em}
+
+/* Truco call prompts never cover the vira. */
+.tdb-v7 .game-message.truco-call{
+  left:auto!important;right:16px!important;top:16px!important;bottom:auto!important;
+  transform:none!important;width:min(350px,calc(100% - 32px))!important;
+  min-width:0!important;max-width:350px!important;padding:13px!important;text-align:left!important;
+  animation:trucoNoticeIn .18s ease-out both!important;z-index:35!important
+}
+.tdb-v7 .game-message.truco-call h2{font-size:25px!important;text-align:left!important}
+.tdb-v7 .game-message.truco-call .choices{justify-content:flex-start!important}
+.tdb-v7 .truco-call-feedback{
+  position:absolute;right:16px;top:16px;z-index:38;
+  max-width:320px;padding:11px 14px;border-radius:12px;
+  border:1px solid rgba(216,181,104,.38);background:rgba(9,11,10,.96);
+  color:#efd493;font-size:11px;font-weight:900;letter-spacing:.04em;
+  box-shadow:0 14px 38px rgba(0,0,0,.4);animation:trucoNoticeIn .18s ease-out both
+}
+@keyframes trucoNoticeIn{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:none}}
+@media(max-width:700px){
+  .tdb-v7 .game-message.truco-call,.tdb-v7 .truco-call-feedback{right:8px!important;top:8px!important;width:min(300px,calc(100% - 16px))!important}
+}
+
+/* Chess: larger board, stable right rail, click + drag affordances. */
+@media (min-width:981px){
+  .tdb-v7 .chess-screen{
+    grid-template-columns:minmax(0,1fr) minmax(214px,270px)!important;
+    gap:6px!important;padding:4px 6px!important
+  }
+  .tdb-v7 .chess-left-panel{display:none!important}
+  .tdb-v7 .chess-center{
+    grid-template-rows:34px 20px minmax(0,1fr) 34px!important;
+    gap:2px!important;height:100dvh!important
+  }
+  .tdb-v7 .chess-player-bar{min-height:34px!important;height:34px!important;padding:2px 7px!important}
+  .tdb-v7 .chess-player-avatar{width:25px!important;height:25px!important}
+  .tdb-v7 .chess-clock{min-width:76px!important;padding:3px 7px!important;font-size:12px!important}
+  .tdb-v7 .chess-turn-banner{min-height:20px!important;height:20px!important;padding:1px 6px!important}
+  .tdb-v7 .chess-board-shell{padding:0!important}
+  .tdb-v7 .chess-board{
+    width:min(100%,calc(100dvh - 94px))!important;
+    max-width:980px!important;max-height:100%!important
+  }
+  .tdb-v7 .chess-right-panel{padding:8px!important}
+}
+.tdb-v7 .chess-piece.chess-draggable{pointer-events:auto!important;cursor:grab!important;user-select:none;-webkit-user-drag:element}
+.tdb-v7 .chess-piece.chess-draggable:active{cursor:grabbing!important}
+.tdb-v7 .chess-square.drag-origin{box-shadow:inset 0 0 0 5px rgba(241,215,130,.82)!important}
+.tdb-v7 .chess-square.drag-target::after{content:"";position:absolute;width:20%;height:20%;border-radius:50%;background:rgba(241,215,130,.58);z-index:5;pointer-events:none}
+.tdb-v7 .chess-square.drag-over{box-shadow:inset 0 0 0 6px rgba(241,215,130,.9)!important}
+
+/* Lobby/Music: keep useful proportions even at browser zoom / smaller laptops. */
+@media (min-width:1060px){
+  .tdb-v7 .music-screen{
+    height:100dvh!important;min-height:0!important;
+    grid-template-columns:minmax(160px,205px) minmax(0,1fr) minmax(220px,270px)!important;
+    grid-template-rows:minmax(0,1fr)!important;gap:7px!important;overflow:hidden!important
+  }
+  .tdb-v7 .music-sidebar,.tdb-v7 .music-main,.tdb-v7 .music-add-panel{min-height:0!important;height:100%!important}
+  .tdb-v7 .music-add-panel{grid-column:auto!important;display:flex!important;flex-direction:column!important;overflow-y:auto!important}
+  .tdb-v7 .music-screen:not(.lounge-has-screen-share) .music-main{grid-template-rows:auto minmax(130px,1fr)!important}
+  .tdb-v7 .music-player-wrap{height:clamp(180px,31dvh,315px)!important;width:min(100%,720px)!important}
+  .tdb-v7 .music-members{max-height:24dvh!important}
+  .tdb-v7 .music-screen.lounge-has-screen-share .music-main{min-height:0!important;height:100%!important;grid-template-rows:minmax(210px,1fr) auto minmax(110px,.45fr)!important}
+  .tdb-v7 .lounge-screen-stage.active{min-height:210px!important}
+}
+@media (min-width:901px) and (max-width:1059px){
+  .tdb-v7 .music-screen{
+    height:auto!important;min-height:100dvh!important;
+    grid-template-columns:minmax(155px,190px) minmax(0,1fr)!important;
+    grid-template-rows:auto auto!important;gap:7px!important;overflow-y:auto!important;overflow-x:hidden!important
+  }
+  .tdb-v7 .music-add-panel{grid-column:1/-1!important;display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;height:auto!important;max-height:none!important;overflow:visible!important}
+  .tdb-v7 .music-add-panel .music-block{min-width:0!important}
+  .tdb-v7 .music-player-wrap{height:clamp(190px,34dvh,310px)!important;width:min(100%,680px)!important}
+  .tdb-v7 .music-screen.lounge-has-screen-share .music-main{min-height:0!important;height:auto!important}
+}
+@media (max-width:900px){
+  .tdb-v7 .music-player-wrap{height:auto!important;aspect-ratio:16/9!important}
+  .tdb-v7 .music-add-panel{grid-template-columns:1fr!important}
+}
