@@ -890,7 +890,7 @@ function renderMusicExtras(force=false){
   const favoriteBtn=document.getElementById('musicFavoriteBtn');
   if(favoriteBtn){
     const favorite=currentFavorite();
-    favoriteBtn.textContent=favorite?'★ Favoritada':'☆ Favoritar';
+    favoriteBtn.textContent=favorite?'★ Favoritada':'Favoritar';
     favoriteBtn.classList.toggle('is-favorite',favorite);
   }
   renderHistoryList(force);
@@ -914,7 +914,7 @@ function renderDynamic(){
 
   if(title) title.textContent=track?.title||'Nenhuma música na fila';
   if(meta) meta.textContent=track?`${track.channel||'YouTube'} • adicionado por ${track.addedBy}`:'Cole um link ou use a pesquisa.';
-  if(playButton) playButton.textContent=musicState.status==='playing'?'⏸ Pausar':'▶ Tocar';
+  if(playButton) playButton.textContent=musicState.status==='playing'?'Pausar':'Tocar';
 
   const art=document.getElementById('musicNowArt');
   if(art){
@@ -1047,10 +1047,10 @@ function renderMusic(){
         </div>
 
         <div class="music-controls">
-          <button class="btn btn-dark" onclick="previousMusic()">⏮ Anterior</button>
-          <button class="btn btn-primary" id="musicPlayBtn" onclick="toggleMusicPlayback()">▶ Tocar</button>
-          <button class="btn btn-dark" onclick="nextMusic()">Próxima ⏭</button>
-          <button class="btn btn-secondary" id="musicFavoriteBtn" onclick="toggleCurrentFavorite()">☆ Favoritar</button>
+          <button class="btn btn-dark" onclick="previousMusic()">Anterior</button>
+          <button class="btn btn-primary" id="musicPlayBtn" onclick="toggleMusicPlayback()">Tocar</button>
+          <button class="btn btn-dark" onclick="nextMusic()">Próxima</button>
+          <button class="btn btn-secondary" id="musicFavoriteBtn" onclick="toggleCurrentFavorite()">Favoritar</button>
         </div>
       </section>
 

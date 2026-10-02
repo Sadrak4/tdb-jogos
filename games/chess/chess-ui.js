@@ -272,8 +272,8 @@ function renderChessScreen(first=false){
           <div class="captured-row"><span>Pretas</span><div id="capturedBlack"></div></div>
         </div>
         <div class="chess-side-actions">
-          ${chess.spectatorMode?'':`<button class="btn btn-dark" onclick="offerChessDraw()">🤝 Empate</button>
-          <button class="btn btn-danger" onclick="resignChess()">⚑ Desistir</button>`}
+          ${chess.spectatorMode?'':`<button class="btn btn-dark" onclick="offerChessDraw()">Empate</button>
+          <button class="btn btn-danger" onclick="resignChess()">Desistir</button>`}
           <button class="btn btn-secondary full" onclick="copyChessPgn()">Copiar PGN</button>
           <button class="btn btn-secondary full" onclick="copyCode('${chess.room.code}')">Copiar código da sala</button>
           <button class="btn btn-dark full" onclick="returnFromChess()">Voltar à sala</button>

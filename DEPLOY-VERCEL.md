@@ -1,40 +1,28 @@
-# DEPLOY — TDB JOGOS v6.1.2 SCREEN SHARE ROUTE FIX
-
-## O que estava errado
-
-Na v6.1.1 a rota existia dentro de `server/http-router.js`, mas faltou publicar esta entrada em `vercel.json`:
-
-```text
-/api/platform/screen-share
-```
-
-Por isso a Vercel respondia HTTP 404 e a transmissão não chegava a ser registrada.
-
-A v6.1.2 corrige isso e adiciona um fallback direto para:
-
-```text
-/api/router?route=platform/screen-share
-```
+# DEPLOY — TDB JOGOS v7.0 VISUAL REBUILD
 
 ## Banco
 
-Não execute SQL novo.
+A v7.0 é uma atualização de interface e **não exige SQL novo**.
 
-## Publicar
+Não altere o schema do Supabase se a versão anterior já está funcionando.
 
-1. `Fetch origin`
-2. `Pull origin` se aparecer
-3. Extraia `TDB-JOGOS-v6.1.2-SCREENSHARE-ROUTE-FIX.zip`
-4. Copie por cima do repositório
-5. Commit:
+## Atualizar pelo GitHub Desktop
+
+1. Abra o repositório `tdb-jogos`.
+2. Clique `Fetch origin`.
+3. Se houver `Pull origin`, faça o Pull antes de substituir os arquivos.
+4. Extraia `TDB-JOGOS-v7.0-VISUAL-REBUILD.zip`.
+5. Copie o conteúdo por cima do repositório local.
+6. Confirme que a nova pasta `ui/` e `assets/v7/` estão no repositório.
+7. Commit sugerido:
 
 ```text
-TDB JOGOS v6.1.2 Screen Share Route Fix
+TDB JOGOS v7.0 Visual Rebuild
 ```
 
-6. `Commit to main`
-7. `Push origin`
-8. Aguarde a Vercel concluir o deploy
+8. `Commit to main`.
+9. `Push origin`.
+10. Aguarde a Vercel concluir o deploy.
 
 ## Verificar versão
 
@@ -44,58 +32,42 @@ Abra:
 https://tdb-jogos.vercel.app/api/health
 ```
 
-Esperado:
+Deve aparecer:
 
 ```json
-"version": "6.1.2"
+"version": "7.0.0"
 ```
 
-## Teste da rota antes de compartilhar
+## Checklist visual
 
-Depois do deploy, abra a TDB Lounge em uma conta online.
+Teste em zoom 100%:
 
-Agora ao clicar em `Compartilhar tela`, o fluxo deve mostrar primeiro:
+- 1366×768
+- 1920×1080
+- celular/tablet se possível
 
-```text
-Verificando servidor…
-```
+Revise:
 
-Somente se a rota responder corretamente o navegador abrirá o seletor de tela.
+1. Login e cadastro.
+2. Home/Lobby.
+3. Todos os quatro cards de jogo.
+4. Navegador de salas.
+5. Sala de espera.
+6. Truco 1x1 e 2x2.
+7. Xadrez.
+8. Blackjack.
+9. TDB Lounge e screen share.
+10. Amigos.
+11. Perfil.
+12. Configurações.
+13. Painel ADM.
+14. Operação / manutenção.
+15. Tela cheia / modo foco.
 
-Isso é proposital: se houver problema no backend, você recebe o erro antes de escolher uma tela.
+## Compartilhamento de tela
 
-## Teste em dois usuários
+O fluxo corrigido na v6.1.2 foi mantido. A nova camada visual não altera as rotas WebRTC/sinalização.
 
-### Transmissor
-1. Entre na mesma Lounge com duas contas.
-2. No primeiro usuário clique `Compartilhar tela`.
-3. Aguarde `Verificando servidor…`.
-4. Escolha monitor, janela ou aba.
-5. Deve aparecer imediatamente:
-   - prévia da tela;
-   - `Parar compartilhamento`;
-   - barra fixa `Compartilhando tela`.
-6. Depois deve aparecer confirmação de transmissão iniciada.
+## Rollback
 
-### Espectador
-1. No segundo usuário deve aparecer que existe uma transmissão.
-2. Clique `Visualizar transmissão`.
-3. Acompanhe:
-   - Solicitando transmissão
-   - Negociando conexão
-   - Estabelecendo vídeo
-   - AO VIVO
-
-## Se ainda não conectar vídeo
-
-Se a transmissão aparece para o outro usuário, mas o vídeo falha somente entre redes diferentes, a rota já está funcionando e o problema passa a ser WebRTC/NAT.
-
-Nesse caso configure TURN:
-
-```text
-SCREEN_SHARE_TURN_URLS
-SCREEN_SHARE_TURN_USERNAME
-SCREEN_SHARE_TURN_CREDENTIAL
-```
-
-STUN já está configurado por padrão.
+Se precisar voltar, a v6.1.2 continua compatível com o mesmo banco; basta redeployar o commit anterior.

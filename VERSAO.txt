@@ -1,49 +1,129 @@
-TDB JOGOS v6.1.2 — Screen Share Route Fix
+TDB JOGOS v7.0.0 — VISUAL REBUILD
 
-CAUSA DO ERRO DA v6.1.1
-- o backend tinha a rota platform/screen-share registrada
-- porém vercel.json NÃO publicava /api/platform/screen-share
-- resultado em produção: HTTP 404 ao tentar anunciar ou consultar a transmissão
-- por isso o navegador conseguia abrir o seletor de tela, mas o TDB não conseguia publicar a transmissão na sala
+OBJETIVO
+- reconstrução grande da camada gráfica mantendo lógica, Supabase, multiplayer e jogos existentes
+- identidade Dark Luxury Gaming: preto/grafite + dourado metálico + verde de mesa
 
-CORREÇÕES
-- adicionado rewrite /api/platform/screen-share -> /api/router?route=platform/screen-share
-- cliente ganhou fallback direto para /api/router se a rota amigável responder 404
-- resposta vazia/HTML de rota inexistente também é detectada como erro
-- antes de abrir o seletor de tela, o TDB faz um preflight no servidor
-- se o servidor não estiver pronto, a janela de seleção nem é aberta
-- mensagens claras para 404, sessão inválida, manutenção, limite de requisição e captura bloqueada
-- depois que a tela é escolhida, a prévia aparece imediatamente
-- botão PARAR aparece imediatamente, antes da confirmação do servidor
-- START precisa confirmar o mesmo broadcastId criado pelo navegador
-- fluxo P2P/offer/answer/heartbeat da v6.1.1 foi preservado
+NOVA FUNDAÇÃO VISUAL
+- ui/tokens.css: cores, superfícies, radius, sombras e motion tokens
+- ui/shell.css: navegação e shell global
+- ui/components.css: botões, inputs, cards, modais, toast, badges
+- ui/pages.css: Home, Lobby, salas, espera, perfil, configurações e ADM
+- ui/games.css: Truco, Xadrez, Blackjack e Lounge
+- ui/responsive.css: desktop, notebook, tablet e mobile
+- ui/icon-system.js: sistema de ícones SVG consistente
+- body usa escopo tdb-v7 para preservar compatibilidade com regras antigas
 
-FLUXO NOVO
-Compartilhar tela
-→ Verificando servidor
-→ seletor nativo do navegador
-→ prévia local + PARAR
-→ servidor confirma START
-→ usuário da sala vê Visualizar transmissão
-→ WATCH
-→ OFFER
-→ ANSWER
-→ vídeo WebRTC
+ASSETS NOVOS
+- assets/v7/truco.svg
+- assets/v7/blackjack.svg
+- assets/v7/chess.svg
+- assets/v7/lounge.svg
 
-TESTES
-- rewrite Vercel validado
-- fallback /api/router validado
-- preflight antes do getDisplayMedia validado
-- rota HTTP completa validada:
-  autenticação → sala → GET state → START → WATCH → STOP
-- serviço de sinalização validado
-- regressões anteriores preservadas
+NAVEGAÇÃO
+- topbar tradicional virou rail lateral no desktop
+- ícones próprios para Início, Amigos, Perfil, Configurações e Sair
+- item ativo com indicador dourado
+- tooltips de navegação
+- em telas pequenas a navegação vira dock inferior
+- modo foco continua escondendo navegação durante jogos
 
-LIMITAÇÃO DE REDE
-- continua sendo WebRTC P2P
-- STUN vem habilitado
-- algumas redes/NAT/CGNAT podem exigir TURN
-- suporte a TURN já existe via SCREEN_SHARE_TURN_* no ambiente
+LOGIN
+- composição cinematográfica em duas áreas
+- arte do Truco no painel de apresentação
+- hierarquia tipográfica maior
+- formulário em card premium
+- contraste e legibilidade reforçados
 
-BANCO
+HOME / LOBBY
+- hero grande com arte própria
+- saudação dinâmica por horário
+- métricas online mantidas
+- cards de jogos com artes exclusivas e profundidade
+- hover com elevação e zoom sutil
+- partidas ao vivo e amigos redesenhados
+- dourado reservado para ações/destaques
+
+NAVEGADOR DE SALAS
+- cabeçalho de cada jogo com identidade visual
+- ações Criar sala / Código / Voltar modernizadas
+- filtros em pills
+- salas em cards compactos com melhor hierarquia
+- painel de ajuda e status refeito
+
+SALA DE ESPERA
+- hero da sala
+- código e privacidade integrados
+- ferramentas com ícones
+- jogadores em cards de assento
+- estados vazios e host mais claros
+- layout preparado para 1x1, 2x2, Blackjack e Lounge
+
+PERFIL / AMIGOS / CONFIGURAÇÕES
+- perfil com banner visual e avatar grande
+- estatísticas em cards
+- histórico modernizado
+- amigos com cards sociais e presença mais legível
+- configurações em grid adaptativo
+- inputs, sliders, switches e suporte seguindo o novo Design System
+
+TRUCO
+- mesa redesenhada em felt verde escuro com rail premium
+- HUD superior reconstruído
+- placar com maior hierarquia
+- badges de mão/rodada/manilha reduzidos
+- assentos integrados à mesa
+- cartas com profundidade, sombras e verso TDB
+- manilhas recebem destaque premium
+- ações e log compactados
+- overlays/resultados seguem o novo padrão
+
+XADREZ
+- shell de partida mais limpo
+- tabuleiro Onyx/Dark Wood inspirado em material físico
+- novas cores de casas
+- painel de jogadores e relógios refinados
+- seleção/última jogada/xeque visualmente mais claros
+- sidebars e resultado modernizados
+
+BLACKJACK
+- mesa cassino premium reconstruída
+- felt com mais profundidade e rail escuro/dourado
+- cartas e fichas com sombra física
+- controles integrados
+- toolbar e sidebar modernizadas
+- atividade e regras menos poluídas
+
+TDB LOUNGE
+- layout social escuro com destaque central
+- player, biblioteca e transmissão com superfícies consistentes
+- Fila / Histórico / Favoritas preservados
+- screen share continua integrado no centro
+- sidebar de pessoas e painel de adição redesenhados
+- compartilhamento de tela v6.1.2 preservado
+
+ADM
+- aparência de Control Center
+- sidebar administrativa dedicada
+- métricas em cards operacionais
+- usuários, reportes, logs e manutenção modernizados
+- funcionalidade de manutenção preservada
+
+RESPONSIVIDADE
+- ajustes explícitos para desktop grande, notebook e mobile
+- 1180px: painéis secundários se reorganizam
+- 900px: navegação lateral vira dock inferior
+- 620px: cards e ações adaptam para celular
+- alturas baixas também recebem compactação
+
+COMPATIBILIDADE
 - nenhum SQL novo
+- identificadores de jogos mantidos
+- Supabase, autenticação, salas, multiplayer, chat, favoritos, screen share e ADM preservados
+- sistema PRONTO continua removido
+- Party continua removido
+
+VERSÃO
+- package.json: 7.0.0
+- /api/health: 7.0.0
+- logs/presença: 7.0.0

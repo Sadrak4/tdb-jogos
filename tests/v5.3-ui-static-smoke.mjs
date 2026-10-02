@@ -31,7 +31,7 @@ assert('bot chess is isolated',app.includes("state.view='bot-chess'"));
 assert('bot truco is isolated',app.includes("state.view='bot-truco'"));
 assert('bot test stops online bridge',app.includes("OnlineGameBridge.stop();"));
 
-assert('waiting invite button opens modal',app.includes('onclick="openInviteFriendsModal()">Convidar amigos'));
+assert('waiting invite button opens modal',app.includes('openInviteFriendsModal()')&&app.includes('Convidar amigos'));
 assert('invite modal keeps room open',app.includes('Você continua na sala enquanto envia os convites.'));
 assert('incoming invitation toast exists',app.includes('function showRoomInviteToast(invite)'));
 assert('invitation toast lasts 10 seconds',app.includes('setTimeout(()=>dismissRoomInviteToast(),10000)'));

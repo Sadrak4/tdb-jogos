@@ -1,0 +1,14 @@
+.tdb-v7{
+  --v7-bg:#070807;--v7-bg-2:#0b0d0c;--v7-surface:#111412;--v7-surface-2:#171a18;--v7-surface-3:#1d211e;
+  --v7-line:rgba(255,255,255,.075);--v7-line-strong:rgba(212,177,96,.22);--v7-gold:#d8b568;--v7-gold-2:#f0d495;
+  --v7-text:#f4f1e8;--v7-muted:#9a9f99;--v7-muted-2:#6f756f;--v7-green:#61d08b;--v7-red:#ef6c6c;--v7-amber:#e8b45c;
+  --v7-radius-sm:10px;--v7-radius:16px;--v7-radius-lg:24px;--v7-radius-xl:32px;
+  --v7-shadow:0 18px 50px rgba(0,0,0,.34);--v7-shadow-lg:0 28px 90px rgba(0,0,0,.48);
+  --v7-nav:86px;--v7-top:74px;--v7-fast:120ms;--v7-normal:190ms;--v7-slow:280ms;
+  background:radial-gradient(circle at 78% -10%,rgba(216,181,104,.10),transparent 28%),linear-gradient(180deg,#090a09,#050605 78%);color:var(--v7-text);
+}
+.tdb-v7 *{box-sizing:border-box}.tdb-v7 body,.tdb-v7{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+.tdb-v7 ::selection{background:rgba(216,181,104,.28);color:#fff}.tdb-icon{width:19px;height:19px;display:inline-block;vertical-align:middle;flex:0 0 auto}
+.tdb-v7 a,.tdb-v7 button,.tdb-v7 input,.tdb-v7 select,.tdb-v7 textarea{font:inherit}.tdb-v7 button{transition:transform var(--v7-fast),border-color var(--v7-normal),background var(--v7-normal),color var(--v7-normal),box-shadow var(--v7-normal)}
+.tdb-v7 button:active:not(:disabled){transform:translateY(1px) scale(.99)}
+@media(prefers-reduced-motion:reduce){.tdb-v7 *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}

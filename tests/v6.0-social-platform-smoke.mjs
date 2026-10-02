@@ -74,7 +74,7 @@ assert('Server accepts friends and invite privacy',upsert.includes("'friends'")&
 assert('Friends-only rooms enforce friendship',join.includes("room.privacy==='friends'"));
 assert('Invite-only rooms enforce invite',join.includes("room.privacy==='invite'"));
 assert('Spectator privacy uses same room restrictions',watch.includes("room.privacy==='friends'")&&watch.includes("room.privacy==='invite'"));
-assert('Easy invite button exists',app.includes('COPIAR CONVITE')&&app.includes('copyRoomInvite'));
+assert('Easy invite button exists',app.includes('copyRoomInvite')&&/copiar convite/i.test(app));
 
 // Loading/fullscreen/graphics.
 assert('Loading sync overlay exists',platformUI.includes('showLoading')&&platformUI.includes('hideLoading'));
@@ -101,8 +101,8 @@ assert('Maintenance is enforced centrally',router.includes("code:'MAINTENANCE'")
 assert('Admin endpoints are exempt from maintenance',router.includes("route.startsWith('admin/')"));
 assert('Health returns maintenance state',health.includes('maintenance:status.maintenance'));
 assert('Realtime backend status reads maintenance state',realtime.includes("getSharedValue('app:maintenance'"));
-assert('Presence stores app version',maintenance.includes("version:String(version||'6.1.2')"));
-assert('Client logs carry v6 version',online.includes("context:{version:'6.1.2'"));
+assert('Presence stores app version',maintenance.includes("version:String(version||'7.0.0')"));
+assert('Client logs carry v6 version',online.includes("context:{version:'7.0.0'"));
 
 // Existing generic 5-minute cleanup is preserved for every game.
 assert('Room empty TTL remains exactly five minutes',roomLeave.includes('5*60*1000'));

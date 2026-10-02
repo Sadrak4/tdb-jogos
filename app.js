@@ -187,6 +187,8 @@ migrateUsers();
 function logoTag(extra='') {
   return `<img ${extra} src="assets/logo-transparent.png" alt="TDB JOGOS" onerror="this.style.display='none'">`;
 }
+function uiIcon(name,cls=''){ return window.TDBIcons?.svg?.(name,cls)||''; }
+function greeting(){ const h=new Date().getHours(); return h<12?'Bom dia':h<18?'Boa tarde':'Boa noite'; }
 function saveUsers(){ Core.auth.saveUsers(state.users); }
 function saveFriends(){ Core.storage.set('tbd_friends', state.friends); }
 function saveRooms(){ Core.rooms.replace(state.rooms); }
@@ -564,19 +566,16 @@ function topbar(active='home'){
     <div class="topbar-left">
       <div class="top-brand" onclick="goHome()" style="cursor:pointer">${logoTag()}<strong>TDB JOGOS</strong></div>
       <nav class="nav-links">
-        <button class="nav-link ${active==='home'?'active':''}" onclick="goHome()">Início</button>
-        <button class="nav-link ${active==='friends'?'active':''}" onclick="renderFriends()">Amigos</button>
-        <button class="nav-link ${active==='profile'?'active':''}" onclick="renderProfile()">Perfil</button>
-        <button class="nav-link ${active==='settings'?'active':''}" onclick="renderSettings()">Configurações</button>
+        <button data-label="Início" class="nav-link ${active==='home'?'active':''}" onclick="goHome()">${uiIcon('home')}<span>Início</span></button>
+        <button data-label="Amigos" class="nav-link ${active==='friends'?'active':''}" onclick="renderFriends()">${uiIcon('friends')}<span>Amigos</span></button>
+        <button data-label="Perfil" class="nav-link ${active==='profile'?'active':''}" onclick="renderProfile()">${uiIcon('profile')}<span>Perfil</span></button>
+        <button data-label="Configurações" class="nav-link ${active==='settings'?'active':''}" onclick="renderSettings()">${uiIcon('settings')}<span>Configurações</span></button>
       </nav>
     </div>
     <div class="topbar-right">
       <span id="onlineStatusPill" class="online-status-pill ${window.TDBOnline?.readyForMultiplayer?'online':window.TDBOnline?.phase==='reconnecting'||window.TDBOnline?.phase==='connecting'?'connecting':'offline'}">${window.TDBOnline?.readyForMultiplayer?(window.TDBOnline?.realtime?'ONLINE':'ONLINE • FALLBACK'):window.TDBOnline?.phase==='reconnecting'?'RECONECTANDO…':window.TDBOnline?.phase==='connecting'?'CONECTANDO…':'OFFLINE'}</span><span id="onlinePingPill" class="online-ping-pill">${Number.isFinite(window.TDBOnline?.latencyMs)?`${window.TDBOnline.latencyMs} ms`:''}</span>
-      <div class="profile-mini" onclick="renderProfile()" style="cursor:pointer">
-        <div class="avatar">${escapeHtml(state.user?.avatar||initials(state.user?.username))}</div>
-        <div class="profile-lines"><strong>${escapeHtml(state.user?.username||'Jogador')}</strong><small>${escapeHtml(state.user?.id||'')}</small></div>
-      </div>
-      <button class="btn btn-dark" onclick="logout()">Sair</button>
+      <div class="profile-mini" onclick="renderProfile()" style="cursor:pointer"><div class="avatar">${escapeHtml(state.user?.avatar||initials(state.user?.username))}</div><div class="profile-lines"><strong>${escapeHtml(state.user?.username||'Jogador')}</strong><small>${escapeHtml(state.user?.id||'')}</small></div></div>
+      <button class="btn btn-dark" title="Sair" onclick="logout()">${uiIcon('logout')}<span>Sair</span></button>
     </div>
   </header>`;
 }
@@ -758,9 +757,9 @@ function renderLobby(){
   <section class="dashboard fade-in">
     ${renderInviteBanner()}
     <div class="hero-strip">
-      <span class="eyebrow">TDB JOGOS</span>
+      <span class="eyebrow">${greeting()}, ${escapeHtml(state.user.username)}</span>
       <h1>A espera ficou mais divertida.</h1>
-      <p>Escolha um jogo, encontre uma sala ou crie a sua. Status ao vivo, salas sociais e partidas entre amigos.</p>
+      <p>Seu espaço para jogar, assistir e ficar com a galera. Escolha uma experiência e entre direto na ação.</p>
     </div>
     <div id="lobbyPulseWrap">${lobbyPulseHtml()}</div>
     <div class="section-title"><div><h2>Partidas ao vivo</h2><p>Assista sem interferir na partida.</p></div></div>
@@ -777,7 +776,7 @@ function gameCard(key){
   const open=getAllRooms(key).filter(r=>r.status==='open').length;
   return `<article class="game-card" onclick="renderGame('${key}')">
     <div class="game-art ${art}"></div><div class="game-symbol">${g.symbol}</div>
-    <div class="game-content"><span class="game-count">${open} sala${open===1?'':'s'} aberta${open===1?'':'s'}</span><h3>${g.name}</h3><p>${g.subtitle}</p><button class="btn btn-primary">Ver salas</button></div>
+    <div class="game-content"><span class="game-count">${open} sala${open===1?'':'s'} aberta${open===1?'':'s'}</span><h3>${g.name}</h3><p>${g.subtitle}</p><button class="btn btn-primary">Ver salas ${uiIcon('chevron')}</button></div>
   </article>`;
 }
 function friendCard(f){
@@ -870,10 +869,10 @@ function drawGamePage(){
   const key=state.selectedGame, g=games[key];
   const rooms=visibleRoomsForSelectedGame();
   app.innerHTML=`${topbar()}
-  <section class="game-page fade-in">
+  <section class="game-page fade-in game-page-${key}" style="--v7-game-art:url('assets/v7/${key==='music'?'lounge':key}.svg')">
     <div class="back-row">
       <div class="game-head"><div class="big-symbol">${g.symbol}</div><div><h1>${g.name}</h1><p>${g.subtitle} • até ${g.players} jogadores</p></div></div>
-      <div class="room-actions"><button class="btn btn-primary" onclick="openCreateRoom()">+ Criar jogo</button><button class="btn btn-secondary" onclick="openJoinCode()">Entrar com código</button><button class="btn btn-dark" onclick="goHome()">Voltar</button></div>
+      <div class="room-actions"><button class="btn btn-primary" onclick="openCreateRoom()">${uiIcon('plus')} Criar sala</button><button class="btn btn-secondary" onclick="openJoinCode()">${uiIcon('key')} Entrar com código</button><button class="btn btn-dark" onclick="goHome()">${uiIcon('back')} Voltar</button></div>
     </div>
     <div class="filter-row">
       <button class="filter-chip ${state.roomFilter==='all'?'active':''}" onclick="setRoomFilter('all')">Todas</button>
@@ -1227,10 +1226,10 @@ function renderWaitingRoom(){
     </div></div></div>
 
     <div class="room-tools">
-      <button class="btn btn-primary" onclick="copyRoomInvite('${room.code}')">COPIAR CONVITE</button>
-      <button class="btn btn-secondary" onclick="openInviteFriendsModal()">Convidar amigos</button>
-      <button class="btn btn-secondary" onclick="TDBPlatformUI.openSocial()">Chat da sala</button>
-      <button class="btn btn-dark" onclick="toggleFullscreen()">Tela cheia</button>
+      <button class="btn btn-primary" onclick="copyRoomInvite('${room.code}')">${uiIcon('copy')} Copiar convite</button>
+      <button class="btn btn-secondary" onclick="openInviteFriendsModal()">${uiIcon('invite')} Convidar amigos</button>
+      <button class="btn btn-secondary" onclick="TDBPlatformUI.openSocial()">${uiIcon('chat')} Chat da sala</button>
+      <button class="btn btn-dark" onclick="toggleFullscreen()">${uiIcon('fullscreen')} Tela cheia</button>
     </div>
 
     <div class="player-list" id="waitingPlayerList">
@@ -1633,7 +1632,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'6.1.2',
+      version:'7.0.0',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)
