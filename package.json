@@ -1,6 +1,6 @@
 {
-  "name": "tdb-jogos",
-  "version": "7.0.0",
+  "name": "tdb",
+  "version": "7.0.1",
   "private": true,
   "type": "module",
   "scripts": {

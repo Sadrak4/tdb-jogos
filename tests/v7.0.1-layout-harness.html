@@ -1,0 +1,52 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../games/chess/chess.css">
+<link rel="stylesheet" href="../games/blackjack/blackjack.css">
+<link rel="stylesheet" href="../games/music/music.css">
+<link rel="stylesheet" href="../ui/tokens.css">
+<link rel="stylesheet" href="../ui/shell.css">
+<link rel="stylesheet" href="../ui/components.css">
+<link rel="stylesheet" href="../ui/pages.css">
+<link rel="stylesheet" href="../ui/games.css">
+<link rel="stylesheet" href="../ui/responsive.css">
+<link rel="stylesheet" href="../ui/gameplay-fixes.css">
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden}body{background:#020302}
+#results{position:fixed;left:8px;top:8px;z-index:200000;background:#fff;color:#000;padding:8px;font:12px monospace;max-width:520px}
+#mount{width:100%;height:100%}
+.fixture-topbar{display:none!important}
+</style></head><body class="tdb-v7"><div id="results">RUNNING</div><div id="mount"></div>
+<script>
+const results=[]; const mount=document.getElementById('mount');
+function pass(name,ok,details=''){results.push({name,ok,details});}
+function frame(){return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))}
+async function truco(){
+ mount.innerHTML=`<section class="truco-screen"><div class="truco-table-wrap"><div class="truco-hud"></div><div class="table-shell"><div class="player-seat seat-top"><div class="seat-badge">BOT</div></div><div class="play-zone" id="trucoPlayZone"><div class="truco-card"></div></div><div id="trucoMyHand"><div class="truco-card my-card"></div></div></div><div class="truco-actions" id="trucoActions">JOGAR</div><div></div></div></section>`;
+ await frame(); const shell=document.querySelector('.table-shell'), r=shell.getBoundingClientRect();
+ pass('truco-shell-height',r.height>300,`${r.width}x${r.height}`);
+ pass('truco-visible',getComputedStyle(document.querySelector('#trucoMyHand')).visibility==='visible');
+}
+async function chess(){
+ const squares=Array.from({length:64},(_,i)=>`<button class="chess-square ${((Math.floor(i/8)+i)%2)?'dark':'light'}"><span class="chess-piece white">♙</span></button>`).join('');
+ mount.innerHTML=`<section class="chess-screen"><aside class="chess-left-panel"></aside><main class="chess-center"><div class="chess-player-bar"></div><div class="chess-turn-banner">SUA VEZ</div><div class="chess-board-shell"><div class="chess-board">${squares}</div></div><div class="chess-player-bar"></div></main><aside class="chess-right-panel"></aside></section>`;
+ await frame(); const board=document.querySelector('.chess-board'), r=board.getBoundingClientRect(), cs=getComputedStyle(board);
+ pass('chess-board-size',r.width>300&&r.height>300,`${r.width}x${r.height}`);
+ pass('chess-board-grid',cs.display==='grid'&&cs.visibility==='visible',`${cs.display}/${cs.visibility}`);
+ pass('chess-64-squares',document.querySelectorAll('.chess-square').length===64);
+}
+async function music(){
+ mount.innerHTML=`<section class="music-screen"><aside class="music-sidebar"></aside><main class="music-main"><section class="lounge-screen-stage"></section><section class="music-player-card"><div class="music-player-wrap"><div id="musicYoutubePlayer"><iframe></iframe></div></div></section><section class="music-queue-card"></section></main><aside class="music-add-panel"></aside></section>`;
+ await frame(); const stage=getComputedStyle(document.querySelector('.lounge-screen-stage')); const player=document.querySelector('.music-player-wrap').getBoundingClientRect();
+ pass('lobby-stage-hidden',stage.display==='none',stage.display);
+ pass('lobby-player-visible',player.width>200&&player.height>80,`${player.width}x${player.height}`);
+}
+async function blackjack(){
+ mount.innerHTML=`<section class="blackjack-page"><div class="bj-player local bj-player-bottom"><div class="bj-player-hands"><div class="bj-hand"><div class="bj-hand-cards">${Array.from({length:6},(_,i)=>`<div class="bj-card"><span>${i}</span></div>`).join('')}</div></div></div></div></section>`;
+ await frame(); const cards=[...document.querySelectorAll('.bj-card')].map(x=>x.getBoundingClientRect()); let overlap=false; for(let i=1;i<cards.length;i++) if(cards[i].left < cards[i-1].right-0.5) overlap=true;
+ pass('blackjack-no-overlap',!overlap,cards.map(x=>`${Math.round(x.left)}-${Math.round(x.right)}`).join(','));
+}
+async function syncOverlay(){
+ mount.innerHTML=`<div class="tdb-sync-overlay show"><div><span class="tdb-sync-spinner"></span><strong>Sincronizando</strong></div></div>`; await frame(); const el=document.querySelector('.tdb-sync-overlay'), r=el.getBoundingClientRect(), cs=getComputedStyle(el); pass('sync-not-fullscreen',r.height<120&&cs.backgroundColor==='rgba(0, 0, 0, 0)',`${r.width}x${r.height}/${cs.backgroundColor}`)
+}
+(async()=>{await truco();await chess();await music();await blackjack();await syncOverlay();const ok=results.every(x=>x.ok);document.getElementById('results').textContent=(ok?'PASS':'FAIL')+' '+JSON.stringify(results);document.body.dataset.result=ok?'pass':'fail';})();
+</script></body></html>

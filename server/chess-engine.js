@@ -266,7 +266,7 @@ function finalizeAfterMove(state,move,before,movedPiece,captured){
     state.drawReason='material insuficiente';
   }
 
-  // TDB JOGOS: empate automático por repetição foi desativado.
+  // TDB: empate automático por repetição foi desativado.
 
   const notation=moveNotation(before,move,state,movedPiece,captured,check,state.status==='checkmate');
   state.moveHistory.push({

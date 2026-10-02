@@ -30,7 +30,7 @@
     },
     music: {
       key: 'music',
-      name: 'TDB Lounge',
+      name: 'TDB Lobby',
       status: 'playable',
       prefix: 'MUS',
       minPlayers: 1,

@@ -43,7 +43,7 @@ assert('Client surfaces disconnect/reconnect transitions',app.includes('desconec
 // Live lobby and detailed friends.
 assert('Lobby has live pulse summary',app.includes('lobbyPulseHtml'));
 assert('Friend status distinguishes games',social.includes('Jogando ${labels[data.game]'));
-assert('Music friend status says listening',social.includes('No TDB Lounge'));
+assert('Music friend status says listening',social.includes('No TDB Lobby'));
 assert('Away status exists',social.includes("status='Ausente'"));
 assert('Friend quick profile supports room invite',app.includes('openFriendQuickProfile')&&app.includes('Convidar para minha sala'));
 
@@ -101,8 +101,8 @@ assert('Maintenance is enforced centrally',router.includes("code:'MAINTENANCE'")
 assert('Admin endpoints are exempt from maintenance',router.includes("route.startsWith('admin/')"));
 assert('Health returns maintenance state',health.includes('maintenance:status.maintenance'));
 assert('Realtime backend status reads maintenance state',realtime.includes("getSharedValue('app:maintenance'"));
-assert('Presence stores app version',maintenance.includes("version:String(version||'7.0.0')"));
-assert('Client logs carry v6 version',online.includes("context:{version:'7.0.0'"));
+assert('Presence stores app version',maintenance.includes("version:String(version||'7.0.1')"));
+assert('Client logs carry v6 version',online.includes("context:{version:'7.0.1'"));
 
 // Existing generic 5-minute cleanup is preserved for every game.
 assert('Room empty TTL remains exactly five minutes',roomLeave.includes('5*60*1000'));

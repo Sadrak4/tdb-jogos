@@ -21,13 +21,13 @@ export async function socialSummary(userId){
   ];
   const map=await usersByIds(ids);
   const presenceMap=new Map((presence.data||[]).map(p=>[p.user_id,p]));
-  const labels={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack',music:'TDB Lounge'};
+  const labels={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack',music:'TDB Lobby'};
   const enrichedFriends=friends.map(f=>{
     const pr=presenceMap.get(f.id),age=pr?Date.now()-new Date(pr.updated_at).getTime():Infinity,data=pr?.data||{};
     let status='Offline';
     if(age<30000){
       if(data.status==='playing')status=`Jogando ${labels[data.game]||data.game||''}`.trim();
-      else if(data.status==='listening')status='No TDB Lounge';
+      else if(data.status==='listening')status='No TDB Lobby';
       else if(data.status==='room')status=`Na sala${data.game?' • '+(labels[data.game]||data.game):''}`;
       else status='Online';
     }else if(age<90000)status='Ausente';

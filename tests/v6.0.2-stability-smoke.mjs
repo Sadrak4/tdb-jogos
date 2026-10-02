@@ -78,7 +78,7 @@ assert('Audio is resumed when returning to the tab',
 assert('Audio remains capped and subtle',sound.includes('Math.min(.09'));
 
 // Version.
-assert('Health reports current stable version',health.includes("version:'7.0.0'"));
-assert('Client reports 6.0.2',app.includes("version:'7.0.0'")&&online.includes("version:'7.0.0'"));
+assert('Health reports current stable version',health.includes("version:'7.0.1'"));
+assert('Client reports 6.0.2',app.includes("version:'7.0.1'")&&online.includes("version:'7.0.1'"));
 
 console.log('ALL V6.0.2 STABILITY TESTS PASSED');

@@ -1,129 +1,57 @@
-TDB JOGOS v7.0.0 — VISUAL REBUILD
+TDB v7.0.1 — GAMEPLAY FIX
 
-OBJETIVO
-- reconstrução grande da camada gráfica mantendo lógica, Supabase, multiplayer e jogos existentes
-- identidade Dark Luxury Gaming: preto/grafite + dourado metálico + verde de mesa
+FOCO
+- preservar o Visual Rebuild da v7
+- corrigir regressões que cobriam ou colapsavam superfícies jogáveis
+- renomear TDB JOGOS para TDB
+- renomear TDB Lounge para TDB Lobby
 
-NOVA FUNDAÇÃO VISUAL
-- ui/tokens.css: cores, superfícies, radius, sombras e motion tokens
-- ui/shell.css: navegação e shell global
-- ui/components.css: botões, inputs, cards, modais, toast, badges
-- ui/pages.css: Home, Lobby, salas, espera, perfil, configurações e ADM
-- ui/games.css: Truco, Xadrez, Blackjack e Lounge
-- ui/responsive.css: desktop, notebook, tablet e mobile
-- ui/icon-system.js: sistema de ícones SVG consistente
-- body usa escopo tdb-v7 para preservar compatibilidade com regras antigas
+CAUSA PRINCIPAL
+A v7 adicionou uma skin visual carregada depois dos estilos antigos. Alguns seletores alteravam também a geometria dos módulos:
+- Truco: `.table-shell` foi de `height:100%` para `height:auto`, embora seus elementos sejam majoritariamente absolutos;
+- Xadrez: `.chess-center` foi trocado de grid para flex, contrariando o cálculo de altura do tabuleiro;
+- TDB Lobby: `.music-main` ganhou uma linha extra fixa mesmo sem screen share ativo;
+- o overlay de sincronização antigo podia permanecer como uma superfície escura sobre o jogo;
+- Blackjack ainda usava margens negativas para empilhar cartas.
 
-ASSETS NOVOS
-- assets/v7/truco.svg
-- assets/v7/blackjack.svg
-- assets/v7/chess.svg
-- assets/v7/lounge.svg
-
-NAVEGAÇÃO
-- topbar tradicional virou rail lateral no desktop
-- ícones próprios para Início, Amigos, Perfil, Configurações e Sair
-- item ativo com indicador dourado
-- tooltips de navegação
-- em telas pequenas a navegação vira dock inferior
-- modo foco continua escondendo navegação durante jogos
-
-LOGIN
-- composição cinematográfica em duas áreas
-- arte do Truco no painel de apresentação
-- hierarquia tipográfica maior
-- formulário em card premium
-- contraste e legibilidade reforçados
-
-HOME / LOBBY
-- hero grande com arte própria
-- saudação dinâmica por horário
-- métricas online mantidas
-- cards de jogos com artes exclusivas e profundidade
-- hover com elevação e zoom sutil
-- partidas ao vivo e amigos redesenhados
-- dourado reservado para ações/destaques
-
-NAVEGADOR DE SALAS
-- cabeçalho de cada jogo com identidade visual
-- ações Criar sala / Código / Voltar modernizadas
-- filtros em pills
-- salas em cards compactos com melhor hierarquia
-- painel de ajuda e status refeito
-
-SALA DE ESPERA
-- hero da sala
-- código e privacidade integrados
-- ferramentas com ícones
-- jogadores em cards de assento
-- estados vazios e host mais claros
-- layout preparado para 1x1, 2x2, Blackjack e Lounge
-
-PERFIL / AMIGOS / CONFIGURAÇÕES
-- perfil com banner visual e avatar grande
-- estatísticas em cards
-- histórico modernizado
-- amigos com cards sociais e presença mais legível
-- configurações em grid adaptativo
-- inputs, sliders, switches e suporte seguindo o novo Design System
-
+CORREÇÕES
 TRUCO
-- mesa redesenhada em felt verde escuro com rail premium
-- HUD superior reconstruído
-- placar com maior hierarquia
-- badges de mão/rodada/manilha reduzidos
-- assentos integrados à mesa
-- cartas com profundidade, sombras e verso TDB
-- manilhas recebem destaque premium
-- ações e log compactados
-- overlays/resultados seguem o novo padrão
+- restaura `table-shell` com altura real de 100%
+- play zone, mão e ações explicitamente visíveis
+- ordem de camadas protegida
 
 XADREZ
-- shell de partida mais limpo
-- tabuleiro Onyx/Dark Wood inspirado em material físico
-- novas cores de casas
-- painel de jogadores e relógios refinados
-- seleção/última jogada/xeque visualmente mais claros
-- sidebars e resultado modernizados
+- centro restaurado para grid de 4 linhas
+- board-shell com área útil real
+- tabuleiro 8×8 com proporção 1:1
+- casas e peças forçadas visíveis
+
+TDB LOBBY
+- stage de screen share inativo usa `display:none`
+- player/biblioteca usam duas linhas quando não há transmissão
+- player YouTube explicitamente visível
 
 BLACKJACK
-- mesa cassino premium reconstruída
-- felt com mais profundidade e rail escuro/dourado
-- cartas e fichas com sombra física
-- controles integrados
-- toolbar e sidebar modernizadas
-- atividade e regras menos poluídas
+- margens negativas removidas
+- gap real entre cartas
+- quebra de linha permitida para mãos longas
 
-TDB LOUNGE
-- layout social escuro com destaque central
-- player, biblioteca e transmissão com superfícies consistentes
-- Fila / Histórico / Favoritas preservados
-- screen share continua integrado no centro
-- sidebar de pessoas e painel de adição redesenhados
-- compartilhamento de tela v6.1.2 preservado
+SINCRONIZAÇÃO
+- overlay não escurece mais a tela inteira
+- render dos quatro módulos chama `hideLoading()`
+- observer também remove loader quando uma tela jogável é montada
 
-ADM
-- aparência de Control Center
-- sidebar administrativa dedicada
-- métricas em cards operacionais
-- usuários, reportes, logs e manutenção modernizados
-- funcionalidade de manutenção preservada
+IDENTIDADE
+- nome público: TDB
+- sala social: TDB Lobby
+- identificadores internos preservados por compatibilidade
 
-RESPONSIVIDADE
-- ajustes explícitos para desktop grande, notebook e mobile
-- 1180px: painéis secundários se reorganizam
-- 900px: navegação lateral vira dock inferior
-- 620px: cards e ações adaptam para celular
-- alturas baixas também recebem compactação
-
-COMPATIBILIDADE
+BANCO
 - nenhum SQL novo
-- identificadores de jogos mantidos
-- Supabase, autenticação, salas, multiplayer, chat, favoritos, screen share e ADM preservados
-- sistema PRONTO continua removido
-- Party continua removido
+- nenhuma tabela nova
+- nenhuma coluna nova
 
 VERSÃO
-- package.json: 7.0.0
-- /api/health: 7.0.0
-- logs/presença: 7.0.0
+- package.json: 7.0.1
+- /api/health: 7.0.1
+- logs/presença: 7.0.1

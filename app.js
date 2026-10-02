@@ -1,9 +1,9 @@
 
 window.addEventListener('error',event=>{
-  console.error('[TDB JOGOS] Erro de interface:',event.error||event.message);
+  console.error('[TDB] Erro de interface:',event.error||event.message);
 });
 window.addEventListener('unhandledrejection',event=>{
-  console.error('[TDB JOGOS] Promise rejeitada:',event.reason);
+  console.error('[TDB] Promise rejeitada:',event.reason);
 });
 
 
@@ -151,7 +151,7 @@ const games = {
   truco: { name: 'Truco', symbol: '🃏', subtitle: 'Blefe, parceria e resenha.', players: 4, minPlayers: 2, prefix: 'TRC' },
   blackjack: { name: 'Blackjack', symbol: '♠️', subtitle: 'Mesa premium contra dealer automático.', players: 3, minPlayers: 1, prefix: 'BLJ' },
   chess: { name: 'Xadrez', symbol: '♟️', subtitle: 'Partidas rápidas 1x1 entre amigos.', players: 2, minPlayers: 2, prefix: 'XDR' },
-  music: { name: 'TDB Lounge', symbol: '◈', subtitle: 'Música, chat e compartilhamento de tela em uma sala.', players: 20, minPlayers: 1, prefix: 'MUS' }
+  music: { name: 'TDB Lobby', symbol: '◈', subtitle: 'Música, chat e compartilhamento de tela em uma sala.', players: 20, minPlayers: 1, prefix: 'MUS' }
 };
 
 Core.sound.setEnabled(state.settings.sound);
@@ -185,7 +185,7 @@ migrateUsers();
 
 
 function logoTag(extra='') {
-  return `<img ${extra} src="assets/logo-transparent.png" alt="TDB JOGOS" onerror="this.style.display='none'">`;
+  return `<img ${extra} src="assets/logo-transparent.png" alt="TDB" onerror="this.style.display='none'">`;
 }
 function uiIcon(name,cls=''){ return window.TDBIcons?.svg?.(name,cls)||''; }
 function greeting(){ const h=new Date().getHours(); return h<12?'Bom dia':h<18?'Boa tarde':'Boa noite'; }
@@ -287,7 +287,7 @@ function openFriendQuickProfile(id){
   const el=document.createElement('div');el.className='modal-backdrop';el.id='friendQuickModal';el.innerHTML=`<div class="modal"><div class="modal-head"><h3>${escapeHtml(f.username)}</h3><button class="icon-btn" onclick="document.getElementById('friendQuickModal').remove()">×</button></div><div class="modal-body"><div class="profile-card"><div class="profile-avatar-xl">${escapeHtml(f.avatar||initials(f.username))}</div><h2>${escapeHtml(f.username)}</h2><div class="code-box">${escapeHtml(f.id)}</div><p class="muted">${escapeHtml(f.status||'Offline')}</p></div></div><div class="modal-foot">${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${f.id}')">Convidar para minha sala</button>`:''}</div></div>`;document.body.appendChild(el);
 }
 function copyRoomInvite(code){
-  const text=`Entre na sala ${code} do TDB JOGOS`;
+  const text=`Entre na sala ${code} do TDB`;
   if(navigator.clipboard)navigator.clipboard.writeText(text).then(()=>toast('Convite copiado.'));
   else toast(text);
 }
@@ -468,12 +468,12 @@ function renderAuth(mode='login'){
     <aside class="auth-visual">
       <div class="brand-lockup">
         ${logoTag()}
-        <div><div class="brand-name">TDB JOGOS</div><div class="brand-sub">JOGOS ENTRE AMIGOS</div></div>
+        <div><div class="brand-name">TDB</div><div class="brand-sub">JOGOS ENTRE AMIGOS</div></div>
       </div>
       <div class="auth-copy">
         <h1>A espera ficou<br>mais divertida.</h1>
         <p>Truco, Xadrez, Blackjack e música em um só lugar. Entre com a galera e transforme aqueles minutos de fila em uma partida.</p>
-        <div class="pill-row"><span class="pill">Truco</span><span class="pill">Blackjack</span><span class="pill">Xadrez</span><span class="pill">TDB Lounge</span></div>
+        <div class="pill-row"><span class="pill">Truco</span><span class="pill">Blackjack</span><span class="pill">Xadrez</span><span class="pill">TDB Lobby</span></div>
       </div>
     </aside>
     <section class="auth-panel">
@@ -564,7 +564,7 @@ function renderAuth(mode='login'){
 function topbar(active='home'){
   return `<header class="topbar">
     <div class="topbar-left">
-      <div class="top-brand" onclick="goHome()" style="cursor:pointer">${logoTag()}<strong>TDB JOGOS</strong></div>
+      <div class="top-brand" onclick="goHome()" style="cursor:pointer">${logoTag()}<strong>TDB</strong></div>
       <nav class="nav-links">
         <button data-label="Início" class="nav-link ${active==='home'?'active':''}" onclick="goHome()">${uiIcon('home')}<span>Início</span></button>
         <button data-label="Amigos" class="nav-link ${active==='friends'?'active':''}" onclick="renderFriends()">${uiIcon('friends')}<span>Amigos</span></button>
@@ -651,7 +651,7 @@ function goHome(){
     setPresence('lobby');
     renderLobby();
   }catch(err){
-    console.error('[TDB JOGOS] Falha ao voltar ao início:',err);
+    console.error('[TDB] Falha ao voltar ao início:',err);
     saveActiveRoom(null);
     renderLobby();
   }
@@ -712,7 +712,7 @@ function waitingHostActions(room){
   if(room.game==='blackjack'){
     return `<button class="btn btn-primary" onclick="startGame()">Abrir mesa de Blackjack</button>`;
   }
-  if(room.game==='music')return `<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Lounge</button>`;
+  if(room.game==='music')return `<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Lobby</button>`;
   return `<button class="btn btn-primary" ${startDisabled} onclick="startGame()">Iniciar partida</button>`;
 }
 
@@ -886,7 +886,7 @@ function drawGamePage(){
       </div>
       <aside class="panel side-info"><div class="panel-header"><h2>Como funciona</h2></div><div class="panel-body">
         <h3>Salas abertas</h3><p>Você pode entrar enquanto houver vaga. A sala pode ser pública, somente amigos, somente convite ou protegida por senha.</p>
-        <h3 style="margin-top:22px;">${key==='chess'?'Xadrez Tradicional':key==='blackjack'?'Blackjack TDB':key==='music'?'TDB Lounge':'Em andamento'}</h3><p>${key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='blackjack'?'Até 3 jogadores contra o dealer. Pedir, parar, dobrar e separar, com entrada durante a rodada para jogar na próxima.':key==='music'?'Música compartilhada, chat e transmissão de tela opcional na mesma sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
+        <h3 style="margin-top:22px;">${key==='chess'?'Xadrez Tradicional':key==='blackjack'?'Blackjack TDB':key==='music'?'TDB Lobby':'Em andamento'}</h3><p>${key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='blackjack'?'Até 3 jogadores contra o dealer. Pedir, parar, dobrar e separar, com entrada durante a rodada para jogar na próxima.':key==='music'?'Música compartilhada, chat e transmissão de tela opcional na mesma sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
         <h3 style="margin-top:22px;">Seu jogo</h3><ul><li>Crie uma sala.</li><li>Compartilhe o código.</li><li>Convide amigos.</li></ul>
       </div></aside>
     </div>
@@ -1176,12 +1176,12 @@ function launchChessBot(){
       return toast('Entre em uma sala de Xadrez primeiro.');
     }
     if(typeof window.startChessWithBot!=='function'){
-      console.error('[TDB JOGOS] Módulo do Xadrez não carregado.');
+      console.error('[TDB] Módulo do Xadrez não carregado.');
       return toast('O módulo do Xadrez não carregou. Recarregue a página.');
     }
     window.startChessWithBot();
   }catch(err){
-    console.error('[TDB JOGOS] Erro ao iniciar partida com bot:',err);
+    console.error('[TDB] Erro ao iniciar partida com bot:',err);
     toast('Não foi possível iniciar a partida com o bot.');
   }
 }
@@ -1262,7 +1262,7 @@ function leaveRoom(){
     setPresence('lobby');
     renderLobby();
   }catch(err){
-    console.error('[TDB JOGOS] Falha ao sair da sala:',err);
+    console.error('[TDB] Falha ao sair da sala:',err);
     saveActiveRoom(null);
     renderLobby();
   }
@@ -1270,12 +1270,12 @@ function leaveRoom(){
 
 function openMusicRoom(){
   const room=state.activeRoom;
-  if(!room || room.game!=='music') return toast('Entre em uma sala TDB Lounge primeiro.');
-  if(typeof window.startMusicRoom!=='function') return toast('Módulo TDB Lounge não carregou.');
+  if(!room || room.game!=='music') return toast('Entre em uma sala TDB Lobby primeiro.');
+  if(typeof window.startMusicRoom!=='function') return toast('Módulo TDB Lobby não carregou.');
 
   state.view='music';
 
-  // TDB Lounge is a persistent shared room, not a competitive match.
+  // TDB Lobby is a persistent shared room, not a competitive match.
   // Do not flip it between open/playing or re-upsert it just to open the player.
   if(Core.mode!=='online'){
     updateStoredRoom(room);
@@ -1286,9 +1286,9 @@ function openMusicRoom(){
   try{
     window.startMusicRoom(structuredClone(room));
   }catch(err){
-    console.error('[TDB Lounge] Falha ao abrir sala:',err);
+    console.error('[TDB Lobby] Falha ao abrir sala:',err);
     state.view='game';
-    toast('Não foi possível abrir o TDB Lounge. Tente novamente.');
+    toast('Não foi possível abrir o TDB Lobby. Tente novamente.');
   }
 }
 window.openMusicRoom=openMusicRoom;
@@ -1583,11 +1583,11 @@ function audioSlider(title,desc,key,value){
 function renderSettings(){
   state.view='settings';
   app.innerHTML=`${topbar('settings')}<section class="dashboard fade-in">
-    <div class="page-head"><div><h1 class="page-title">Configurações</h1><p class="muted">Gráficos, animações, áudio, interface e suporte do TDB JOGOS.</p></div></div>
+    <div class="page-head"><div><h1 class="page-title">Configurações</h1><p class="muted">Gráficos, animações, áudio, interface e suporte do TDB.</p></div></div>
     <div class="settings-stack">
       ${settingRow('Animações completas','Movimentos de cartas, peças, fichas, entrada de jogadores e transições.','animations',state.settings.animations!==false)}
       ${settingRow('Efeitos de partículas','Permite efeitos visuais decorativos. Desative em PCs mais fracos.','particles',state.settings.particles!==false)}
-      ${settingRow('Sons do TDB JOGOS','Ativa cliques, efeitos de partidas e alertas sonoros.','sound',state.settings.sound)}
+      ${settingRow('Sons do TDB','Ativa cliques, efeitos de partidas e alertas sonoros.','sound',state.settings.sound)}
       ${audioSlider('Volume geral','Limite mestre de todos os efeitos. O padrão é propositalmente baixo.','masterVolume',state.settings.masterVolume??55)}
       ${audioSlider('Interface','Botões, navegação, confirmação e retorno.','uiVolume',state.settings.uiVolume??42)}
       ${audioSlider('Jogos','Cartas do Truco e movimentos do Xadrez.','gameVolume',state.settings.gameVolume??50)}
@@ -1632,7 +1632,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'7.0.0',
+      version:'7.0.1',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)
@@ -1665,7 +1665,7 @@ async function logout(){
       await window.TDBAuthOnline.logout();
     }
   }catch(err){
-    console.warn('[TDB JOGOS] Logout remoto:',err);
+    console.warn('[TDB] Logout remoto:',err);
   }finally{
     clearLocalSessionState();
     state.rooms=Core.rooms.list();
@@ -1709,7 +1709,7 @@ async function bootAuthenticatedApp(){
   const hosted=location.protocol!=='file:' && !!window.TDBAuthOnline;
 
   if(hosted){
-    // Hosted TDB JOGOS trusts the server session, never an old local-only user.
+    // Hosted TDB trusts the server session, never an old local-only user.
     const serverUser=await window.TDBAuthOnline.session();
 
     if(!serverUser){
@@ -2163,6 +2163,7 @@ function animateDealReveal(){
 
 
 function renderTruco(){
+  window.TDBPlatformUI?.hideLoading?.();
   // Mount the Truco table only once. Later plays update only the dynamic regions,
   // avoiding a full page redraw/flicker on each action.
   if(!document.getElementById('trucoRoot')){
@@ -2179,7 +2180,7 @@ function mountTrucoScreen(){
     <div class="truco-table-wrap">
       <div class="truco-hud">
         <div class="score-panel">
-          <div class="score-title">TDB JOGOS • TRUCO PAULISTA</div><div class="connection-ready">Core preparado para sincronização online</div>
+          <div class="score-title">TDB • TRUCO PAULISTA</div><div class="connection-ready">Core preparado para sincronização online</div>
           <div class="score-line"><span>NÓS</span><span class="score-num" id="trucoScoreUs">0</span></div>
           <div class="score-line"><span>ELES</span><span class="score-num" id="trucoScoreThem">0</span></div>
         </div>

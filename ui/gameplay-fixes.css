@@ -1,0 +1,171 @@
+/* =========================================================
+   TDB v7.0.1 — GAMEPLAY VISIBILITY / LAYOUT SAFETY
+   Keeps the v7 visual identity without letting decorative/layout rules
+   cover or collapse the actual game surfaces.
+   ========================================================= */
+
+/* Never cover a running game with the old full-screen sync veil. */
+.tdb-v7 .tdb-sync-overlay{
+  top:14px!important;
+  left:calc(var(--v7-nav) + 14px)!important;
+  right:14px!important;
+  bottom:auto!important;
+  width:auto!important;
+  height:auto!important;
+  min-height:0!important;
+  padding:0!important;
+  background:transparent!important;
+  backdrop-filter:none!important;
+  place-items:start center!important;
+  pointer-events:none!important;
+}
+.tdb-v7 .tdb-sync-overlay.show{display:grid!important}
+.tdb-v7 .tdb-sync-overlay>div{
+  min-height:38px!important;
+  padding:8px 12px!important;
+  border-radius:999px!important;
+  background:rgba(12,15,13,.96)!important;
+  border:1px solid rgba(216,181,104,.28)!important;
+  box-shadow:0 12px 34px rgba(0,0,0,.34)!important;
+  backdrop-filter:blur(14px)!important;
+}
+
+/* TRUCO — v7 had changed table-shell from height:100% to auto. Most
+   table children are absolutely positioned, so the table could collapse. */
+.tdb-v7 .truco-screen{
+  height:100dvh!important;
+  min-height:0!important;
+  overflow:hidden!important;
+}
+.tdb-v7 .truco-table-wrap{
+  height:calc(100dvh - 46px)!important;
+  min-height:0!important;
+  max-height:calc(100dvh - 46px)!important;
+}
+.tdb-v7 .table-shell{
+  height:100%!important;
+  min-height:0!important;
+  overflow:hidden!important;
+  isolation:isolate!important;
+}
+.tdb-v7 .table-shell::before,.tdb-v7 .table-shell::after{z-index:0!important}
+.tdb-v7 .table-shell>.player-seat,
+.tdb-v7 .table-shell>.play-zone,
+.tdb-v7 .table-shell>.vira-box,
+.tdb-v7 .table-shell>.my-hand,
+.tdb-v7 .table-shell>.table-logo{z-index:2}
+.tdb-v7 #trucoPlayZone,.tdb-v7 #trucoMyHand,.tdb-v7 #trucoActions{
+  visibility:visible!important;
+  opacity:1!important;
+}
+
+/* XADREZ — restore the proven grid geometry. The v7 flex override fought
+   the chess module's height calculations and could leave only the frame. */
+.tdb-v7 .chess-screen{
+  height:100dvh!important;
+  min-height:100dvh!important;
+  overflow:hidden!important;
+  align-items:stretch!important;
+}
+.tdb-v7 .chess-center{
+  display:grid!important;
+  grid-template-rows:auto auto minmax(0,1fr) auto!important;
+  height:calc(100dvh - 36px)!important;
+  min-height:0!important;
+  align-items:center!important;
+  justify-content:center!important;
+  overflow:hidden!important;
+}
+.tdb-v7 .chess-board-shell{
+  width:100%!important;
+  height:100%!important;
+  min-height:0!important;
+  padding:4px!important;
+  background:transparent!important;
+  border:0!important;
+  box-shadow:none!important;
+  overflow:hidden!important;
+  display:grid!important;
+  place-items:center!important;
+}
+.tdb-v7 .chess-board{
+  display:grid!important;
+  grid-template-columns:repeat(8,minmax(0,1fr))!important;
+  grid-template-rows:repeat(8,minmax(0,1fr))!important;
+  width:min(100%,calc(100dvh - 205px))!important;
+  max-width:820px!important;
+  height:auto!important;
+  aspect-ratio:1/1!important;
+  opacity:1!important;
+  visibility:visible!important;
+  position:relative!important;
+  z-index:2!important;
+  flex:none!important;
+}
+.tdb-v7 .chess-square{min-width:0!important;min-height:0!important;visibility:visible!important;opacity:1!important}
+.tdb-v7 .chess-piece{visibility:visible!important;opacity:1!important;pointer-events:none}
+
+/* TDB LOBBY — keep the original two-row music geometry unless screen
+   sharing is actually active. This prevents an empty central grid row from
+   becoming a dark panel in front of the player. */
+.tdb-v7 .music-screen{
+  height:100dvh!important;
+  min-height:100dvh!important;
+  overflow:hidden!important;
+}
+.tdb-v7 .music-screen:not(.lounge-has-screen-share) .music-main{
+  grid-template-rows:minmax(0,auto) minmax(170px,1fr)!important;
+  height:100%!important;
+  min-height:0!important;
+  overflow:hidden!important;
+}
+.tdb-v7 .lounge-screen-stage:not(.active){display:none!important}
+.tdb-v7 .music-player-card,.tdb-v7 .music-queue-card{position:relative!important;z-index:1!important}
+.tdb-v7 .music-player-wrap{position:relative!important;z-index:1!important}
+.tdb-v7 #musicYoutubePlayer,.tdb-v7 #musicYoutubePlayer iframe{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  visibility:visible!important;
+  opacity:1!important;
+}
+
+/* BLACKJACK — cards remain side-by-side. The old negative margins made
+   successive cards visually pass over one another. */
+.tdb-v7 .bj-hand-cards{
+  display:flex!important;
+  justify-content:center!important;
+  align-items:flex-end!important;
+  gap:4px!important;
+  flex-wrap:wrap!important;
+  row-gap:4px!important;
+}
+.tdb-v7 .bj-hand-cards .bj-card+.bj-card,
+.tdb-v7 .bj-player.local .bj-hand-cards .bj-card+.bj-card{
+  margin-left:0!important;
+}
+.tdb-v7 .bj-player{width:min(282px,26vw)!important}
+.tdb-v7 .bj-player-bottom{width:min(470px,48vw)!important}
+.tdb-v7 .bj-player:not(.local) .bj-card{width:40px!important;height:58px!important}
+.tdb-v7 .bj-player.local .bj-card{width:49px!important;height:70px!important}
+.tdb-v7 .bj-player:not(.local) .bj-card .bj-card-suit{font-size:19px!important}
+.tdb-v7 .bj-player.local .bj-card .bj-card-suit{font-size:23px!important}
+.tdb-v7 .bj-player-hands{overflow:visible!important}
+
+@media(max-width:1180px){
+  .tdb-v7 .chess-board{width:min(100%,calc(100dvh - 195px))!important;max-width:720px!important}
+  .tdb-v7 .bj-player{width:min(250px,25vw)!important}
+  .tdb-v7 .bj-player-bottom{width:min(430px,46vw)!important}
+}
+@media(max-width:900px){
+  .tdb-v7 .tdb-sync-overlay{left:14px!important;bottom:90px!important;top:auto!important}
+  .tdb-v7 .truco-screen,.tdb-v7 .chess-screen,.tdb-v7 .music-screen{height:auto!important;min-height:100dvh!important;overflow:visible!important}
+  .tdb-v7 .truco-table-wrap{height:auto!important;max-height:none!important;min-height:720px!important}
+  .tdb-v7 .table-shell{min-height:560px!important}
+  .tdb-v7 .chess-center{height:auto!important;overflow:visible!important}
+  .tdb-v7 .chess-board-shell{height:auto!important;overflow:visible!important}
+  .tdb-v7 .chess-board{width:min(calc(100vw - 28px),680px)!important;max-width:100%!important}
+  .tdb-v7 .music-screen:not(.lounge-has-screen-share) .music-main{height:auto!important;overflow:visible!important}
+  .tdb-v7 .bj-player{width:44vw!important}
+  .tdb-v7 .bj-player-bottom{width:90%!important}
+}

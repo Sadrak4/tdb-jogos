@@ -45,7 +45,7 @@ function playerErrorMessage(code){
   if(code===5) return 'Este vídeo não pôde ser reproduzido no player HTML5.';
   if(code===100) return 'O vídeo foi removido ou está privado.';
   if(code===101 || code===150) return 'O proprietário deste vídeo não permite reprodução incorporada.';
-  if(code===153) return 'O YouTube não recebeu a identificação do site (Referer/origin). Abra o TDB JOGOS pelo servidor local incluído, não pelo arquivo index.html.';
+  if(code===153) return 'O YouTube não recebeu a identificação do site (Referer/origin). Abra o TDB pelo servidor local incluído, não pelo arquivo index.html.';
   return `Erro do player do YouTube (${code}).`;
 }
 
@@ -266,7 +266,7 @@ async function searchYoutube(){
     window.__TDB_MUSIC_RESULTS__=items;
     renderSearchResults(items);
   }catch(err){
-    console.error('[TDB Lounge] pesquisa',err);
+    console.error('[TDB Lobby] pesquisa',err);
     if(box) box.innerHTML=`<div class="music-message error">${escapeHtml(err.message||'Falha na pesquisa.')}</div>`;
   }
 }
@@ -366,7 +366,7 @@ async function playMusic(){
   try{
     if(playerReady && player?.playVideo) player.playVideo();
   }catch(err){
-    console.warn('[TDB Lounge] playVideo falhou',err);
+    console.warn('[TDB Lobby] playVideo falhou',err);
   }
 }
 
@@ -386,7 +386,7 @@ async function pauseMusic(){
   try{
     if(playerReady && player?.pauseVideo) player.pauseVideo();
   }catch(err){
-    console.warn('[TDB Lounge] pauseVideo falhou',err);
+    console.warn('[TDB Lobby] pauseVideo falhou',err);
   }
 
   saveMusicState(next);
@@ -542,7 +542,7 @@ async function createPlayer(){
         if(event.data===YT.PlayerState.ENDED && canSkip()) nextMusic();
       },
       onError(event){
-        console.error('[TDB Lounge] YouTube Player error:',event.data);
+        console.error('[TDB Lobby] YouTube Player error:',event.data);
         showPlayerError(Number(event.data));
       },
       onAutoplayBlocked(){
@@ -634,7 +634,7 @@ function syncPlayer(force=false){
       }
     }
   }catch(err){
-    console.warn('[TDB Lounge] sync',err);
+    console.warn('[TDB Lobby] sync',err);
   }finally{
     setTimeout(()=>{ applyingRemote=false; },80);
   }
@@ -975,10 +975,11 @@ async function leaveMusicRoom(){
 }
 
 function renderMusic(){
+  window.TDBPlatformUI?.hideLoading?.();
   app.innerHTML=`${topbar()}
   <section id="musicScreen" class="music-screen fade-in">
     <aside class="music-sidebar">
-      <div class="music-brand">${logoTag()}<div><strong>TDB LOUNGE</strong><span>MÚSICA • CHAT • TELA</span></div></div>
+      <div class="music-brand">${logoTag()}<div><strong>TDB LOBBY</strong><span>MÚSICA • CHAT • TELA</span></div></div>
       <div class="music-room-info">
         <h2>${escapeHtml(room.name)}</h2>
         <p>Código <strong>${escapeHtml(room.code)}</strong></p>

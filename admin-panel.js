@@ -14,7 +14,7 @@ function adminToast(msg,type='success'){
 function shell(content,active=adminState.tab){
   return `<section class="admin-shell">
     <aside class="admin-sidebar">
-      <div class="admin-brand"><img src="assets/logo-transparent.png" alt=""><div><strong>TDB JOGOS</strong><small>Painel administrativo</small></div></div>
+      <div class="admin-brand"><img src="assets/logo-transparent.png" alt=""><div><strong>TDB</strong><small>Painel administrativo</small></div></div>
       <nav class="admin-nav">
         <button class="${active==='overview'?'active':''}" onclick="TDBAdminUI.openTab('overview')">Visão geral</button>
         <button class="${active==='users'?'active':''}" onclick="TDBAdminUI.openTab('users')">Contas</button>
@@ -29,7 +29,7 @@ function shell(content,active=adminState.tab){
 }
 async function renderLogin(message=''){
   root().innerHTML=`<section class="admin-login-page"><div class="admin-login-card panel">
-    <div class="admin-brand centered"><img src="assets/logo-transparent.png" alt=""><div><strong>TDB JOGOS</strong><small>Administração</small></div></div>
+    <div class="admin-brand centered"><img src="assets/logo-transparent.png" alt=""><div><strong>TDB</strong><small>Administração</small></div></div>
     <h1>Acesso administrativo</h1><p class="muted">Área restrita para gerenciamento de contas, reportes e logs.</p>
     ${message?`<div class="admin-login-error">${esc(message)}</div>`:''}
     <form id="adminLoginForm" class="form-grid">
@@ -37,7 +37,7 @@ async function renderLogin(message=''){
       <div class="field"><label>Senha</label><input id="adminPassword" type="password" autocomplete="current-password" required></div>
       <button class="btn btn-primary full" type="submit">Entrar no painel</button>
     </form>
-    <button class="link-btn admin-back-site" onclick="TDBAdminUI.backToSite()">← Voltar ao TDB JOGOS</button>
+    <button class="link-btn admin-back-site" onclick="TDBAdminUI.backToSite()">← Voltar ao TDB</button>
   </div></section>`;
   document.getElementById('adminLoginForm').onsubmit=async e=>{
     e.preventDefault();
@@ -50,7 +50,7 @@ async function renderLogin(message=''){
 }
 async function renderOverview(){
   const o=await A().overview();
-  root().innerHTML=shell(`<div class="admin-head"><div><h1>Visão geral</h1><p>Controle operacional do TDB JOGOS.</p></div><span class="admin-secure-badge">● Sessão ADM protegida</span></div>
+  root().innerHTML=shell(`<div class="admin-head"><div><h1>Visão geral</h1><p>Controle operacional do TDB.</p></div><span class="admin-secure-badge">● Sessão ADM protegida</span></div>
     <div class="admin-stats">
       <article><span>Contas criadas</span><strong>${Number(o.users||0)}</strong></article>
       <article><span>Usuários online</span><strong>${Number(o.onlineUsers||0)}</strong></article>
@@ -161,7 +161,7 @@ async function resetPassword(userId){
 }
 async function toggleBan(userId,banned){
   let reason='';
-  if(banned){reason=prompt('Motivo do banimento:','Violação das regras do TDB JOGOS')||'';if(!reason)return}
+  if(banned){reason=prompt('Motivo do banimento:','Violação das regras do TDB')||'';if(!reason)return}
   if(!confirm(banned?'Banir esta conta e encerrar todas as sessões?':'Desbanir esta conta?'))return;
   try{await A().setBan(userId,banned,reason);adminToast(banned?'Conta banida.':'Conta desbanida.');await renderUsers()}catch(err){adminToast(err.message,'error')}
 }

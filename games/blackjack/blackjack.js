@@ -321,6 +321,7 @@ function tableBody(){
   </div>`;
 }
 function renderBody(){
+  window.TDBPlatformUI?.hideLoading?.();
   const root=document.getElementById('blackjackRoot');
   if(!root||!blackjack)return;
 
@@ -364,6 +365,7 @@ function renderBody(){
   flushVisualEffects();
 }
 function mount(){
+  window.TDBPlatformUI?.hideLoading?.();
   app.innerHTML=`${topbar()}<section class="blackjack-page"><div id="blackjackRoot"></div></section>`;
   renderBody();
 }

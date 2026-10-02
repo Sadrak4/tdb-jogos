@@ -31,7 +31,7 @@ function cleanSessionId(v){
 }
 async function roomFor(code,user){
   const room=await getRoomPrivate(codeOf(code));
-  if(!room||room.game!=='music')throw new Error('Sala TDB Lounge não encontrada.');
+  if(!room||room.game!=='music')throw new Error('Sala TDB Lobby não encontrada.');
   if(!isMember(room,user.id))throw new Error('Você não está nesta sala.');
   return room;
 }

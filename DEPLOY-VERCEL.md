@@ -1,30 +1,27 @@
-# DEPLOY — TDB JOGOS v7.0 VISUAL REBUILD
+# DEPLOY — TDB v7.0.1 GAMEPLAY FIX
 
 ## Banco
 
-A v7.0 é uma atualização de interface e **não exige SQL novo**.
+Não execute SQL novo. Esta versão não altera o schema do Supabase.
 
-Não altere o schema do Supabase se a versão anterior já está funcionando.
+## Publicar
 
-## Atualizar pelo GitHub Desktop
-
-1. Abra o repositório `tdb-jogos`.
-2. Clique `Fetch origin`.
-3. Se houver `Pull origin`, faça o Pull antes de substituir os arquivos.
-4. Extraia `TDB-JOGOS-v7.0-VISUAL-REBUILD.zip`.
-5. Copie o conteúdo por cima do repositório local.
-6. Confirme que a nova pasta `ui/` e `assets/v7/` estão no repositório.
-7. Commit sugerido:
+1. Abra o repositório `tdb-jogos` no GitHub Desktop.
+2. `Fetch origin`.
+3. Faça `Pull origin` se aparecer.
+4. Extraia `TDB-v7.0.1-GAMEPLAY-FIX.zip`.
+5. Copie os arquivos por cima do repositório.
+6. Commit sugerido:
 
 ```text
-TDB JOGOS v7.0 Visual Rebuild
+TDB v7.0.1 Gameplay Fix
 ```
 
-8. `Commit to main`.
-9. `Push origin`.
-10. Aguarde a Vercel concluir o deploy.
+7. `Commit to main`.
+8. `Push origin`.
+9. Aguarde o deploy da Vercel.
 
-## Verificar versão
+## Conferir versão
 
 Abra:
 
@@ -32,42 +29,25 @@ Abra:
 https://tdb-jogos.vercel.app/api/health
 ```
 
-Deve aparecer:
+Esperado:
 
 ```json
-"version": "7.0.0"
+{
+  "app": "TDB",
+  "version": "7.0.1"
+}
 ```
 
-## Checklist visual
+## Teste obrigatório após deploy
 
-Teste em zoom 100%:
+Faça em zoom 100%:
 
-- 1366×768
-- 1920×1080
-- celular/tablet se possível
+1. Truco contra bot: mesa, mão e cartas jogadas devem aparecer.
+2. Xadrez contra bot: o tabuleiro 8×8 deve aparecer e aceitar clique.
+3. TDB Lobby: player/biblioteca devem aparecer sem uma tela escura na frente.
+4. Blackjack: distribuir várias cartas; elas não devem se sobrepor.
+5. TDB Lobby screen share: testar iniciar/parar e visualizar com outra conta.
 
-Revise:
+## Observação
 
-1. Login e cadastro.
-2. Home/Lobby.
-3. Todos os quatro cards de jogo.
-4. Navegador de salas.
-5. Sala de espera.
-6. Truco 1x1 e 2x2.
-7. Xadrez.
-8. Blackjack.
-9. TDB Lounge e screen share.
-10. Amigos.
-11. Perfil.
-12. Configurações.
-13. Painel ADM.
-14. Operação / manutenção.
-15. Tela cheia / modo foco.
-
-## Compartilhamento de tela
-
-O fluxo corrigido na v6.1.2 foi mantido. A nova camada visual não altera as rotas WebRTC/sinalização.
-
-## Rollback
-
-Se precisar voltar, a v6.1.2 continua compatível com o mesmo banco; basta redeployar o commit anterior.
+Os identificadores internos ainda usam `music`/`lounge-*` e o repositório continua `tdb-jogos` por compatibilidade. Isso é intencional e não muda o nome mostrado ao usuário, que agora é apenas **TDB** e **TDB Lobby**.

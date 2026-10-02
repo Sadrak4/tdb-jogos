@@ -4,7 +4,7 @@
 
 const E=window.TDBChessEngine;
 if(!E){
-  console.error('[TDB JOGOS] A engine do Xadrez não foi carregada.');
+  console.error('[TDB] A engine do Xadrez não foi carregada.');
 }
 let chess=null;
 let chessClockTimer=null;
@@ -239,12 +239,13 @@ function capturedFor(color){
 }
 
 function renderChessScreen(first=false){
+  window.TDBPlatformUI?.hideLoading?.();
   const root=document.getElementById('chessRoot');
   if(!root || first){
     app.innerHTML=`${topbar()}
     <section class="chess-screen" id="chessRoot">
       <aside class="chess-left-panel">
-        <div class="chess-panel-brand">${logoTag()}<div><strong>TDB JOGOS</strong><span>XADREZ TRADICIONAL</span></div></div>
+        <div class="chess-panel-brand">${logoTag()}<div><strong>TDB</strong><span>XADREZ TRADICIONAL</span></div></div>
         <div class="chess-info-line"><span>Modo</span><strong>1x1 Tradicional</strong></div>
         <div class="chess-info-line"><span>Tempo</span><strong>${chess.clockEnabled?Math.floor(chess.room.chessClock/60)+' min':'Sem relógio'}</strong></div>
         <div class="chess-info-line"><span>Sala</span><strong>${escapeHtml(chess.room.code)}</strong></div>

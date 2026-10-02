@@ -20,7 +20,7 @@ function ensureLayer(){
   $('#tdbRoomChatForm').addEventListener('submit',sendMessage);
   $('#tdbReactionBar').innerHTML=['😂','🔥','👏','😮','❤️','👍'].map(e=>`<button type="button" onclick="TDBPlatformUI.react('${e}')">${e}</button>`).join('');
 }
-function showLoading(text='Sincronizando…',timeout=10000){ensureLayer();clearTimeout(loadingTimer);$('#tdbSyncText').textContent=text;$('#tdbSyncOverlay').classList.add('show');if(timeout)loadingTimer=setTimeout(hideLoading,timeout)}
+function showLoading(text='Sincronizando…',timeout=5000){ensureLayer();clearTimeout(loadingTimer);$('#tdbSyncText').textContent=text;$('#tdbSyncOverlay').classList.add('show');if(timeout)loadingTimer=setTimeout(hideLoading,timeout)}
 function hideLoading(){clearTimeout(loadingTimer);$('#tdbSyncOverlay')?.classList.remove('show')}
 function setMaintenance(value={}){
   ensureLayer();
@@ -53,7 +53,11 @@ window.addEventListener('tdb-maintenance',e=>setMaintenance(e.detail||{enabled:t
 window.addEventListener('tdb-room-feed-update',e=>{if(room()?.code===e.detail?.roomCode)refreshFeed()});
 window.addEventListener('hashchange',()=>setMaintenance(window.TDBOnline?.maintenance||{enabled:false}));
 window.addEventListener('storage',applyGraphics);document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)document.body.classList.remove('tdb-game-focus')});
-new MutationObserver(()=>setTimeout(refreshDock,10)).observe(document.getElementById('app'),{childList:true,subtree:false});
+new MutationObserver(()=>setTimeout(()=>{
+  refreshDock();
+  // A playable screen already rendered: never leave the initial sync veil over it.
+  if(document.querySelector('.truco-screen,.chess-screen,.blackjack-page,.music-screen')) hideLoading();
+},10)).observe(document.getElementById('app'),{childList:true,subtree:false});
 setInterval(tick,1000);reconnectTimer=setInterval(refreshReconnect,1000);
 ensureLayer();applyGraphics();setMaintenance(window.TDBOnline?.maintenance||{enabled:false});
 window.TDBPlatformUI={showLoading,hideLoading,setMaintenance,openSocial,closeSocial,react,refreshFeed,toggleFullscreen,applyGraphics,refreshDock};

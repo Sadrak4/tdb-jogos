@@ -1,5 +1,5 @@
 -- ============================================================
--- TDB JOGOS v5.0 - Supabase Schema
+-- TDB - Supabase Schema (base v5.0)
 -- Execute este arquivo UMA VEZ no Supabase:
 -- Dashboard > SQL Editor > New query > cole tudo > Run
 -- ============================================================
