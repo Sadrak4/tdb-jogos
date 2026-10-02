@@ -20,11 +20,13 @@ function safeUser(u){
     id:u.id,
     username:u.username,
     avatar:u.avatar||null,
+    avatarImage:u.avatar_image||u.avatarImage||null,
     banner:u.banner||null,
     createdAt:u.created_at?new Date(u.created_at).getTime():(u.createdAt||Date.now())
   };
 }
-function cleanBanner(value){const v=String(value||'').trim().slice(0,1000);if(!v)return null;try{const u=new URL(v);return ['http:','https:'].includes(u.protocol)?v:null}catch{return null}}
+function cleanImageUrl(value){const v=String(value||'').trim().slice(0,1000);if(!v)return null;try{const u=new URL(v);return ['http:','https:'].includes(u.protocol)?v:null}catch{return null}}
+function cleanBanner(value){return cleanImageUrl(value)}
 function usersKey(){return 'local:auth:users'}
 function sessionsKey(){return 'local:auth:sessions'}
 function friendKey(userId){return `local:friends:${userId}`}
@@ -268,7 +270,7 @@ export async function removeFriend(userId,friendId){
 }
 
 
-export async function updateProfile(userId,username,avatar=null,banner=null){
+export async function updateProfile(userId,username,avatar=null,banner=null,avatarImage=null){
   username=String(username||'').trim();
   if(username.length<3) throw new Error('Usuário precisa de pelo menos 3 caracteres.');
 
@@ -294,6 +296,7 @@ export async function updateProfile(userId,username,avatar=null,banner=null){
         username,
         username_normalized:usernameNormalized,
         avatar:avatar||null,
+        avatar_image:cleanImageUrl(avatarImage),
         banner:cleanBanner(banner)
       })
       .eq('id',userId)
@@ -313,7 +316,7 @@ export async function updateProfile(userId,username,avatar=null,banner=null){
   if(users.some(u=>u.id!==userId&&normalize(u.username)===normalize(username))) throw new Error('Esse nome já está em uso.');
   const idx=users.findIndex(u=>u.id===userId);
   if(idx<0) throw new Error('Conta não encontrada.');
-  users[idx]={...users[idx],username,avatar,banner:cleanBanner(banner)};
+  users[idx]={...users[idx],username,avatar,avatarImage:cleanImageUrl(avatarImage),banner:cleanBanner(banner)};
   await setSharedValue(usersKey(),users);
   return safeUser(users[idx]);
 }

@@ -1,9 +1,9 @@
 import { initSupabase,isSupabaseReady,getSupabaseClient,emitEvent,getRoomPrivate,setRoomPrivate } from './realtime-store.js';
 import * as Auth from './auth-service.js';
-function safeUser(u){return u?{id:u.id,username:u.username,avatar:u.avatar||null}:null}
+function safeUser(u){return u?{id:u.id,username:u.username,avatar:u.avatar||null,avatarImage:u.avatar_image||u.avatarImage||null}:null}
 async function db(){await initSupabase();if(!isSupabaseReady())throw new Error('Supabase indisponível.');return getSupabaseClient()}
-async function usersByIds(ids){if(!ids.length)return new Map();const c=await db();const {data,error}=await c.from('tdb_users').select('id,username,avatar').in('id',[...new Set(ids)]);if(error)throw new Error(error.message);return new Map((data||[]).map(u=>[u.id,safeUser(u)]))}
-export async function searchUsers(currentUserId,query){const c=await db(),q=String(query||'').trim();if(q.length<2)return[];let request=c.from('tdb_users').select('id,username,avatar').neq('id',currentUserId).limit(12);if(/^TDB-/i.test(q))request=request.ilike('id',`%${q.toUpperCase()}%`);else request=request.ilike('username',`%${q}%`);const {data,error}=await request;if(error)throw new Error(error.message);return(data||[]).map(safeUser)}
+async function usersByIds(ids){if(!ids.length)return new Map();const c=await db();const {data,error}=await c.from('tdb_users').select('id,username,avatar,avatar_image').in('id',[...new Set(ids)]);if(error)throw new Error(error.message);return new Map((data||[]).map(u=>[u.id,safeUser(u)]))}
+export async function searchUsers(currentUserId,query){const c=await db(),q=String(query||'').trim();if(q.length<2)return[];let request=c.from('tdb_users').select('id,username,avatar,avatar_image').neq('id',currentUserId).limit(12);if(/^TDB-/i.test(q))request=request.ilike('id',`%${q.toUpperCase()}%`);else request=request.ilike('username',`%${q}%`);const {data,error}=await request;if(error)throw new Error(error.message);return(data||[]).map(safeUser)}
 export async function socialSummary(userId){
   const c=await db();
   const [friends,incoming,outgoing,invites,presence]=await Promise.all([
@@ -82,7 +82,7 @@ export async function respondRoomInvite(userId,inviteId,accept){
       if((room.players?.length||0)>=cap) throw new Error('A sala ficou cheia.');
       const u=await Auth.findUserById(userId);
       room.players=room.players||[];
-      room.players.push({id:u.id,username:u.username,avatar:u.avatar||null,connection:'online'});
+      room.players.push({id:u.id,username:u.username,avatar:u.avatar||null,avatarImage:u.avatarImage||null,connection:'online'});
       await setRoomPrivate(room);
     }
   }

@@ -1,12 +1,19 @@
-# TDB v7.1.6 — Lobby, Ao Vivo e UX
+# TDB v7.1.8 — Chess Room + Bot AI
 
-Versão baseada na **v7.1.5** e pronta para substituir diretamente a versão atualmente publicada.
+Esta versão parte da **v7.1.7** e mantém Perfil 3.0, foto de perfil, perfis públicos, Lobby/Ao Vivo, manutenção administrativa, melhorias de Truco/Música e o bloqueio temporário do Blackjack.
 
-Principais pontos: exclusão imediata de sala pelo host, botão voltar na sala de espera, correção/visibilidade do modo espectador, resposta de Truco mais legível, Xadrez com drag-and-drop e tabuleiro maior, TDB Lobby/Música responsivo com troca da origem compartilhada, Blackjack temporariamente em manutenção e barra lateral recolhível.
+## Destaques da v7.1.8
+- Botão inteiro da seta lateral agora é clicável.
+- Relógio do Xadrez revisado no cliente e no servidor.
+- BOT espera aproximadamente 1,8 s antes de mover.
+- Dificuldades **Fácil / Médio / Difícil**.
+- IA do Xadrez com avaliação posicional e Minimax + Alpha-Beta nos níveis superiores.
+- Host pode **Editar regras** da sala sem apagá-la e recriá-la.
+- Regras editáveis de Xadrez e Truco, com validação no servidor.
 
-O **Modo Manutenção com acesso administrativo da v7.1.5 continua incluído**.
+Leia `ATUALIZACAO-v7.1.8.md` para a lista completa.
 
-Leia `ATUALIZACAO-v7.1.6.md` para a lista completa.
+## Banco de dados
+A **v7.1.8 não exige SQL novo**.
 
-## Supabase
-Nenhum SQL novo para a v7.1.6. Se a coluna `banner` da v7.1.0 já existe em `public.tdb_users`, não altere o banco.
+A migration `SUPABASE-MIGRATION-v7.1.7.sql` continua no pacote apenas para instalações que ainda não adicionaram `avatar_image`.

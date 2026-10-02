@@ -45,10 +45,19 @@ function applySidebarState(collapsed=Core.storage.get(SIDEBAR_COLLAPSE_KEY,false
   document.documentElement?.classList.toggle('tdb-sidebar-collapsed',value);
   return value;
 }
+let sidebarToggleLocked=false;
 function toggleSidebar(){
+  if(sidebarToggleLocked) return;
+  sidebarToggleLocked=true;
   const next=!document.body?.classList.contains('tdb-sidebar-collapsed');
   Core.storage.set(SIDEBAR_COLLAPSE_KEY,next);
   applySidebarState(next);
+  const button=document.querySelector('.sidebar-toggle');
+  if(button){
+    button.setAttribute('aria-expanded',String(!next));
+    button.setAttribute('title',next?'Abrir barra lateral':'Esconder barra lateral');
+  }
+  window.setTimeout(()=>{sidebarToggleLocked=false},190);
 }
 window.toggleSidebar=toggleSidebar;
 applySidebarState();
@@ -179,6 +188,17 @@ const games = {
   music: { name: 'TDB Lobby', symbol: '◈', subtitle: 'Música, chat e compartilhamento de tela em uma sala.', players: 20, minPlayers: 1, prefix: 'MUS' }
 };
 const FEATURE_FLAGS=Object.freeze({blackjack:false});
+const CHESS_BOT_DIFFICULTIES=Object.freeze({
+  easy:{label:'Fácil',description:'Joga legalmente, enxerga capturas simples e ainda comete erros.'},
+  medium:{label:'Médio',description:'Avalia material, desenvolvimento, ameaças e algumas respostas à frente.'},
+  hard:{label:'Difícil',description:'Pesquisa mais variantes, prioriza táticas, segurança do rei e finais.'}
+});
+function chessBotDifficultyValue(value){
+  const raw=typeof value==='object'?(value?.chessBotDifficulty||value?.botDifficulty):value;
+  return Object.prototype.hasOwnProperty.call(CHESS_BOT_DIFFICULTIES,String(raw||'').toLowerCase())?String(raw).toLowerCase():'easy';
+}
+function chessBotDifficultyLabel(value){return CHESS_BOT_DIFFICULTIES[chessBotDifficultyValue(value)].label}
+window.chessBotDifficultyLabel=chessBotDifficultyLabel;
 function isGameEnabled(key){return key!=='blackjack'||FEATURE_FLAGS.blackjack===true}
 function blackjackMaintenance(){toast('Blackjack está em manutenção. Ele volta em uma próxima atualização.')}
 function rejectDisabledRoom(room,{leaveOnline=false,notify=true}={}){
@@ -269,6 +289,24 @@ function initials(name='Jogador'){
 function escapeHtml(str=''){
   return String(str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
+function safeRemoteImage(value){
+  const raw=String(value||'').trim();
+  if(!raw) return '';
+  try{
+    const u=new URL(raw,location.href);
+    return ['http:','https:'].includes(u.protocol)?u.href:'';
+  }catch{return ''}
+}
+function avatarHtml(user,className='avatar'){
+  const image=safeRemoteImage(user?.avatarImage||user?.avatar_image||'');
+  const fallback=escapeHtml(user?.avatar||initials(user?.username||'Jogador'));
+  const label=escapeHtml(user?.username||'Jogador');
+  return `<div class="${escapeHtml(className)}${image?' has-photo':''}">${image?`<img src="${escapeHtml(image)}" alt="Foto de ${label}" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();this.parentElement.classList.remove('has-photo');this.parentElement.textContent='${fallback}'">`:fallback}</div>`;
+}
+function profileBannerStyle(value){
+  const image=safeRemoteImage(value);
+  return image?` style="background-image:url('${escapeHtml(image)}')"`:'';
+}
 function toast(msg){
   const el=document.getElementById('toast');
   el.textContent=msg; el.classList.add('show');
@@ -336,7 +374,7 @@ async function openFriendQuickProfile(id){
     const presenceLabel=presenceDisplayLabel(data.presence||{status:f.status||'offline'});
     const statHtml=Object.entries(stats).map(([game,x])=>`<article><span>${escapeHtml(gameNames[game]||game)}</span><strong>${Number(x.wins||0)}V</strong><small>${Number(x.played||0)} partidas • ${Number(x.losses||0)}D • ${Number(x.draws||0)}E</small></article>`).join('')||'<p class="muted">Ainda sem partidas competitivas registradas.</p>';
     const recent=(data.recent||[]).slice(0,5).map(r=>{const won=(r.winner_ids||[]).includes(id),lost=(r.loser_ids||[]).includes(id);return `<div class="profile-public-history"><span>${escapeHtml(gameNames[r.game]||r.game)}</span><strong>${won?'Vitória':lost?'Derrota':'Empate'}</strong><small>${new Date(r.finished_at).toLocaleDateString('pt-BR')}</small></div>`}).join('')||'<div class="muted">Sem histórico recente.</div>';
-    el.querySelector('.modal-body').innerHTML=`${u.banner?`<div class="profile-banner" style="background-image:url('${escapeHtml(u.banner)}')"></div>`:''}<div class="profile-card profile-public-card"><div class="profile-avatar-xl">${escapeHtml(u.avatar||initials(u.username))}</div><h2>${escapeHtml(u.username)}</h2><div class="code-box">${escapeHtml(u.id)}</div><p class="presence-line"><i class="dot ${data.presence?.status==='offline'?'offline':data.presence?.status==='away'?'busy':'online'}"></i>${escapeHtml(presenceLabel)}</p></div><div class="profile-public-stats">${statHtml}</div><h3 class="profile-public-subtitle">Partidas recentes</h3><div class="profile-public-recent">${recent}</div><div class="modal-foot">${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${u.id}')">Convidar para minha sala</button>`:'<span class="muted">Entre em uma sala para convidar este amigo.</span>'}</div>`;
+    el.querySelector('.modal-body').innerHTML=`${u.banner?`<div class="profile-banner" style="background-image:url('${escapeHtml(u.banner)}')"></div>`:''}<div class="profile-card profile-public-card">${avatarHtml(u,'profile-avatar-xl')}<h2>${escapeHtml(u.username)}</h2><div class="code-box">${escapeHtml(u.id)}</div><p class="presence-line"><i class="dot ${data.presence?.status==='offline'?'offline':data.presence?.status==='away'?'busy':'online'}"></i>${escapeHtml(presenceLabel)}</p></div><div class="profile-public-stats">${statHtml}</div><h3 class="profile-public-subtitle">Partidas recentes</h3><div class="profile-public-recent">${recent}</div><div class="modal-foot">${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${u.id}')">Convidar para minha sala</button>`:'<span class="muted">Entre em uma sala para convidar este amigo.</span>'}</div>`;
   }catch(err){const body=el.querySelector('.modal-body');if(body)body.innerHTML=`<div class="empty-state">${escapeHtml(err.message||'Não foi possível carregar o perfil.')}</div>`}
 }
 function presenceDisplayLabel(p){
@@ -381,7 +419,7 @@ function currentRole(room){
 }
 function addSpectator(room,user){
   room.spectators=room.spectators||[];
-  if(!room.spectators.some(s=>s.id===user.id)) room.spectators.push({id:user.id,username:user.username,avatar:user.avatar});
+  if(!room.spectators.some(s=>s.id===user.id)) room.spectators.push({id:user.id,username:user.username,avatar:user.avatar,avatarImage:user.avatarImage||null});
   syncLocalRoom(room);
 }
 function removeSpectator(room,userId){ room.spectators=(room.spectators||[]).filter(s=>s.id!==userId); syncLocalRoom(room); }
@@ -634,7 +672,7 @@ function renderAuth(mode='login'){
 
 function topbar(active='home'){
   return `<header class="topbar">
-    <button class="sidebar-toggle" type="button" onclick="toggleSidebar()" title="Esconder/mostrar barra lateral" aria-label="Esconder ou mostrar barra lateral"><span>‹</span></button>
+    <button class="sidebar-toggle" type="button" onclick="toggleSidebar()" title="Esconder/mostrar barra lateral" aria-label="Esconder ou mostrar barra lateral" aria-expanded="${!document.body?.classList.contains('tdb-sidebar-collapsed')}"><span>‹</span></button>
     <div class="topbar-left">
       <div class="top-brand" onclick="goHome()" style="cursor:pointer">${logoTag()}<strong>TDB</strong></div>
       <nav class="nav-links">
@@ -645,7 +683,7 @@ function topbar(active='home'){
     </div>
     <div class="topbar-right">
       <span id="onlineStatusPill" class="online-status-pill ${window.TDBOnline?.readyForMultiplayer?'online':window.TDBOnline?.phase==='reconnecting'||window.TDBOnline?.phase==='connecting'?'connecting':'offline'}">${window.TDBOnline?.readyForMultiplayer?(window.TDBOnline?.realtime?'ONLINE':'ONLINE • FALLBACK'):window.TDBOnline?.phase==='reconnecting'?'RECONECTANDO…':window.TDBOnline?.phase==='connecting'?'CONECTANDO…':'OFFLINE'}</span><span id="onlinePingPill" class="online-ping-pill">${Number.isFinite(window.TDBOnline?.latencyMs)?`${window.TDBOnline.latencyMs} ms`:''}</span>
-      <div class="profile-mini" onclick="renderProfile()" style="cursor:pointer"><div class="avatar">${escapeHtml(state.user?.avatar||initials(state.user?.username))}</div><div class="profile-lines"><strong>${escapeHtml(state.user?.username||'Jogador')}</strong><small>${escapeHtml(state.user?.id||'')}</small></div></div>
+      <div class="profile-mini" onclick="renderProfile()" style="cursor:pointer">${avatarHtml(state.user,'avatar')}<div class="profile-lines"><strong>${escapeHtml(state.user?.username||'Jogador')}</strong><small>${escapeHtml(state.user?.id||'')}</small></div></div>
       <button class="btn btn-dark" title="Sair" onclick="logout()">${uiIcon('logout')}<span>Sair</span></button>
     </div>
   </header>`;
@@ -774,18 +812,19 @@ function waitingHostActions(room){
   const cap=roomCapacity(room);
   const enough=(room.players||[]).length>=minimumPlayersForRoom(room);
   const startDisabled=enough?'':`disabled title="Aguardando jogadores"`;
+  const editRules=`<button class="btn btn-secondary room-rules-button" onclick="openEditRoomRules()">${uiIcon('settings')} Editar regras</button>`;
   if(room.game==='truco'){
-    return `<button class="btn btn-secondary" onclick="startTrucoWithBots()">Testar com ${cap===2?'1 bot':'3 bots'}</button>
+    return `${editRules}<button class="btn btn-secondary" onclick="startTrucoWithBots()">Testar com ${cap===2?'1 bot':'3 bots'}</button>
       <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?'Iniciar partida':'Aguardando jogadores'}</button>`;
   }
   if(room.game==='chess'){
-    return `<button class="btn btn-secondary" onclick="launchChessBot()">Testar com bot</button>
+    return `${editRules}<button class="btn btn-secondary" onclick="launchChessBot()">Testar com bot • ${chessBotDifficultyLabel(room)}</button>
       <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?'Iniciar partida':'Aguardando jogadores'}</button>`;
   }
   if(room.game==='blackjack'){
     return `<button class="btn btn-primary" onclick="startGame()">Abrir mesa de Blackjack</button>`;
   }
-  if(room.game==='music')return `<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Lobby</button>`;
+  if(room.game==='music')return `${editRules}<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Lobby</button>`;
   return `<button class="btn btn-primary" ${startDisabled} onclick="startGame()">Iniciar partida</button>`;
 }
 
@@ -803,15 +842,27 @@ function waitingPlayersHtml(room){
     ${cap>6?`<div class="player-slot empty">Capacidade da sala: ${cap}</div>`:''}`;
 }
 
+function waitingRoomMetaHtml(room){
+  const cap=roomCapacity(room);
+  const meta=
+    room.game==='truco' ? ` • ${cap===2?'1x1':'2x2'} • ${room.turnTimer?`${room.turnTimer}s/jogada`:'Sem limite'}` :
+    room.game==='chess' ? ` • 1x1 • ${room.chessClock?Math.floor(room.chessClock/60)+' min':'Sem relógio'} • BOT ${chessBotDifficultyLabel(room)}` :
+    room.game==='blackjack' ? ` • até 3 jogadores • dealer automático` :
+    room.game==='music' ? ` • Lounge compartilhado` : '';
+  return `${games[room.game]?.name||room.game}${meta} • ${privacyLabel(room)} • Host: <span id="waitingHostName">${escapeHtml(room.owner||'—')}</span>`;
+}
+
 function patchWaitingRoom(forceActions=false){
   if(state.view!=='waiting' || !state.activeRoom) return;
   const room=state.activeRoom;
   const list=document.getElementById('waitingPlayerList');
   const host=document.getElementById('waitingHostName');
+  const meta=document.getElementById('waitingRoomMeta');
   const actions=document.getElementById('waitingActions');
 
   if(list) list.innerHTML=waitingPlayersHtml(room);
-  if(host) host.textContent=room.owner||'—';
+  if(meta) meta.innerHTML=waitingRoomMetaHtml(room);
+  else if(host) host.textContent=room.owner||'—';
 
   if(actions && (forceActions || actions.dataset.ownerId!==String(room.ownerId||''))){
     const isHost=room.ownerId===state.user.id;
@@ -863,9 +914,9 @@ function friendCard(f){
   const busy=/^(Jogando|Ouvindo|Na sala)/.test(status);
   const offline=status==='Offline';
   return `<div class="friend-card">
-    <div class="avatar">${escapeHtml(f.avatar||initials(f.username))}</div>
-    <div class="friend-meta" onclick="openFriendQuickProfile('${f.id}')"><strong>${escapeHtml(f.username)}</strong><span><i class="dot ${offline?'offline':busy?'busy':'online'}"></i>${escapeHtml(status)}</span><small>${escapeHtml(f.id)} • abrir perfil rápido</small></div>
-    <button class="btn btn-dark" onclick="event.stopPropagation();inviteFriend('${f.id}')">Convidar</button>
+    ${avatarHtml(f,'avatar')}
+    <div class="friend-meta" onclick="renderPublicProfile('${f.id}')"><strong>${escapeHtml(f.username)}</strong><span><i class="dot ${offline?'offline':busy?'busy':'online'}"></i>${escapeHtml(status)}</span><small>${escapeHtml(f.id)}</small></div>
+    <div class="friend-card-actions"><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();renderPublicProfile('${f.id}')">Visitar perfil</button><button class="btn btn-dark btn-sm" onclick="event.stopPropagation();inviteFriend('${f.id}')">Convidar</button></div>
   </div>`;
 }
 
@@ -888,7 +939,7 @@ async function openInviteFriendsModal(){
     <div class="modal-body">
       <div class="invite-friend-list">
         ${state.friends.length?state.friends.map(f=>`<div class="social-row">
-          <div class="avatar">${escapeHtml(f.avatar||initials(f.username))}</div>
+          ${avatarHtml(f,'avatar')}
           <div class="friend-meta"><strong>${escapeHtml(f.username)}</strong><small>${escapeHtml(f.id)}</small></div>
           <button class="btn btn-primary btn-sm" onclick="inviteFriendFromModal('${f.id}',this)">Convidar</button>
         </div>`).join(''):'<div class="muted">Você ainda não tem amigos adicionados.</div>'}
@@ -983,7 +1034,7 @@ function roomRow(room){
   const ownerLabel=empty?'Sala vazia':`Host: ${escapeHtml(room.owner||'—')}`;
   const spectators=(room.spectators||[]).length;
   return `<div class="room-row ${empty?'room-empty-grace':''}">
-    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • ${ownerLabel} ${room.privacy==='private'?'🔒':room.privacy==='friends'?'👥':room.privacy==='invite'?'✉️':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='music'?' • ◈ Lounge':room.game==='blackjack'?' • até 3 vs dealer':''}${empty&&emptyLeft?` • expira em ~${emptyLeft} min`:''}</span></div>
+    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • ${ownerLabel} ${room.privacy==='private'?'🔒':room.privacy==='friends'?'👥':room.privacy==='invite'?'✉️':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='chess'?` • ${room.chessClock?`${Math.floor(room.chessClock/60)} min`:'sem relógio'} • BOT ${chessBotDifficultyLabel(room)}`:''}${room.game==='music'?' • ◈ Lounge':room.game==='blackjack'?' • até 3 vs dealer':''}${empty&&emptyLeft?` • expira em ~${emptyLeft} min`:''}</span></div>
     <div class="room-stat"><strong>${room.players?.length||0}/${cap}</strong><span>${room.game==='music'?'Ouvintes':`Jogadores${spectators?` • 👁 ${spectators}`:''}`}</span></div>
     <div><span class="badge ${open?'open':'playing'}">${empty?'Vazia':room.game==='music'?(open?'Aberta':'Tocando'):room.game==='blackjack'?'Em manutenção':open?'Aberta':live?'Em andamento':'Indisponível'}</span></div>
     <button class="btn ${joinable?'btn-primary':watchable?'btn-secondary':'btn-dark'}" ${joinable?`onclick="requestJoinRoom('${room.code}')"`:watchable?`onclick="watchRoom('${room.code}')"`:'disabled'}>${joinable?'Entrar':watchable?'Assistir':full?'Cheia':'Jogando'}</button>
@@ -1016,6 +1067,14 @@ function openCreateRoom(){
             <option value="white">Brancas</option>
             <option value="black">Pretas</option>
           </select>
+        </div>
+        <div class="field"><label>Dificuldade do BOT</label>
+          <select id="chessBotDifficulty" class="select">
+            <option value="easy" selected>Fácil</option>
+            <option value="medium">Médio</option>
+            <option value="hard">Difícil</option>
+          </select>
+          <small class="field-help">Usada ao escolher “Testar com bot”. Pode ser alterada depois sem recriar a sala.</small>
         </div>`:''}
       ${state.selectedGame==='blackjack'?`
         <div class="field"><label>Tempo por decisão</label><select id="blackjackTurnTimer" class="select"><option value="15">15 segundos</option><option value="20" selected>20 segundos</option><option value="30">30 segundos</option><option value="0">Sem limite</option></select></div>
@@ -1092,6 +1151,7 @@ async function createRoom(){
     const trucoSeats=state.selectedGame==='truco' ? Number(document.getElementById('trucoSeats')?.value||4) : null;
     const chessClock=state.selectedGame==='chess' ? Number(document.getElementById('chessClock')?.value||0) : null;
     const chessColor=state.selectedGame==='chess' ? (document.getElementById('chessColor')?.value||'random') : null;
+    const chessBotDifficulty=state.selectedGame==='chess' ? chessBotDifficultyValue(document.getElementById('chessBotDifficulty')?.value||'easy') : null;
     const musicControl=state.selectedGame==='music' ? (document.getElementById('musicControl')?.value||'everyone') : null;
     const musicSkipMode=state.selectedGame==='music' ? (document.getElementById('musicSkipMode')?.value||'vote') : null;
     const musicQueueLimit=state.selectedGame==='music' ? Number(document.getElementById('musicQueueLimit')?.value||5) : null;
@@ -1103,8 +1163,8 @@ async function createRoom(){
     const candidate={
       code:genRoomCode(state.selectedGame),game:state.selectedGame,name,
       owner:state.user.username,ownerId:state.user.id,privacy,password,status:'open',
-      turnTimer,trucoSeats,chessClock,chessColor,musicControl,musicSkipMode,musicQueueLimit,blackjackTurnTimer,blackjackMinBet,blackjackStartingChips,blackjackDecks,
-      players:[{username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online'}],
+      turnTimer,trucoSeats,chessClock,chessColor,chessBotDifficulty,musicControl,musicSkipMode,musicQueueLimit,blackjackTurnTimer,blackjackMinBet,blackjackStartingChips,blackjackDecks,
+      players:[{username:state.user.username,id:state.user.id,avatar:state.user.avatar,avatarImage:state.user.avatarImage||null,connection:'online'}],
       spectators:[],createdAt:Date.now()
     };
 
@@ -1203,7 +1263,7 @@ function joinRoom(code,password=''){
   if(!room.players.some(p=>p.id===state.user.id)){
     if(room.players.length>=roomCapacity(room)) return toast('A sala está cheia.');
     const wasEmpty=room.players.length===0;
-    room.players.push({username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online'});
+    room.players.push({username:state.user.username,id:state.user.id,avatar:state.user.avatar,avatarImage:state.user.avatarImage||null,connection:'online'});
     if(wasEmpty){
       room.owner=state.user.username;
       room.ownerId=state.user.id;
@@ -1276,6 +1336,105 @@ function launchChessBot(){
 }
 window.launchChessBot=launchChessBot;
 
+function roomRulesFields(room){
+  if(room.game==='truco'){
+    return `<div class="field"><label>Formato do Truco</label><select id="editTrucoSeats" class="select">
+      <option value="2" ${Number(room.trucoSeats||4)===2?'selected':''}>2 jogadores (1x1)</option>
+      <option value="4" ${Number(room.trucoSeats||4)===4?'selected':''}>4 jogadores (2x2)</option>
+    </select></div>
+    <div class="field"><label>Tempo por jogada</label><select id="editTurnTimer" class="select">
+      <option value="0" ${Number(room.turnTimer||0)===0?'selected':''}>Sem limite</option>
+      <option value="30" ${Number(room.turnTimer||0)===30?'selected':''}>30 segundos</option>
+      <option value="60" ${Number(room.turnTimer||0)===60?'selected':''}>60 segundos</option>
+    </select></div>`;
+  }
+  if(room.game==='chess'){
+    const clock=Number(room.chessClock||0),diff=chessBotDifficultyValue(room);
+    return `<div class="field"><label>Tempo da partida</label><select id="editChessClock" class="select">
+      ${[0,60,180,300,600,900].map(v=>`<option value="${v}" ${clock===v?'selected':''}>${v===0?'Sem relógio':`${v/60} minuto${v===60?'':'s'}`}</option>`).join('')}
+    </select></div>
+    <div class="field"><label>Sua cor na próxima partida</label><select id="editChessColor" class="select">
+      <option value="random" ${(room.chessColor||'random')==='random'?'selected':''}>Aleatória</option>
+      <option value="white" ${room.chessColor==='white'?'selected':''}>Brancas</option>
+      <option value="black" ${room.chessColor==='black'?'selected':''}>Pretas</option>
+    </select></div>
+    <div class="field"><label>Dificuldade do BOT</label><select id="editChessBotDifficulty" class="select">
+      ${Object.entries(CHESS_BOT_DIFFICULTIES).map(([key,value])=>`<option value="${key}" ${diff===key?'selected':''}>${value.label}</option>`).join('')}
+    </select><small class="field-help" id="botDifficultyHelp">${escapeHtml(CHESS_BOT_DIFFICULTIES[diff].description)}</small></div>`;
+  }
+  if(room.game==='music'){
+    return `<div class="field"><label>Quem controla o player</label><select id="editMusicControl" class="select">
+      <option value="everyone" ${room.musicControl!=='host'?'selected':''}>Todos na sala</option>
+      <option value="host" ${room.musicControl==='host'?'selected':''}>Somente host</option>
+    </select></div>
+    <div class="field"><label>Quem pode pular</label><select id="editMusicSkipMode" class="select">
+      ${['vote','everyone','host'].map(v=>`<option value="${v}" ${room.musicSkipMode===v?'selected':''}>${v==='vote'?'Votação para pular':v==='everyone'?'Todos podem pular':'Somente host'}</option>`).join('')}
+    </select></div>
+    <div class="field"><label>Limite de músicas por pessoa</label><select id="editMusicQueueLimit" class="select">
+      ${[3,5,10,0].map(v=>`<option value="${v}" ${Number(room.musicQueueLimit??5)===v?'selected':''}>${v||'Sem limite'}</option>`).join('')}
+    </select></div>`;
+  }
+  return `<div class="mini-note">Não há regras editáveis para este modo.</div>`;
+}
+function openEditRoomRules(){
+  const room=state.activeRoom;
+  if(!room) return toast('Sala não encontrada.');
+  if(room.ownerId!==state.user?.id) return toast('Somente o host pode editar as regras.');
+  if(room.status==='playing') return toast('Volte para a sala antes de alterar as regras da próxima partida.');
+  document.getElementById('modalBackdrop')?.remove();
+  document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="modalBackdrop"><div class="modal room-rules-modal">
+    <div class="modal-head"><div><h3>Editar regras da sala</h3><p class="muted small">As mudanças valem para a próxima partida. Não é necessário recriar a sala.</p></div><button class="icon-btn" onclick="closeModal()">×</button></div>
+    <div class="modal-body"><div class="form-grid">${roomRulesFields(room)}</div></div>
+    <div class="modal-foot"><button class="btn btn-dark" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveRoomRules()">Salvar regras</button></div>
+  </div></div>`);
+  const diff=document.getElementById('editChessBotDifficulty');
+  if(diff) diff.addEventListener('change',()=>{const help=document.getElementById('botDifficultyHelp');if(help)help.textContent=CHESS_BOT_DIFFICULTIES[chessBotDifficultyValue(diff.value)].description});
+}
+async function saveRoomRules(){
+  const room=state.activeRoom;
+  if(!room||room.ownerId!==state.user?.id) return toast('Somente o host pode editar as regras.');
+  if(room.status==='playing') return toast('A partida está em andamento. Altere as regras quando voltar à sala.');
+  const next=structuredClone(room);
+  if(room.game==='truco'){
+    const seats=Number(document.getElementById('editTrucoSeats')?.value||room.trucoSeats||4);
+    if((room.players||[]).length>seats) return toast(`A sala tem ${(room.players||[]).length} jogadores. Remova jogadores antes de mudar para ${seats}.`);
+    next.trucoSeats=seats===2?2:4;
+    next.turnTimer=[0,30,60].includes(Number(document.getElementById('editTurnTimer')?.value))?Number(document.getElementById('editTurnTimer').value):0;
+  }else if(room.game==='chess'){
+    next.chessClock=[0,60,180,300,600,900].includes(Number(document.getElementById('editChessClock')?.value))?Number(document.getElementById('editChessClock').value):600;
+    const color=document.getElementById('editChessColor')?.value||'random';
+    next.chessColor=['white','black','random'].includes(color)?color:'random';
+    next.chessBotDifficulty=chessBotDifficultyValue(document.getElementById('editChessBotDifficulty')?.value||'easy');
+  }else if(room.game==='music'){
+    next.musicControl=document.getElementById('editMusicControl')?.value==='host'?'host':'everyone';
+    const skip=document.getElementById('editMusicSkipMode')?.value||'vote';
+    next.musicSkipMode=['host','everyone','vote'].includes(skip)?skip:'vote';
+    const limit=Number(document.getElementById('editMusicQueueLimit')?.value||5);
+    next.musicQueueLimit=[0,3,5,10].includes(limit)?limit:5;
+  }
+  window.TDBPlatformUI?.showLoading?.('Salvando regras…');
+  try{
+    let saved=next;
+    if(Core.mode==='online'&&window.TDBOnline?.connected){
+      saved=await window.TDBOnline.upsertRoom(next);
+      if(!saved) throw new Error('Não foi possível salvar as regras.');
+    }else updateStoredRoom(next);
+    state.activeRoom=saved||next;
+    Core.rooms.setActive(state.activeRoom);
+    const idx=state.rooms.findIndex(r=>r.code===state.activeRoom.code);
+    if(idx>=0)state.rooms[idx]=state.activeRoom;
+    else state.rooms.push(state.activeRoom);
+    closeModal();
+    toast('Regras da sala atualizadas para a próxima partida.');
+    renderWaitingRoom();
+  }catch(err){
+    console.error('[TDB] Falha ao atualizar regras da sala:',err);
+    toast(err?.message||'Não foi possível atualizar as regras.');
+  }finally{window.TDBPlatformUI?.hideLoading?.()}
+}
+window.openEditRoomRules=openEditRoomRules;
+window.saveRoomRules=saveRoomRules;
+
 function renderWaitingRoom(){
   if(state.activeRoom?.simulation && state.botReturnRoom){
     const latest=state.rooms.find(r=>r.code===state.botReturnRoom.code) || state.botReturnRoom;
@@ -1298,12 +1457,6 @@ function renderWaitingRoom(){
   const isHost=room.ownerId===state.user.id;
   const cap=roomCapacity(room);
 
-  const meta=
-    room.game==='truco' ? ` • ${cap===2?'1x1':'2x2'}` :
-    room.game==='chess' ? ` • 1x1 • ${room.chessClock?Math.floor(room.chessClock/60)+' min':'Sem relógio'}` :
-    room.game==='blackjack' ? ` • até 3 jogadores • dealer automático` :
-    room.game==='music' ? ` • Lounge compartilhado` : '';
-
   const hostActions=waitingHostActions(room);
   const nonHostAction=waitingNonHostAction(room);
 
@@ -1312,7 +1465,7 @@ function renderWaitingRoom(){
     <button class="waiting-back-button" onclick="backToGameLobby()">${uiIcon('back')} <span>Voltar ao lobby</span></button>
     <div class="waiting-hero"><div class="game-head"><div class="big-symbol">${g.symbol}</div><div>
       <h1>${escapeHtml(room.name)}</h1>
-      <p>${g.name}${meta} • ${privacyLabel(room)} • Host: <span id="waitingHostName">${escapeHtml(room.owner)}</span></p>
+      <p id="waitingRoomMeta">${waitingRoomMetaHtml(room)}</p>
       <div class="code-box">Código: <strong>${room.code}</strong><button class="link-btn" onclick="copyCode('${room.code}')">Copiar</button></div>
     </div></div></div>
 
@@ -1337,7 +1490,7 @@ function renderWaitingRoom(){
 function playerSlot(p,isHost){
   const canKick=isHost && p.id!==state.user.id;
   const known=state.knownRoomPlayers.has(p.id);state.knownRoomPlayers.add(p.id);
-  return `<div class="player-slot ${known?'':'player-entry'}"><div class="avatar">${escapeHtml(p.avatar||initials(p.username))}</div><div class="slot-main"><strong>${escapeHtml(p.username)} ${p.id===state.activeRoom.ownerId?'<span class="host-tag">HOST</span>':''}</strong><div class="muted small">${escapeHtml(p.id||'Jogador')}${connectionLabel(p)}</div></div>${canKick?`<button class="btn btn-danger btn-sm" onclick="kickPlayer('${p.id}')">Expulsar</button>`:''}</div>`;
+  return `<div class="player-slot ${known?'':'player-entry'}">${avatarHtml(p,'avatar')}<div class="slot-main"><strong>${escapeHtml(p.username)} ${p.id===state.activeRoom.ownerId?'<span class="host-tag">HOST</span>':''}</strong><div class="muted small">${escapeHtml(p.id||'Jogador')}${connectionLabel(p)}</div></div>${canKick?`<button class="btn btn-danger btn-sm" onclick="kickPlayer('${p.id}')">Expulsar</button>`:''}</div>`;
 }
 async function kickPlayer(id){
   const room=state.activeRoom;if(!room) return;
@@ -1537,7 +1690,7 @@ function renderFriends(skipRefresh=false){
 function renderUserSearchResults(){
   const rows=state.userSearch||[];
   if(!rows.length) return '<div class="mini-note">Pesquise por nome ou pelo ID TDB-...</div>';
-  return rows.map(u=>`<div class="social-row"><div class="avatar">${escapeHtml(u.avatar||initials(u.username))}</div><div class="friend-meta"><strong>${escapeHtml(u.username)}</strong><small>${escapeHtml(u.id)}</small></div><button class="btn btn-secondary btn-sm" onclick="sendFriendRequest('${u.id}')">Enviar pedido</button></div>`).join('');
+  return rows.map(u=>`<div class="social-row">${avatarHtml(u,'avatar')}<div class="friend-meta"><strong>${escapeHtml(u.username)}</strong><small>${escapeHtml(u.id)}</small></div><div class="social-row-actions"><button class="btn btn-dark btn-sm" onclick="renderPublicProfile('${u.id}')">Ver perfil</button><button class="btn btn-secondary btn-sm" onclick="sendFriendRequest('${u.id}')">Enviar pedido</button></div></div>`).join('');
 }
 
 function showRoomInviteToast(invite){
@@ -1650,16 +1803,80 @@ async function respondRoomInvite(inviteId,accept){
 
 function renderProfile(){
   state.view='profile';
-  app.innerHTML=`${topbar('profile')}<section class="dashboard fade-in">
-    <div class="page-head"><div><h1 class="page-title">Seu perfil</h1><p class="muted">Histórico competitivo considera apenas partidas contra jogadores reais.</p></div></div>
-    <div class="profile-grid">
-      <div class="panel profile-card">${state.user.banner?`<div class="profile-banner" style="background-image:url('${escapeHtml(state.user.banner)}')"></div>`:''}<div class="profile-avatar-xl">${escapeHtml(state.user.avatar||initials(state.user.username))}</div><h2>${escapeHtml(state.user.username)}</h2><div class="code-box">${escapeHtml(state.user.id)} <button class="link-btn" onclick="copyCode('${state.user.id}')">Copiar</button></div><p class="muted">${currentStatus()}</p></div>
-      <div class="panel"><div class="panel-header"><h2>Editar perfil</h2></div><div class="panel-body"><div class="form-grid"><div class="field"><label>Nome de usuário</label><input id="editUsername" maxlength="24" value="${escapeHtml(state.user.username)}"></div><div class="field"><label>Avatar curto</label><input id="editAvatar" maxlength="2" value="${escapeHtml(state.user.avatar||initials(state.user.username))}"></div><div class="field field-wide"><label>Banner (URL de imagem, opcional)</label><input id="editBanner" maxlength="1000" placeholder="https://..." value="${escapeHtml(state.user.banner||'')}"></div><button class="btn btn-primary" onclick="saveProfile()">Salvar alterações</button></div></div></div>
+  const banner=safeRemoteImage(state.user?.banner);
+  const avatarImage=safeRemoteImage(state.user?.avatarImage||state.user?.avatar_image);
+  app.innerHTML=`${topbar('profile')}<section class="dashboard profile-page fade-in">
+    <div class="page-head profile-page-head"><div><span class="eyebrow">PERFIL TDB</span><h1 class="page-title">Seu perfil</h1><p class="muted">Personalize como você aparece para seus amigos e acompanhe seu histórico competitivo.</p></div></div>
+    <div class="profile-hero panel">
+      <div class="profile-cover${banner?' has-image':''}"${banner?` style="background-image:url('${escapeHtml(banner)}')"`:''}><div class="profile-cover-shade"></div></div>
+      <div class="profile-identity-row">
+        ${avatarHtml(state.user,'profile-avatar-xl')}
+        <div class="profile-identity-copy"><div class="profile-name-line"><h2>${escapeHtml(state.user.username)}</h2><span class="profile-status-chip"><i class="dot online"></i>${escapeHtml(currentStatus())}</span></div><div class="profile-id-line"><span>${escapeHtml(state.user.id)}</span><button class="link-btn" onclick="copyCode('${state.user.id}')">Copiar ID</button></div></div>
+      </div>
+    </div>
+    <div class="profile-edit-layout">
+      <div class="panel profile-editor"><div class="panel-header"><div><h2>Editar perfil</h2><p class="muted">Banner e foto aparecem também para seus amigos.</p></div></div><div class="panel-body">
+        <div class="profile-edit-preview">
+          <div id="profileBannerPreview" class="profile-mini-cover${banner?' has-image':''}"${banner?` style="background-image:url('${escapeHtml(banner)}')"`:''}></div>
+          <div id="profileAvatarPreview">${avatarHtml({...state.user,avatarImage},'profile-preview-avatar')}</div>
+        </div>
+        <div class="form-grid profile-form-grid">
+          <div class="field"><label>Nome de usuário</label><input id="editUsername" maxlength="24" value="${escapeHtml(state.user.username)}"></div>
+          <div class="field"><label>Iniciais (fallback)</label><input id="editAvatar" maxlength="2" value="${escapeHtml(state.user.avatar||initials(state.user.username))}"></div>
+          <div class="field field-wide"><label>Foto de perfil (URL da imagem)</label><input id="editAvatarImage" maxlength="1000" placeholder="https://..." value="${escapeHtml(avatarImage||'')}" oninput="refreshProfilePreview()"><small>Use um link direto de imagem HTTPS. Se estiver vazio, aparecem suas iniciais.</small></div>
+          <div class="field field-wide"><label>Banner (URL da imagem)</label><input id="editBanner" maxlength="1000" placeholder="https://..." value="${escapeHtml(banner||'')}" oninput="refreshProfilePreview()"><small>Recomendado: imagem horizontal, por exemplo 1600×500.</small></div>
+          <button class="btn btn-primary profile-save-btn" onclick="saveProfile()">Salvar alterações</button>
+        </div>
+      </div></div>
+      <div class="panel profile-tips"><div class="panel-header"><h2>Como seu perfil aparece</h2></div><div class="panel-body"><p>Seus amigos verão sua foto, banner, presença, estatísticas e partidas recentes.</p><div class="profile-tip"><strong>Foto</strong><span>Quadrada funciona melhor.</span></div><div class="profile-tip"><strong>Banner</strong><span>Use uma imagem larga para evitar cortes.</span></div><div class="profile-tip"><strong>Privacidade</strong><span>Senha e dados de login nunca aparecem no perfil público.</span></div></div></div>
     </div>
     <div id="profileCompetitive">${renderProfileHistory()}</div>
   </section>`;
   refreshProfileHistory();
 }
+function refreshProfilePreview(){
+  const avatarValue=safeRemoteImage(document.getElementById('editAvatarImage')?.value||'');
+  const bannerValue=safeRemoteImage(document.getElementById('editBanner')?.value||'');
+  const user={...state.user,avatarImage:avatarValue,avatar:document.getElementById('editAvatar')?.value.trim()||initials(document.getElementById('editUsername')?.value||state.user.username)};
+  const avatarWrap=document.getElementById('profileAvatarPreview');
+  if(avatarWrap) avatarWrap.innerHTML=avatarHtml(user,'profile-preview-avatar');
+  const banner=document.getElementById('profileBannerPreview');
+  if(banner){banner.classList.toggle('has-image',!!bannerValue);banner.style.backgroundImage=bannerValue?`url("${bannerValue.replace(/"/g,'%22')}")`:''}
+}
+function publicProfileStatsHtml(data){
+  const gameNames={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack'};
+  const entries=Object.entries(data?.stats||{});
+  if(!entries.length)return '<div class="profile-empty-card">Ainda sem partidas competitivas registradas.</div>';
+  return entries.map(([game,x])=>`<article class="public-stat-card"><span>${escapeHtml(gameNames[game]||game)}</span><strong>${Number(x.wins||0)} vitórias</strong><small>${Number(x.played||0)} partidas • ${Number(x.losses||0)} derrotas • ${Number(x.draws||0)} empates</small></article>`).join('');
+}
+function publicProfileRecentHtml(data,id){
+  const gameNames={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack'};
+  const rows=(data?.recent||[]).slice(0,8);
+  if(!rows.length)return '<div class="profile-empty-card">Sem histórico recente.</div>';
+  return rows.map(r=>{const won=(r.winner_ids||[]).includes(id),lost=(r.loser_ids||[]).includes(id);return `<div class="public-history-row"><div><strong>${escapeHtml(gameNames[r.game]||r.game)}</strong><small>${new Date(r.finished_at).toLocaleString('pt-BR')}</small></div><span class="result-pill ${won?'win':lost?'loss':'draw'}">${won?'Vitória':lost?'Derrota':'Empate'}</span></div>`}).join('');
+}
+async function renderPublicProfile(id){
+  if(!state.user)return renderAuth('login');
+  const playerId=String(id||'').trim().toUpperCase();
+  if(!playerId)return;
+  state.view='public-profile';
+  app.innerHTML=`${topbar('friends')}<section class="dashboard public-profile-page fade-in"><div class="page-head"><div><button class="profile-back-link" onclick="renderFriends(true)">← Voltar aos amigos</button><h1 class="page-title">Perfil do jogador</h1></div></div><div class="panel profile-loading-panel">Carregando perfil…</div></section>`;
+  try{
+    const data=window.TDBOnline?.connected?await window.TDBOnline.getPublicProfile(playerId):null;
+    if(state.view!=='public-profile')return;
+    if(!data?.user)throw new Error('Perfil não encontrado.');
+    const u=data.user,banner=safeRemoteImage(u.banner),presenceLabel=presenceDisplayLabel(data.presence||{});
+    app.innerHTML=`${topbar('friends')}<section class="dashboard public-profile-page fade-in">
+      <div class="page-head"><div><button class="profile-back-link" onclick="renderFriends(true)">← Voltar aos amigos</button><span class="eyebrow">PERFIL PÚBLICO</span><h1 class="page-title">${escapeHtml(u.username)}</h1></div>${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${u.id}')">Convidar para minha sala</button>`:''}</div>
+      <div class="profile-hero panel public-profile-hero"><div class="profile-cover${banner?' has-image':''}"${banner?` style="background-image:url('${escapeHtml(banner)}')"`:''}><div class="profile-cover-shade"></div></div><div class="profile-identity-row">${avatarHtml(u,'profile-avatar-xl')}<div class="profile-identity-copy"><div class="profile-name-line"><h2>${escapeHtml(u.username)}</h2><span class="profile-status-chip"><i class="dot ${data.presence?.status==='offline'?'offline':data.presence?.status==='away'?'busy':'online'}"></i>${escapeHtml(presenceLabel)}</span></div><div class="profile-id-line"><span>${escapeHtml(u.id)}</span><button class="link-btn" onclick="copyCode('${u.id}')">Copiar ID</button></div></div></div></div>
+      <div class="section-title"><div><h2>Estatísticas</h2><p>Partidas competitivas contra jogadores reais.</p></div></div><div class="public-profile-stats">${publicProfileStatsHtml(data)}</div>
+      <div class="section-title"><div><h2>Partidas recentes</h2><p>Últimos resultados registrados.</p></div></div><div class="panel"><div class="panel-body public-profile-history">${publicProfileRecentHtml(data,u.id)}</div></div>
+    </section>`;
+  }catch(err){
+    if(state.view==='public-profile') app.innerHTML=`${topbar('friends')}<section class="dashboard fade-in"><button class="profile-back-link" onclick="renderFriends(true)">← Voltar aos amigos</button><div class="empty-state">${escapeHtml(err.message||'Não foi possível carregar o perfil.')}</div></section>`;
+  }
+}
+
 function renderProfileHistory(){
   const h=state.profileHistory;if(!h)return `<div class="panel"><div class="panel-body"><div class="muted">Carregando histórico competitivo…</div></div></div>`;
   const gameNames={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack'};
@@ -1677,12 +1894,13 @@ function copyRecentPgn(i){const pgn=window.__TDB_PROFILE_RESULTS__?.[i]?.metadat
 async function saveProfile(){
   const username=document.getElementById('editUsername').value.trim();
   const avatar=document.getElementById('editAvatar').value.trim()||initials(username);
+  const avatarImage=document.getElementById('editAvatarImage')?.value.trim()||'';
   const banner=document.getElementById('editBanner')?.value.trim()||'';
   if(username.length<3) return toast('Use pelo menos 3 caracteres.');
 
   if(location.protocol!=='file:' && window.TDBOnline?.connected && window.TDBOnline?.supabase){
     try{
-      const updated=await window.TDBOnline.updateProfile(username,avatar,banner);
+      const updated=await window.TDBOnline.updateProfile(username,avatar,banner,avatarImage);
       state.user=updated;
       Core.auth.setCurrentUser(updated);
       const idx=state.users.findIndex(u=>u.id===updated.id);
@@ -1696,8 +1914,8 @@ async function saveProfile(){
 
   if(state.users.some(u=>u.id!==state.user.id&&(u.username||'').toLowerCase()===username.toLowerCase())) return toast('Esse nome já está em uso.');
   const idx=state.users.findIndex(u=>u.id===state.user.id);
-  state.user.username=username; state.user.avatar=avatar; state.user.banner=banner||null;
-  if(idx>=0) state.users[idx]={...state.users[idx],username,avatar,banner:banner||null};
+  state.user.username=username; state.user.avatar=avatar; state.user.avatarImage=safeRemoteImage(avatarImage)||null; state.user.banner=safeRemoteImage(banner)||null;
+  if(idx>=0) state.users[idx]={...state.users[idx],username,avatar,avatarImage:state.user.avatarImage,banner:state.user.banner};
   saveUsers(); saveSession(state.user);
   toast('Perfil atualizado.'); renderProfile();
 }
@@ -1757,7 +1975,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'7.1.6',
+      version:'7.1.8',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)
@@ -1911,6 +2129,8 @@ window.toggleFullscreen=toggleFullscreen;
 window.renderFriends=renderFriends;
 window.addFriendById=addFriendById;
 window.renderProfile=renderProfile;
+window.renderPublicProfile=renderPublicProfile;
+window.refreshProfilePreview=refreshProfilePreview;
 window.openInviteFriendsModal=openInviteFriendsModal;
 window.closeInviteFriendsModal=closeInviteFriendsModal;
 window.inviteFriendFromModal=inviteFriendFromModal;
@@ -1967,7 +2187,7 @@ function startTrucoWithBots(){
   const cap=roomCapacity(room);
   if(cap===2){
     room.players=[
-      {username:user.username,id:user.id,avatar:user.avatar,bot:false},
+      {username:user.username,id:user.id,avatar:user.avatar,avatarImage:user.avatarImage||null,bot:false},
       {username:'Bot Rival',id:'BOT-RIVAL',avatar:'R',bot:true}
     ];
   }else{
@@ -1977,7 +2197,7 @@ function startTrucoWithBots(){
       {username:'Bot Copas',id:'BOT-COPAS',avatar:'C',bot:true}
     ];
     room.players=[
-      {username:user.username,id:user.id,avatar:user.avatar,bot:false},
+      {username:user.username,id:user.id,avatar:user.avatar,avatarImage:user.avatarImage||null,bot:false},
       bots[0],bots[1],bots[2]
     ];
   }
@@ -2064,7 +2284,7 @@ function startTrucoGame(room,localBots=false){
   let players=[];
 
   if(cap===2){
-    const p0=room.players[0] || {username:state.user.username,id:state.user.id,avatar:state.user.avatar,bot:false};
+    const p0=room.players[0] || {username:state.user.username,id:state.user.id,avatar:state.user.avatar,avatarImage:state.user.avatarImage||null,bot:false};
     const p1=room.players[1] || {username:'Bot Rival',id:'BOT-RIVAL',avatar:'R',bot:true};
     players=[
       {...p0, seat:0, team:0, bot:!!p0.bot},

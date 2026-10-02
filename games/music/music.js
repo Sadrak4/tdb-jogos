@@ -650,12 +650,12 @@ function refreshRoomMembers(){
   const box=document.getElementById('musicMembers');
   if(!box) return;
 
-  const key=musicSignature((room.players||[]).map(p=>[p.id,p.username,p.avatar,p.connection,room.ownerId===p.id]));
+  const key=musicSignature((room.players||[]).map(p=>[p.id,p.username,p.avatar,p.avatarImage,p.connection,room.ownerId===p.id]));
   if(musicRenderCache.members===key)return;
   musicRenderCache.members=key;
   box.innerHTML=(room.players||[]).map(p=>`
     <div class="music-member">
-      <div class="avatar">${escapeHtml(p.avatar||initials(p.username))}</div>
+      ${typeof avatarHtml==='function'?avatarHtml(p,'avatar'):`<div class="avatar">${escapeHtml(p.avatar||initials(p.username))}</div>`}
       <span><strong>${escapeHtml(p.username)}</strong><small>${p.id===room.ownerId?'HOST':'OUVINTE'}</small></span>
     </div>`).join('');
 }

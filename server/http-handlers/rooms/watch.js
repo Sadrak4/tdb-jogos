@@ -30,7 +30,7 @@ export default async function handler(req,res){
 
     room.spectators=room.spectators||[];
     if(!room.spectators.some(s=>s.id===user.id)){
-      room.spectators.push({id:user.id,username:user.username,avatar:user.avatar||null});
+      room.spectators.push({id:user.id,username:user.username,avatar:user.avatar||null,avatarImage:user.avatarImage||null});
     }
     await setRoomPrivate(room);
     res.json({ok:true,room:publicRoom(room)});

@@ -709,3 +709,95 @@ body.tdb-game-focus.tdb-v7 .music-screen{
   .tdb-v7 .music-player-wrap{height:auto!important;aspect-ratio:16/9!important}
   .tdb-v7 .music-add-panel{grid-template-columns:1fr!important}
 }
+
+/* =========================================================
+   TDB v7.1.7 — chess board final sizing pass
+   The board now grows from both viewport width and height instead
+   of inheriting the old shell height cap that left large empty gaps.
+   ========================================================= */
+@media (min-width:981px){
+  .tdb-v7 .chess-screen{
+    grid-template-columns:minmax(0,1fr) clamp(232px,20vw,270px)!important;
+    gap:8px!important;
+    padding:4px 6px!important;
+    overflow:hidden!important;
+  }
+  .tdb-v7 .chess-center{
+    height:100dvh!important;
+    max-height:100dvh!important;
+    grid-template-rows:34px 20px minmax(0,1fr) 34px!important;
+    align-items:center!important;
+    justify-items:center!important;
+    overflow:hidden!important;
+  }
+  .tdb-v7 .chess-board-shell{
+    width:100%!important;
+    height:100%!important;
+    min-height:0!important;
+    max-height:none!important;
+    display:grid!important;
+    place-items:center!important;
+    overflow:visible!important;
+    padding:1px!important;
+  }
+  .tdb-v7 .chess-board{
+    width:min(calc(100vw - var(--v7-nav) - 305px),calc(100dvh - 102px),900px)!important;
+    height:min(calc(100vw - var(--v7-nav) - 305px),calc(100dvh - 102px),900px)!important;
+    min-width:0!important;
+    min-height:0!important;
+    max-width:none!important;
+    max-height:none!important;
+    margin:auto!important;
+    aspect-ratio:1/1!important;
+  }
+  body.sidebar-collapsed.tdb-v7 .chess-board,
+  body.tdb-sidebar-collapsed.tdb-v7 .chess-board{
+    width:min(calc(100vw - 305px),calc(100dvh - 102px),900px)!important;
+    height:min(calc(100vw - 305px),calc(100dvh - 102px),900px)!important;
+  }
+}
+@media (min-width:981px) and (max-height:720px){
+  .tdb-v7 .chess-board{
+    width:min(calc(100vw - var(--v7-nav) - 300px),calc(100dvh - 92px),760px)!important;
+    height:min(calc(100vw - var(--v7-nav) - 300px),calc(100dvh - 92px),760px)!important;
+  }
+}
+
+/* =========================================================
+   TDB v7.1.8 — Chess room / BOT AI / reliable sidebar toggle
+   ========================================================= */
+@media (min-width:901px){
+  .tdb-v7 .sidebar-toggle{
+    width:44px!important;
+    height:64px!important;
+    right:-22px!important;
+    z-index:1200!important;
+    cursor:pointer!important;
+    pointer-events:auto!important;
+    touch-action:manipulation;
+    user-select:none;
+    -webkit-tap-highlight-color:transparent;
+    border-radius:0 16px 16px 0!important;
+  }
+  .tdb-v7 .sidebar-toggle span{
+    pointer-events:none!important;
+    font-size:26px!important;
+  }
+  .tdb-v7 .sidebar-toggle:hover{
+    background:#171b17!important;
+    border-color:rgba(216,181,104,.48)!important;
+    color:#f0d48e!important;
+  }
+  .tdb-v7.tdb-sidebar-collapsed .sidebar-toggle{
+    right:-22px!important;
+    width:44px!important;
+    border-left:1px solid rgba(216,181,104,.25)!important;
+  }
+}
+
+.tdb-v7 .room-rules-button{display:inline-flex!important;align-items:center;gap:7px}
+.tdb-v7 .room-rules-button .tdb-icon{width:16px;height:16px}
+.tdb-v7 .room-rules-modal{max-width:680px;width:min(680px,calc(100vw - 28px))}
+.tdb-v7 .room-rules-modal .modal-head>div{min-width:0}
+.tdb-v7 .room-rules-modal .modal-head p{margin:4px 0 0}
+.tdb-v7 .field-help{display:block;margin-top:7px;color:#868c86;font-size:10px;line-height:1.45}

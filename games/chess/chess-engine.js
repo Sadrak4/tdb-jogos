@@ -366,10 +366,129 @@ function bestLegalMoves(state,color=state.turn){
     .sort((a,b)=>b.score-a.score);
 }
 
+function positionalPieceScore(piece,r,c){
+  if(!piece) return 0;
+  const center=Math.max(0,7-Math.round((Math.abs(3.5-r)+Math.abs(3.5-c))*2));
+  let score=center*4;
+  if(piece.type==='pawn'){
+    const advance=piece.color==='white'?(6-r):(r-1);
+    score+=Math.max(0,advance)*8;
+    if(c===3||c===4)score+=8;
+  }
+  if(piece.type==='knight')score+=center*5;
+  if(piece.type==='bishop')score+=center*3;
+  if(piece.type==='rook'&&(r===0||r===7))score+=3;
+  if(piece.type==='king'){
+    const home=piece.color==='white'?7:0;
+    if(r===home&&(c===6||c===2))score+=55;
+    if(Math.abs(3.5-r)+Math.abs(3.5-c)<3)score-=25;
+  }
+  return score;
+}
+
+function evaluatePosition(state,perspective){
+  if(state.status==='checkmate')return state.winner===perspective?10000000:-10000000;
+  if(['stalemate','draw'].includes(state.status))return 0;
+  if(state.status==='timeout'||state.status==='resigned'||state.status==='abandoned'){
+    return state.winner===perspective?9000000:state.winner?-9000000:0;
+  }
+  let score=0;
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    const p=state.board[r][c];
+    if(!p)continue;
+    const value=pieceValue(p.type)+positionalPieceScore(p,r,c);
+    score+=(p.color===perspective?value:-value);
+  }
+  if(isInCheck(state,other(perspective)))score+=45;
+  if(isInCheck(state,perspective))score-=60;
+  return score;
+}
+
+function orderedSearchMoves(state,moves,maxCount=18){
+  return moves
+    .map(move=>({move,score:moveScore(state,move)}))
+    .sort((a,b)=>b.score-a.score)
+    .slice(0,maxCount)
+    .map(x=>x.move);
+}
+
+function chooseBotMove(state,color=state.turn,difficulty='easy',options={}){
+  const level=['easy','medium','hard'].includes(difficulty)?difficulty:'easy';
+  const temp=clone(state);
+  temp.turn=color;
+  const all=Array.isArray(options.candidateMoves)&&options.candidateMoves.length
+    ? options.candidateMoves.map(clone)
+    : allLegalMoves(temp,color);
+  if(!all.length)return null;
+
+  const ranked=all.map(move=>({move,score:moveScore(temp,move)})).sort((a,b)=>b.score-a.score);
+  if(level==='easy'){
+    // Fácil mantém erros humanos: normalmente vê capturas/xeques simples,
+    // mas escolhe entre várias jogadas razoáveis e às vezes joga algo neutro.
+    if(Math.random()<0.18)return all[Math.floor(Math.random()*all.length)];
+    const best=ranked[0]?.score??0;
+    const pool=ranked.filter(x=>x.score>=best-260).slice(0,8);
+    return (pool[Math.floor(Math.random()*Math.max(1,pool.length))]||ranked[0]).move;
+  }
+
+  const depth=level==='hard'?3:2;
+  const branch=level==='hard'?18:12;
+  const budget=Number(options.timeBudgetMs|| (level==='hard'?780:320));
+  const deadline=Date.now()+Math.max(80,budget);
+  let timedOut=false;
+
+  function search(node,remaining,alpha,beta){
+    if(Date.now()>=deadline){timedOut=true;return evaluatePosition(node,color)}
+    if(remaining<=0||node.status!=='playing')return evaluatePosition(node,color);
+    const maximizing=node.turn===color;
+    const legal=allLegalMoves(node,node.turn);
+    if(!legal.length)return evaluatePosition(node,color);
+    const moves=orderedSearchMoves(node,legal,branch);
+    if(maximizing){
+      let value=-Infinity;
+      for(const move of moves){
+        const next=applyMove(node,move,'queen');
+        value=Math.max(value,search(next,remaining-1,alpha,beta));
+        alpha=Math.max(alpha,value);
+        if(beta<=alpha||timedOut)break;
+      }
+      return value;
+    }
+    let value=Infinity;
+    for(const move of moves){
+      const next=applyMove(node,move,'queen');
+      value=Math.min(value,search(next,remaining-1,alpha,beta));
+      beta=Math.min(beta,value);
+      if(beta<=alpha||timedOut)break;
+    }
+    return value;
+  }
+
+  const root=orderedSearchMoves(temp,all,level==='hard'?20:14);
+  let bestMove=root[0]||ranked[0].move;
+  let bestScore=-Infinity;
+  const scored=[];
+  for(const move of root){
+    const next=applyMove(temp,move,'queen');
+    const score=search(next,depth-1,-Infinity,Infinity);
+    scored.push({move,score});
+    if(score>bestScore){bestScore=score;bestMove=move}
+    if(timedOut)break;
+  }
+
+  // Médio varia levemente entre variantes quase equivalentes; Difícil é mais preciso.
+  scored.sort((a,b)=>b.score-a.score);
+  if(level==='medium'&&scored.length>1){
+    const near=scored.filter(x=>x.score>=scored[0].score-45).slice(0,3);
+    if(near.length>1&&Math.random()<0.32)return near[Math.floor(Math.random()*near.length)].move;
+  }
+  return scored[0]?.move||bestMove;
+}
+
 window.TDBChessEngine={
   PIECES,FILES,createState,initialBoard,displayPiece,
   legalMovesFrom,allLegalMoves,applyMove,isInCheck,
   squareName,parseSquare,other,clone,insufficientMaterial,
-  pieceValue,moveScore,bestLegalMoves
+  pieceValue,moveScore,bestLegalMoves,evaluatePosition,chooseBotMove
 };
 })();
