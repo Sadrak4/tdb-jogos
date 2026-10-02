@@ -13,6 +13,3 @@
 ## Banco de dados
 Esta versão ADICIONA a coluna `banner` em `tdb_users`.
 Execute `SUPABASE-MIGRATION-v7.1.0.sql` uma vez no SQL Editor do Supabase.
-
-## Base preservada
-A v7.1.0 parte da v7.0.1 Gameplay Fix e preserva os fixes de visibilidade/layout dos quatro módulos.

@@ -36,6 +36,7 @@ const state = {
   knownRoomPlayers: new Set(),
   connectionStates: new Map()
 };
+window.TDBAppState=state;
 
 
 window.addEventListener('tdb-online-sync',event=>{
@@ -281,11 +282,32 @@ function lobbyPulseHtml(){
   const friendsPlaying=state.friends.filter(f=>/^(Jogando|Ouvindo|Na sala)/.test(f.status||'')).length;
   return `<div class="lobby-pulse" id="lobbyPulse"><article><span>Jogadores online</span><strong>${online}</strong></article><article><span>Salas abertas</span><strong>${open}</strong></article><article><span>Amigos ativos</span><strong>${friendsPlaying}</strong></article></div>`;
 }
-function openFriendQuickProfile(id){
+async function openFriendQuickProfile(id){
   const f=state.friends.find(x=>x.id===id);if(!f)return;
   document.getElementById('friendQuickModal')?.remove();
-  const el=document.createElement('div');el.className='modal-backdrop';el.id='friendQuickModal';el.innerHTML=`<div class="modal"><div class="modal-head"><h3>${escapeHtml(f.username)}</h3><button class="icon-btn" onclick="document.getElementById('friendQuickModal').remove()">×</button></div><div class="modal-body"><div class="profile-card"><div class="profile-avatar-xl">${escapeHtml(f.avatar||initials(f.username))}</div><h2>${escapeHtml(f.username)}</h2><div class="code-box">${escapeHtml(f.id)}</div><p class="muted">${escapeHtml(f.status||'Offline')}</p></div></div><div class="modal-foot">${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${f.id}')">Convidar para minha sala</button>`:''}</div></div>`;document.body.appendChild(el);
+  const el=document.createElement('div');el.className='modal-backdrop';el.id='friendQuickModal';
+  el.innerHTML=`<div class="modal profile-public-modal"><div class="modal-head"><h3>Perfil</h3><button class="icon-btn" onclick="document.getElementById('friendQuickModal').remove()">×</button></div><div class="modal-body"><div class="profile-public-loading">Carregando perfil de ${escapeHtml(f.username)}…</div></div></div>`;
+  document.body.appendChild(el);
+  try{
+    const data=window.TDBOnline?.connected?await window.TDBOnline.getPublicProfile(id):{user:f,presence:{status:'offline'},stats:{},recent:[]};
+    const u=data.user||f, stats=data.stats||{}, gameNames={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack'};
+    const presenceLabel=presenceDisplayLabel(data.presence||{status:f.status||'offline'});
+    const statHtml=Object.entries(stats).map(([game,x])=>`<article><span>${escapeHtml(gameNames[game]||game)}</span><strong>${Number(x.wins||0)}V</strong><small>${Number(x.played||0)} partidas • ${Number(x.losses||0)}D • ${Number(x.draws||0)}E</small></article>`).join('')||'<p class="muted">Ainda sem partidas competitivas registradas.</p>';
+    const recent=(data.recent||[]).slice(0,5).map(r=>{const won=(r.winner_ids||[]).includes(id),lost=(r.loser_ids||[]).includes(id);return `<div class="profile-public-history"><span>${escapeHtml(gameNames[r.game]||r.game)}</span><strong>${won?'Vitória':lost?'Derrota':'Empate'}</strong><small>${new Date(r.finished_at).toLocaleDateString('pt-BR')}</small></div>`}).join('')||'<div class="muted">Sem histórico recente.</div>';
+    el.querySelector('.modal-body').innerHTML=`${u.banner?`<div class="profile-banner" style="background-image:url('${escapeHtml(u.banner)}')"></div>`:''}<div class="profile-card profile-public-card"><div class="profile-avatar-xl">${escapeHtml(u.avatar||initials(u.username))}</div><h2>${escapeHtml(u.username)}</h2><div class="code-box">${escapeHtml(u.id)}</div><p class="presence-line"><i class="dot ${data.presence?.status==='offline'?'offline':data.presence?.status==='away'?'busy':'online'}"></i>${escapeHtml(presenceLabel)}</p></div><div class="profile-public-stats">${statHtml}</div><h3 class="profile-public-subtitle">Partidas recentes</h3><div class="profile-public-recent">${recent}</div><div class="modal-foot">${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${u.id}')">Convidar para minha sala</button>`:'<span class="muted">Entre em uma sala para convidar este amigo.</span>'}</div>`;
+  }catch(err){const body=el.querySelector('.modal-body');if(body)body.innerHTML=`<div class="empty-state">${escapeHtml(err.message||'Não foi possível carregar o perfil.')}</div>`}
 }
+function presenceDisplayLabel(p){
+  const status=String(p?.status||'offline').toLowerCase(), game=p?.game;
+  if(status==='offline')return'Offline'; if(status==='away')return'Ausente';
+  if(status==='listening'||game==='music')return'Ouvindo música';
+  if(status==='playing'&&game==='truco')return'No Truco';
+  if(status==='playing'&&game==='chess')return'No Xadrez';
+  if(status==='playing'&&game==='blackjack')return'No Blackjack';
+  if(status==='watching')return'Assistindo uma partida';
+  return'Online';
+}
+
 function copyRoomInvite(code){
   const text=`Entre na sala ${code} do TDB`;
   if(navigator.clipboard)navigator.clipboard.writeText(text).then(()=>toast('Convite copiado.'));
@@ -1529,8 +1551,8 @@ function renderProfile(){
   app.innerHTML=`${topbar('profile')}<section class="dashboard fade-in">
     <div class="page-head"><div><h1 class="page-title">Seu perfil</h1><p class="muted">Histórico competitivo considera apenas partidas contra jogadores reais.</p></div></div>
     <div class="profile-grid">
-      <div class="panel profile-card"><div class="profile-avatar-xl">${escapeHtml(state.user.avatar||initials(state.user.username))}</div><h2>${escapeHtml(state.user.username)}</h2><div class="code-box">${escapeHtml(state.user.id)} <button class="link-btn" onclick="copyCode('${state.user.id}')">Copiar</button></div><p class="muted">${currentStatus()}</p></div>
-      <div class="panel"><div class="panel-header"><h2>Editar perfil</h2></div><div class="panel-body"><div class="form-grid"><div class="field"><label>Nome de usuário</label><input id="editUsername" maxlength="24" value="${escapeHtml(state.user.username)}"></div><div class="field"><label>Avatar curto</label><input id="editAvatar" maxlength="2" value="${escapeHtml(state.user.avatar||initials(state.user.username))}"></div><button class="btn btn-primary" onclick="saveProfile()">Salvar alterações</button></div></div></div>
+      <div class="panel profile-card">${state.user.banner?`<div class="profile-banner" style="background-image:url('${escapeHtml(state.user.banner)}')"></div>`:''}<div class="profile-avatar-xl">${escapeHtml(state.user.avatar||initials(state.user.username))}</div><h2>${escapeHtml(state.user.username)}</h2><div class="code-box">${escapeHtml(state.user.id)} <button class="link-btn" onclick="copyCode('${state.user.id}')">Copiar</button></div><p class="muted">${currentStatus()}</p></div>
+      <div class="panel"><div class="panel-header"><h2>Editar perfil</h2></div><div class="panel-body"><div class="form-grid"><div class="field"><label>Nome de usuário</label><input id="editUsername" maxlength="24" value="${escapeHtml(state.user.username)}"></div><div class="field"><label>Avatar curto</label><input id="editAvatar" maxlength="2" value="${escapeHtml(state.user.avatar||initials(state.user.username))}"></div><div class="field field-wide"><label>Banner (URL de imagem, opcional)</label><input id="editBanner" maxlength="1000" placeholder="https://..." value="${escapeHtml(state.user.banner||'')}"></div><button class="btn btn-primary" onclick="saveProfile()">Salvar alterações</button></div></div></div>
     </div>
     <div id="profileCompetitive">${renderProfileHistory()}</div>
   </section>`;
@@ -1553,11 +1575,12 @@ function copyRecentPgn(i){const pgn=window.__TDB_PROFILE_RESULTS__?.[i]?.metadat
 async function saveProfile(){
   const username=document.getElementById('editUsername').value.trim();
   const avatar=document.getElementById('editAvatar').value.trim()||initials(username);
+  const banner=document.getElementById('editBanner')?.value.trim()||'';
   if(username.length<3) return toast('Use pelo menos 3 caracteres.');
 
   if(location.protocol!=='file:' && window.TDBOnline?.connected && window.TDBOnline?.supabase){
     try{
-      const updated=await window.TDBOnline.updateProfile(username,avatar);
+      const updated=await window.TDBOnline.updateProfile(username,avatar,banner);
       state.user=updated;
       Core.auth.setCurrentUser(updated);
       const idx=state.users.findIndex(u=>u.id===updated.id);
@@ -1571,8 +1594,8 @@ async function saveProfile(){
 
   if(state.users.some(u=>u.id!==state.user.id&&(u.username||'').toLowerCase()===username.toLowerCase())) return toast('Esse nome já está em uso.');
   const idx=state.users.findIndex(u=>u.id===state.user.id);
-  state.user.username=username; state.user.avatar=avatar;
-  if(idx>=0) state.users[idx]={...state.users[idx],username,avatar};
+  state.user.username=username; state.user.avatar=avatar; state.user.banner=banner||null;
+  if(idx>=0) state.users[idx]={...state.users[idx],username,avatar,banner:banner||null};
   saveUsers(); saveSession(state.user);
   toast('Perfil atualizado.'); renderProfile();
 }
@@ -1632,7 +1655,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'7.0.1',
+      version:'7.1.0',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)

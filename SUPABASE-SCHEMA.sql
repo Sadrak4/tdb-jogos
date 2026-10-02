@@ -16,6 +16,8 @@ create table if not exists public.tdb_users (
   created_at timestamptz not null default now()
 );
 
+alter table public.tdb_users add column if not exists banner text;
+
 create table if not exists public.tdb_sessions (
   token text primary key,
   user_id text not null references public.tdb_users(id) on delete cascade,

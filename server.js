@@ -43,7 +43,7 @@ async function start(port,attempt=0){
     const url=`http://localhost:${port}`;
     console.log('');
     console.log('======================================');
-    console.log(' TDB v7.0.1 - Gameplay Fix');
+    console.log(' TDB v7.1.0 - Gameplay Fix');
     console.log('======================================');
     console.log(`Site: ${url}`);
     console.log(`Health: ${url}/api/health`);

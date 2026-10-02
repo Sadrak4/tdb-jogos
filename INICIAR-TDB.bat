@@ -23,7 +23,7 @@ if not exist node_modules (
 )
 
 echo.
-echo Iniciando TDB v7.0.1...
+echo Iniciando TDB v7.1.0...
 echo.
 node server.js
 pause

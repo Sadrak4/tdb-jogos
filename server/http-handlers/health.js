@@ -5,7 +5,7 @@ export default async function handler(_req,res){
   res.status(200).json({
     ok:true,
     app:'TDB',
-    version:'7.0.1',
+    version:'7.1.0',
     realtime:'supabase-realtime+http-fallback',
     supabase:status.supabase,
     configured:status.configured,
