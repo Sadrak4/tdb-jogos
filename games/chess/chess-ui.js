@@ -528,11 +528,30 @@ function maybeBotMove(){
         return;
       }
 
+      // Anti-loop de final: evita o BOT ficar alternando o rei/peças entre
+      // duas ou três casas quando existem outras jogadas legais. Não inventa
+      // derrota automática: o usuário ainda precisa aplicar xeque-mate.
+      const ownRecent=(chess.moveHistory||[]).filter(m=>m.color===color).slice(-8);
+      const moveKey=m=>`${E.squareName(m.from.r,m.from.c)}-${E.squareName(m.to.r,m.to.c)}`;
+      const discouraged=new Set();
+      const recentDestinations=new Map();
+      for(const old of ownRecent){
+        discouraged.add(`${old.from}-${old.to}`);
+        discouraged.add(`${old.to}-${old.from}`);
+        recentDestinations.set(old.to,(recentDestinations.get(old.to)||0)+1);
+      }
+      const nonReverse=legalMoves.filter(m=>!discouraged.has(moveKey(m)));
+      const nonRepeatedDestination=(nonReverse.length?nonReverse:legalMoves).filter(m=>{
+        const to=E.squareName(m.to.r,m.to.c);
+        return (recentDestinations.get(to)||0)<2;
+      });
+      const botMoves=nonRepeatedDestination.length?nonRepeatedDestination:(nonReverse.length?nonReverse:legalMoves);
+
       let chosen=null;
 
       if(typeof E.bestLegalMoves==='function'){
         try{
-          const ranked=E.bestLegalMoves(chess,color);
+          const ranked=E.bestLegalMoves(chess,color)?.filter(x=>botMoves.some(m=>moveKey(m)===moveKey(x.move))) || [];
           if(ranked?.length){
             const bestScore=ranked[0].score;
             const candidates=ranked.filter(x=>x.score>=bestScore-120).slice(0,5);
@@ -544,8 +563,8 @@ function maybeBotMove(){
       }
 
       if(!chosen){
-        const captures=legalMoves.filter(m=>chess.board[m.to.r][m.to.c] || m.enPassant);
-        const pool=captures.length ? captures : legalMoves;
+        const captures=botMoves.filter(m=>chess.board[m.to.r][m.to.c] || m.enPassant);
+        const pool=captures.length ? captures : botMoves;
         chosen=pool[Math.floor(Math.random()*pool.length)];
       }
 
@@ -583,7 +602,7 @@ function renderOverlay(){
     return resultModal('XEQUE-MATE',chess.winner===localColor()?'Você venceu a partida.':'Seu adversário venceu a partida.');
   }
   if(chess.status==='stalemate' || chess.status==='draw'){
-    return resultModal('EMPATE',chess.drawReason||'Partida empatada.');
+    return resultModal('EMPATE',chess.drawReason==='afogamento'?'Afogamento: o rei não está em xeque, mas não possui nenhuma jogada legal.':chess.drawReason||'Partida empatada.');
   }
   if(chess.status==='resigned'){
     return resultModal('PARTIDA ENCERRADA',chess.winner===localColor()?'O adversário desistiu.':'Você desistiu.');

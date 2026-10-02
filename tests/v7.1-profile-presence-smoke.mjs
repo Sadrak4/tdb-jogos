@@ -2,7 +2,7 @@ import fs from 'node:fs';
 const read=f=>fs.readFileSync(new URL('../'+f,import.meta.url),'utf8');
 const app=read('app.js'),auth=read('server/auth-service.js'),router=read('server/http-router.js'),client=read('core/online-client.js'),schema=read('SUPABASE-SCHEMA.sql'),index=read('index.html'),presence=read('core/presence-manager.js');
 const ok=(name,c)=>{if(!c)throw new Error('FAIL: '+name);console.log('OK',name)};
-ok('package version 7.1.0',JSON.parse(read('package.json')).version==='7.1.0');
+ok('package version in v7.1 line',JSON.parse(read('package.json')).version.startsWith('7.1.'));
 ok('schema has banner migration',schema.includes('add column if not exists banner text'));
 ok('safe user exposes banner',auth.includes('banner:u.banner||null'));
 ok('profile update persists banner',auth.includes('banner:cleanBanner(banner)'));

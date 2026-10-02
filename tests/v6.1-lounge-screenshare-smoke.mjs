@@ -39,5 +39,5 @@ assert('Lounge stops screen share when leaving',music.includes('TDBScreenShare?.
 assert('Screen share client module is loaded',index.includes('games/music/screen-share.js'));
 assert('Screen share has dedicated responsive styling',css.includes('v6.1 — TDB Lobby / compartilhamento de tela')&&css.includes('v6.1.1 — Screen share stage / reliable viewing'));
 assert('Friend status uses TDB Lobby name',social.includes('No TDB Lobby'));
-assert('Health reports 7.0.1',health.includes("version:'7.0.1'"));
+assert('Health reports 7.1.4',health.includes("version:'7.1.4'"));
 console.log('ALL V6.1 LOUNGE SCREEN SHARE STATIC TESTS PASSED');

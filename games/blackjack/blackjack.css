@@ -634,3 +634,52 @@
 @media(max-width:900px){
   .bj-round-summary{width:min(500px,86%)}
 }
+
+
+/* =========================================================
+   TDB v7.1.1 — BLACKJACK CASINO REBUILD
+   ========================================================= */
+.blackjack-page{background:radial-gradient(circle at 50% 35%,rgba(21,103,66,.28),transparent 38%),linear-gradient(180deg,#070b09,#030504)!important}
+#blackjackRoot{max-width:1600px;margin:0 auto!important}
+.bj-layout{grid-template-columns:minmax(0,1fr) minmax(210px,270px)!important;gap:14px!important}
+.bj-stage{
+  min-height:clamp(520px,69dvh,760px)!important;
+  border:12px solid #19150f!important;
+  border-radius:48% 48% 18% 18%/18% 18% 12% 12%!important;
+  background:
+    radial-gradient(ellipse at 50% 38%,rgba(42,145,91,.34),transparent 34%),
+    radial-gradient(ellipse at 50% 58%,#17603f 0%,#0d432d 50%,#082b1e 82%,#061c15 100%)!important;
+  box-shadow:inset 0 0 0 2px rgba(234,195,101,.28),inset 0 -70px 110px rgba(0,0,0,.35),0 28px 80px rgba(0,0,0,.55)!important;
+  overflow:hidden!important;
+}
+.bj-stage:before{content:"";position:absolute;inset:14px;border:1px solid rgba(244,211,128,.18);border-radius:inherit;pointer-events:none}
+.bj-felt-mark{opacity:.12!important;transform:translate(-50%,-50%) scale(1.08)!important}
+.bj-dealer{top:5%!important;left:50%!important;transform:translateX(-50%)!important;min-width:300px!important;padding:9px 14px!important;border-radius:16px!important;background:rgba(3,18,12,.48)!important;backdrop-filter:blur(8px)!important}
+.bj-dealer.active{box-shadow:0 0 0 2px rgba(238,203,112,.28),0 0 35px rgba(238,203,112,.12)!important}
+.bj-dealer-cards{gap:7px!important;perspective:900px}
+.bj-card{width:58px!important;height:82px!important;border-radius:9px!important;box-shadow:0 10px 18px rgba(0,0,0,.38)!important;animation:bjCardArrival .28s cubic-bezier(.2,.85,.2,1) both}
+@keyframes bjCardArrival{from{opacity:0;transform:translateY(-18px) rotate(-5deg) scale(.9)}to{opacity:1;transform:none}}
+.bj-player{border-radius:18px!important;background:linear-gradient(180deg,rgba(8,22,15,.86),rgba(5,13,9,.78))!important;border:1px solid rgba(244,211,128,.12)!important;box-shadow:0 14px 30px rgba(0,0,0,.28)!important;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease!important}
+.bj-player.current{border-color:rgba(244,211,128,.55)!important;box-shadow:0 0 0 3px rgba(244,211,128,.08),0 18px 38px rgba(0,0,0,.34)!important;transform:translateY(-3px)!important}
+.bj-player-bottom{bottom:5%!important;max-width:520px!important}
+.bj-player-left{left:3%!important}.bj-player-right{right:3%!important}
+.bj-player-head{border-bottom:1px solid rgba(255,255,255,.06)!important;padding-bottom:6px!important}
+.bj-avatar{background:linear-gradient(145deg,#2b2416,#0f100c)!important;border:1px solid rgba(235,196,101,.45)!important;color:#f0d78f!important}
+.bj-hand-cards{gap:7px!important;flex-wrap:nowrap!important;min-height:86px!important}
+.bj-player.local .bj-card{width:64px!important;height:91px!important}
+.bj-player:not(.local) .bj-card{width:50px!important;height:72px!important}
+.bj-center-status{top:46%!important;left:50%!important;transform:translate(-50%,-50%)!important;min-width:210px!important;padding:9px 14px!important;border-radius:999px!important;background:rgba(4,18,12,.82)!important;border:1px solid rgba(235,196,101,.27)!important;box-shadow:0 12px 30px rgba(0,0,0,.3)!important}
+.bj-controls{margin-top:10px!important;padding:12px!important;border-radius:20px!important;background:linear-gradient(180deg,rgba(24,28,24,.98),rgba(10,13,11,.98))!important}
+.bj-actions{display:grid!important;grid-template-columns:repeat(4,minmax(100px,1fr))!important;gap:9px!important}
+.bj-action{min-height:52px!important;border-radius:14px!important;font-weight:900!important;letter-spacing:.04em!important;transition:transform .14s ease,filter .14s ease,box-shadow .14s ease!important}
+.bj-action:not(:disabled):hover{transform:translateY(-2px)!important;filter:brightness(1.1)!important;box-shadow:0 10px 24px rgba(0,0,0,.28)!important}
+.bj-action:not(:disabled):active{transform:translateY(1px) scale(.985)!important}
+.bj-action.hit{background:linear-gradient(180deg,#e7c66f,#b98a31)!important;color:#171006!important}
+.bj-action.stand{background:linear-gradient(180deg,#343a35,#1c211d)!important}
+.bj-action.double{background:linear-gradient(180deg,#355f91,#223c5c)!important}.bj-action.split{background:linear-gradient(180deg,#694a88,#412c57)!important}
+.bj-side-card{border-radius:16px!important;background:linear-gradient(180deg,#121713,#090c0a)!important;border:1px solid rgba(235,196,101,.12)!important}
+.bj-event{border-left:2px solid rgba(235,196,101,.35)!important}
+.bj-chip-choice{transition:transform .15s ease,filter .15s ease!important}.bj-chip-choice:hover{transform:translateY(-5px) scale(1.06)!important;filter:brightness(1.12)!important}
+.bj-round-summary{backdrop-filter:blur(12px)!important;border:1px solid rgba(235,196,101,.25)!important;box-shadow:0 20px 55px rgba(0,0,0,.4)!important}
+@media(max-width:1180px){.bj-stage{min-height:600px!important}.bj-layout{grid-template-columns:1fr!important}.bj-sidebar{display:grid!important;grid-template-columns:1fr 1fr!important}.bj-player-left{left:1%!important}.bj-player-right{right:1%!important}}
+@media(max-width:760px){.bj-stage{min-height:680px!important;border-width:7px!important;border-radius:28px!important}.bj-player-left,.bj-player-right{top:37%!important;width:45%!important}.bj-player-bottom{width:94%!important}.bj-actions{grid-template-columns:1fr 1fr!important}.bj-sidebar{grid-template-columns:1fr!important}.bj-card{width:46px!important;height:66px!important}.bj-player.local .bj-card{width:52px!important;height:74px!important}}

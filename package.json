@@ -1,11 +1,12 @@
 {
   "name": "tdb",
-  "version": "7.1.0",
+  "version": "7.1.4",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:audit": "node tests/v7.1.4-final-audit-smoke.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

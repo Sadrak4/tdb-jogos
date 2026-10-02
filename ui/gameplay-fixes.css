@@ -169,3 +169,415 @@
   .tdb-v7 .bj-player{width:44vw!important}
   .tdb-v7 .bj-player-bottom{width:90%!important}
 }
+
+
+/* =========================================================
+   TDB v7.1.1 — gameplay polish / viewport safety
+   ========================================================= */
+/* Truco: the top player's backs and the card played by that seat must
+   never occupy the same visual slot. The played card is offset to its
+   own quadrant, while the vira remains untouched in the exact center. */
+.tdb-v7 .play-card.p2{
+  top:18%!important;
+  left:64%!important;
+  transform:translateX(-50%) rotate(-2deg)!important;
+  z-index:7!important;
+}
+.tdb-v7 .seat-top .enemy-hand{transform:translateY(-2px)!important}
+.tdb-v7 .seat-top{z-index:12!important}
+.tdb-v7 .play-zone{z-index:6!important}
+.tdb-v7 .vira-zone{z-index:10!important}
+
+/* Chess: use the complete viewport width, reserve a stable right rail and
+   grow the board before sacrificing it. Right panel scrolls internally. */
+@media(min-width:931px){
+  .tdb-v7 .chess-screen{
+    width:100%!important;
+    max-width:1780px!important;
+    box-sizing:border-box!important;
+    grid-template-columns:minmax(0,1fr) minmax(250px,310px)!important;
+    gap:10px!important;
+    padding:8px 10px!important;
+  }
+  .tdb-v7 .chess-left-panel{display:none!important}
+  .tdb-v7 .chess-center{
+    width:100%!important;
+    max-width:none!important;
+    height:calc(100dvh - 16px)!important;
+  }
+  .tdb-v7 .chess-board{
+    width:min(100%,calc(100dvh - 176px))!important;
+    max-width:920px!important;
+  }
+  .tdb-v7 .chess-right-panel{
+    grid-column:auto!important;
+    min-width:0!important;
+    width:100%!important;
+    height:calc(100dvh - 16px)!important;
+    max-height:calc(100dvh - 16px)!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    box-sizing:border-box!important;
+    padding:12px!important;
+  }
+  .tdb-v7 .chess-history{height:auto!important;max-height:42dvh!important;min-height:150px!important}
+}
+
+/* Music/Lobby: every column must fit inside the viewport. No side table is
+   allowed to be pushed beyond the left/right edge by intrinsic content. */
+@media(min-width:1101px){
+  .tdb-v7 .music-screen{
+    width:calc(100vw - 20px)!important;
+    max-width:1680px!important;
+    box-sizing:border-box!important;
+    grid-template-columns:minmax(180px,230px) minmax(0,1fr) minmax(230px,300px)!important;
+    gap:8px!important;
+    padding-inline:0!important;
+  }
+  .tdb-v7 .music-sidebar,.tdb-v7 .music-main,.tdb-v7 .music-add-panel{
+    min-width:0!important;
+    max-width:100%!important;
+    box-sizing:border-box!important;
+  }
+  .tdb-v7 .music-add-panel{overflow-x:hidden!important}
+  .tdb-v7 .music-add-panel input,.tdb-v7 .music-add-panel select,.tdb-v7 .music-add-panel .field{max-width:100%!important;min-width:0!important;box-sizing:border-box!important}
+}
+
+/* =========================================================
+   TDB v7.1.2 — Truco card layering / vira readability
+   ========================================================= */
+/* A carta que o adversário acabou de jogar precisa ficar VISÍVEL por cima
+   das cartas fechadas da mão dele. O assento continua no mesmo lugar, mas
+   a carta pública recebe a camada superior. */
+.tdb-v7 .play-zone{z-index:14!important}
+.tdb-v7 .play-card{z-index:15!important}
+.tdb-v7 .play-card.p2{
+  top:18%!important;
+  left:64%!important;
+  transform:translateX(-50%) rotate(-2deg)!important;
+  z-index:24!important;
+}
+.tdb-v7 .seat-top{z-index:12!important}
+.tdb-v7 .seat-top .enemy-hand{z-index:12!important}
+
+/* A vira não deve ser reduzida: ela é informação central da rodada e fica
+   maior que antes, sem alterar o tamanho das cartas jogadas. */
+.tdb-v7 .vira-zone{z-index:18!important}
+.tdb-v7 .vira-zone .truco-card{
+  width:calc(var(--truco-play-w) * 1.18)!important;
+  height:calc(var(--truco-play-h) * 1.18)!important;
+}
+
+/* Quando as duas áreas se cruzarem em telas menores, a carta jogada fica
+   acima visualmente; a vira continua maior e legível ao centro. */
+.tdb-v7 .play-card.p2{z-index:24!important}
+
+@media(max-width:900px){
+  .tdb-v7 .vira-zone .truco-card{
+    width:calc(var(--truco-play-w) * 1.12)!important;
+    height:calc(var(--truco-play-h) * 1.12)!important;
+  }
+}
+
+/* =========================================================
+   TDB v7.1.4 — FINAL AUTHORITATIVE LAYOUT / GAMEPLAY PASS
+   This file is loaded LAST. Keep the rules below authoritative
+   so older responsive layers cannot shrink/cut active game UIs.
+   ========================================================= */
+
+/* ---------- TRUCO: clear center + readable vira ---------- */
+.tdb-v7 .play-zone{
+  z-index:14!important;
+}
+.tdb-v7 .play-card{
+  z-index:15!important;
+}
+/* The top opponent card lands near the opponent side, never on the vira.
+   Its higher z-index lets it pass visually over the opponent's card backs
+   if the two zones touch on a short viewport. */
+.tdb-v7 .play-card.p2{
+  top:-5%!important;
+  left:50%!important;
+  transform:translateX(-50%) rotate(-2deg)!important;
+  z-index:30!important;
+}
+.tdb-v7 .seat-top{z-index:12!important}
+.tdb-v7 .seat-top .enemy-hand{position:relative!important;z-index:12!important}
+.tdb-v7 .vira-zone{
+  /* stays above public cards if an unusually short viewport makes zones touch */
+  z-index:40!important;
+}
+.tdb-v7 .vira-zone .truco-card{
+  width:calc(var(--truco-play-w) * 1.30)!important;
+  height:calc(var(--truco-play-h) * 1.30)!important;
+}
+
+/* ---------- XADREZ: board first, right rail always reachable ---------- */
+.tdb-v7 .chess-screen,
+.tdb-v7 .chess-screen *{box-sizing:border-box}
+
+@media (min-width:981px){
+  .tdb-v7 .chess-screen{
+    width:auto!important;
+    max-width:none!important;
+    height:100dvh!important;
+    min-height:0!important;
+    margin-left:calc(var(--v7-nav) + 6px)!important;
+    margin-right:6px!important;
+    padding:6px!important;
+    overflow:hidden!important;
+    align-items:stretch!important;
+    gap:8px!important;
+    grid-template-columns:minmax(0,1fr) minmax(238px,286px)!important;
+  }
+  body.tdb-game-focus.tdb-v7 .chess-screen{
+    margin-left:6px!important;
+    margin-right:6px!important;
+  }
+  .tdb-v7 .chess-left-panel{
+    display:none!important;
+  }
+  .tdb-v7 .chess-center{
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    height:100%!important;
+    min-height:0!important;
+    display:grid!important;
+    grid-template-rows:auto auto minmax(0,1fr) auto!important;
+    gap:4px!important;
+    align-items:center!important;
+    justify-items:center!important;
+    overflow:hidden!important;
+  }
+  .tdb-v7 .chess-player-bar{
+    width:100%!important;
+    max-width:none!important;
+    min-height:39px!important;
+    padding:4px 8px!important;
+  }
+  .tdb-v7 .chess-player-avatar{
+    width:30px!important;
+    height:30px!important;
+  }
+  .tdb-v7 .chess-clock{
+    min-width:88px!important;
+    padding:6px 8px!important;
+    font-size:14px!important;
+  }
+  .tdb-v7 .chess-turn-banner{
+    width:100%!important;
+    min-height:24px!important;
+    padding:2px 8px!important;
+  }
+  .tdb-v7 .chess-board-shell{
+    width:100%!important;
+    height:100%!important;
+    min-height:0!important;
+    overflow:hidden!important;
+    padding:2px!important;
+    display:grid!important;
+    place-items:center!important;
+  }
+  .tdb-v7 .chess-board{
+    width:min(100%,calc(100dvh - 126px))!important;
+    height:auto!important;
+    max-width:none!important;
+    max-height:100%!important;
+    aspect-ratio:1/1!important;
+    flex:none!important;
+  }
+  .tdb-v7 .chess-right-panel{
+    display:flex!important;
+    flex-direction:column!important;
+    min-width:0!important;
+    width:100%!important;
+    max-width:100%!important;
+    height:100%!important;
+    max-height:100%!important;
+    padding:10px!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    scrollbar-gutter:stable!important;
+  }
+  .tdb-v7 .chess-right-panel .chess-side-section:first-child{
+    flex:1 1 auto!important;
+    min-height:145px!important;
+    display:flex!important;
+    flex-direction:column!important;
+  }
+  .tdb-v7 .chess-history{
+    flex:1 1 auto!important;
+    min-height:105px!important;
+    height:auto!important;
+    max-height:none!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+  .tdb-v7 .chess-side-actions{
+    flex:0 0 auto!important;
+  }
+}
+
+/* Very wide screens can afford the information rail without reducing play. */
+@media (min-width:1600px){
+  .tdb-v7 .chess-screen{
+    grid-template-columns:minmax(150px,190px) minmax(0,1fr) minmax(245px,295px)!important;
+  }
+  .tdb-v7 .chess-left-panel{
+    display:block!important;
+    min-width:0!important;
+    overflow-y:auto!important;
+  }
+}
+
+@media (max-width:980px){
+  .tdb-v7 .chess-screen{
+    width:auto!important;
+    height:100dvh!important;
+    min-height:0!important;
+    margin-left:0!important;
+    margin-right:0!important;
+    padding:8px 8px 92px!important;
+    display:block!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+  .tdb-v7 .chess-left-panel{display:none!important}
+  .tdb-v7 .chess-center{
+    width:100%!important;
+    height:auto!important;
+    overflow:visible!important;
+  }
+  .tdb-v7 .chess-board-shell{
+    width:100%!important;
+    height:auto!important;
+    overflow:visible!important;
+  }
+  .tdb-v7 .chess-board{
+    width:min(calc(100vw - 24px),calc(100dvh - 150px),760px)!important;
+    max-width:100%!important;
+    margin-inline:auto!important;
+  }
+  .tdb-v7 .chess-right-panel{
+    display:block!important;
+    width:100%!important;
+    max-width:100%!important;
+    margin-top:10px!important;
+    overflow:visible!important;
+  }
+}
+
+/* ---------- TDB LOBBY / MÚSICA: never crop the tools rail ---------- */
+.tdb-v7 .music-screen,
+.tdb-v7 .music-screen *{box-sizing:border-box}
+.tdb-v7 .music-screen{
+  width:auto!important;
+  max-width:none!important;
+  margin-left:calc(var(--v7-nav) + 8px)!important;
+  margin-right:8px!important;
+  padding-left:0!important;
+  padding-right:0!important;
+  overflow-x:hidden!important;
+}
+body.tdb-game-focus.tdb-v7 .music-screen{
+  margin-left:8px!important;
+  margin-right:8px!important;
+}
+.tdb-v7 .music-sidebar,
+.tdb-v7 .music-main,
+.tdb-v7 .music-add-panel,
+.tdb-v7 .music-player-card,
+.tdb-v7 .music-queue-card,
+.tdb-v7 .music-block{
+  min-width:0!important;
+  max-width:100%!important;
+}
+.tdb-v7 .music-add-panel input,
+.tdb-v7 .music-add-panel select,
+.tdb-v7 .music-add-panel textarea,
+.tdb-v7 .music-add-panel .field,
+.tdb-v7 .music-add-panel .btn,
+.tdb-v7 .music-search-row{
+  min-width:0!important;
+  max-width:100%!important;
+}
+
+@media (min-width:1280px){
+  .tdb-v7 .music-screen{
+    height:100dvh!important;
+    min-height:0!important;
+    grid-template-columns:minmax(190px,230px) minmax(0,1fr) minmax(270px,330px)!important;
+    gap:8px!important;
+    overflow:hidden!important;
+  }
+  .tdb-v7 .music-add-panel{
+    grid-column:auto!important;
+    display:flex!important;
+    flex-direction:column!important;
+    width:100%!important;
+    height:100%!important;
+    max-height:100%!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+}
+
+@media (min-width:901px) and (max-width:1279px){
+  .tdb-v7 .music-screen{
+    height:100dvh!important;
+    min-height:0!important;
+    grid-template-columns:minmax(180px,220px) minmax(0,1fr)!important;
+    grid-template-rows:minmax(0,1fr) auto!important;
+    gap:8px!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+  .tdb-v7 .music-sidebar,
+  .tdb-v7 .music-main{
+    min-height:0!important;
+  }
+  .tdb-v7 .music-add-panel{
+    grid-column:1/-1!important;
+    width:100%!important;
+    height:auto!important;
+    max-height:none!important;
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    overflow:visible!important;
+  }
+}
+
+@media (max-width:900px){
+  .tdb-v7 .music-screen{
+    width:auto!important;
+    height:100dvh!important;
+    min-height:0!important;
+    margin:0!important;
+    padding:8px 8px 92px!important;
+    display:block!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+  .tdb-v7 .music-sidebar,
+  .tdb-v7 .music-main,
+  .tdb-v7 .music-add-panel{
+    width:100%!important;
+    margin-bottom:10px!important;
+  }
+  .tdb-v7 .music-add-panel{display:block!important}
+}
+
+/* ---------- BLACKJACK: interaction readability safety ---------- */
+.tdb-v7 .bj-stage,
+.tdb-v7 .bj-player,
+.tdb-v7 .bj-hand,
+.tdb-v7 .bj-controls{box-sizing:border-box}
+.tdb-v7 .bj-hand-cards{
+  overflow:visible!important;
+}
+.tdb-v7 .bj-action:not(:disabled),
+.tdb-v7 .bj-chip-choice:not(:disabled),
+.tdb-v7 .bj-bet-nudge:not(:disabled){
+  cursor:pointer!important;
+}

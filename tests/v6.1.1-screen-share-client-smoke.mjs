@@ -37,6 +37,6 @@ assert('WATCH clears stale negotiation before publishing viewer request',service
 assert('OFFER clears stale answer before publishing a new offer',service.includes('Clear old answer/connected state before publishing the fresh offer event'));
 assert('Shared store can list signal rows by prefix',store.includes('export async function listSharedValues(prefix)'));
 assert('Shared store emits screen events with only the room code',store.includes("topic:'screenshare'")&&store.includes("key.slice(7).split(':')[0]"));
-assert('Health reports 7.0.1',health.includes("version:'7.0.1'"));
+assert('Health reports 7.1.4',health.includes("version:'7.1.4'"));
 
 console.log('ALL V6.1.1 SCREEN SHARE CLIENT TESTS PASSED');
