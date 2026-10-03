@@ -86,3 +86,7 @@
   .tdb-v7 .friend-card-actions{width:100%;justify-content:stretch;padding-left:47px}
   .tdb-v7 .friend-card-actions .btn{flex:1}
 }
+
+/* TDB v7.2.0 — fifth game card / Sinuca */
+.tdb-v7 .game-card:nth-child(5){grid-column:span 12;min-height:250px!important}
+.tdb-v7 .art-pool{background:linear-gradient(0deg,rgba(7,8,7,.90),transparent 55%),url('../assets/v7/pool.svg') center/cover!important}

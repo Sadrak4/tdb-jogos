@@ -1,19 +1,38 @@
-# TDB v7.1.8 — Chess Room + Bot AI
+# TDB v7.2.0 — Sinuca 8-Ball
 
-Esta versão parte da **v7.1.7** e mantém Perfil 3.0, foto de perfil, perfis públicos, Lobby/Ao Vivo, manutenção administrativa, melhorias de Truco/Música e o bloqueio temporário do Blackjack.
+A v7.2.0 adiciona a **Sinuca 8-Ball online** ao TDB com motor próprio de física, mesa Canvas, mira, força, faltas, lisas/listradas, bola 8 com caçapa declarada, espectadores, reconexão, revanche e integração com perfis/histórico.
 
-## Destaques da v7.1.8
-- Botão inteiro da seta lateral agora é clicável.
-- Relógio do Xadrez revisado no cliente e no servidor.
-- BOT espera aproximadamente 1,8 s antes de mover.
-- Dificuldades **Fácil / Médio / Difícil**.
-- IA do Xadrez com avaliação posicional e Minimax + Alpha-Beta nos níveis superiores.
-- Host pode **Editar regras** da sala sem apagá-la e recriá-la.
-- Regras editáveis de Xadrez e Truco, com validação no servidor.
+## Jogos no lobby
 
-Leia `ATUALIZACAO-v7.1.8.md` para a lista completa.
+1. Truco
+2. Sinuca
+3. Xadrez
+4. TDB Lobby
+5. Blackjack — Em manutenção
 
-## Banco de dados
-A **v7.1.8 não exige SQL novo**.
+## Arquitetura da Sinuca
 
-A migration `SUPABASE-MIGRATION-v7.1.7.sql` continua no pacote apenas para instalações que ainda não adicionaram `avatar_image`.
+- `games/pool/pool.js` — interface, Canvas, controles e replay das tacadas.
+- `games/pool/pool-physics.js` — física usada para animação no navegador.
+- `games/pool/pool.css` — layout responsivo e visual da mesa.
+- `server/pool-engine.js` — física e regras autoritativas do servidor.
+- `assets/v7/pool.svg` — arte do card.
+
+Leia `ATUALIZACAO-v7.2.0.md` para a lista completa.
+
+## Supabase
+
+Se o banco já está atualizado até a v7.1.7, **a v7.2.0 não exige SQL novo**.
+
+## Desenvolvimento local
+
+```bash
+npm install
+npm run dev
+```
+
+## Teste principal desta versão
+
+```bash
+npm run test:v720
+```

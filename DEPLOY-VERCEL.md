@@ -1,12 +1,16 @@
-# DEPLOY — TDB v7.1.8
+# DEPLOY — TDB v7.2.0
 
-1. **Não existe SQL novo para esta versão.**
-2. Se você já executou `SUPABASE-MIGRATION-v7.1.7.sql`, não execute mais nada no Supabase.
-3. Extraia `TDB-v7.1.8-CHESS-BOT-AI.zip`.
-4. Substitua os arquivos do repositório pelos arquivos desta versão.
-5. Abra o GitHub Desktop e confira as alterações.
-6. Commit sugerido: `TDB v7.1.8 - Chess Room Bot AI`.
-7. Faça **Push origin**.
-8. Aguarde o deploy do Vercel ficar **Ready**.
-9. Abra `/api/health` e confirme `"version": "7.1.8"`.
-10. Teste: botão lateral, relógio, BOT Fácil/Médio/Difícil e edição de regras da sala.
+1. Não é necessário executar SQL novo para esta versão.
+2. Extraia `TDB-v7.2.0-SINUCA.zip`.
+3. Substitua os arquivos do repositório pela versão nova.
+4. Abra o GitHub Desktop e confira as alterações.
+5. Commit sugerido: `TDB v7.2.0 - Sinuca 8-Ball`.
+6. Clique em **Push origin**.
+7. Aguarde o Vercel concluir o deploy.
+8. Abra `/api/health` e confirme `"version": "7.2.0"`.
+9. Teste com duas contas: criar sala de Sinuca, entrar, iniciar, executar tacadas, provocar uma falta, voltar à sala, alterar regras e iniciar novamente.
+10. Em uma terceira conta, teste **Ao vivo agora → Assistir** quando espectadores estiverem permitidos.
+
+## Observação
+
+Blackjack continua bloqueado como **Em manutenção** e aparece por último no lobby.

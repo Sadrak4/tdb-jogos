@@ -20,6 +20,7 @@ export default async function handler(req,res){
     const room=await getRoomPrivate(code);
     if(!room) throw new Error('Sala não encontrada.');
     if(room.game==='blackjack') return res.status(503).json({ok:false,error:'Blackjack está em manutenção temporária.',code:'GAME_MAINTENANCE'});
+    if(room.game==='pool'&&room.poolAllowSpectators===false) throw new Error('O host desativou espectadores nesta sala.');
     const gameState=await getGame(code);
     const live=room.status==='playing' || !!(gameState && !isTerminal(gameState));
     if(!live) throw new Error('A partida ainda não começou.');

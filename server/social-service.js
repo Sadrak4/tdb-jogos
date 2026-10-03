@@ -21,7 +21,7 @@ export async function socialSummary(userId){
   ];
   const map=await usersByIds(ids);
   const presenceMap=new Map((presence.data||[]).map(p=>[p.user_id,p]));
-  const labels={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack',music:'TDB Lobby'};
+  const labels={truco:'Truco',pool:'Sinuca',chess:'Xadrez',blackjack:'Blackjack',music:'TDB Lobby'};
   const enrichedFriends=friends.map(f=>{
     const pr=presenceMap.get(f.id),age=pr?Date.now()-new Date(pr.updated_at).getTime():Infinity,data=pr?.data||{};
     let status='Offline';
@@ -77,7 +77,7 @@ export async function respondRoomInvite(userId,inviteId,accept){
     room=await getRoomPrivate(invite.room_code);
     if(!room) throw new Error('A sala do convite não existe mais.');
     if(room.game==='blackjack') throw new Error('Blackjack está em manutenção temporária.');
-    const cap=room.game==='truco'?Number(room.trucoSeats||4):room.game==='chess'?2:room.game==='music'?Number(room.musicCapacity||20):5;
+    const cap=room.game==='truco'?Number(room.trucoSeats||4):['chess','pool'].includes(room.game)?2:room.game==='music'?Number(room.musicCapacity||20):5;
     if(!room.players?.some(p=>p.id===userId)){
       if((room.players?.length||0)>=cap) throw new Error('A sala ficou cheia.');
       const u=await Auth.findUserById(userId);

@@ -93,7 +93,7 @@ window.addEventListener('tdb-online-sync',event=>{
       if(state.view==='waiting'){
         patchWaitingRoom(previousOwner!==latest.ownerId);
 
-        if(latest.status==='playing' && ['truco','chess'].includes(latest.game) && OnlineGameBridge.roomCode!==latest.code){
+        if(latest.status==='playing' && ['truco','pool','chess'].includes(latest.game) && OnlineGameBridge.roomCode!==latest.code){
           OnlineGameBridge.start(latest,'player');
         }
       }
@@ -120,7 +120,7 @@ window.addEventListener('tdb-online-status',event=>{
   const ping=document.getElementById('onlinePingPill');
   if(ping) ping.textContent=Number.isFinite(detail.latencyMs)?`${detail.latencyMs} ms`:'';
   window.TDBPlatformUI?.setMaintenance?.(detail.maintenance||{enabled:false});
-  if(detail.connected && state.activeRoom?.status==='playing' && ['truco','chess'].includes(state.activeRoom.game) && !OnlineGameBridge.roomCode){
+  if(detail.connected && state.activeRoom?.status==='playing' && ['truco','pool','chess'].includes(state.activeRoom.game) && !OnlineGameBridge.roomCode){
     OnlineGameBridge.start(state.activeRoom,currentRole(state.activeRoom)==='spectator'?'spectator':'player');
   }
   if(!el) return;
@@ -174,6 +174,9 @@ window.addEventListener('tdb-game-state',event=>{
   }else if(gameState.game==='truco'){
     state.view='playing-truco';
     applyOnlineTrucoState(gameState,OnlineGameBridge.role);
+  }else if(gameState.game==='pool'){
+    state.view='playing-pool';
+    window.applyOnlinePoolState?.(gameState,state.activeRoom,OnlineGameBridge.role);
   }else if(gameState.game==='blackjack'){
     if(!isGameEnabled('blackjack')) return rejectDisabledRoom(state.activeRoom||{code:roomCode,game:'blackjack'},{leaveOnline:true});
     state.view='playing-blackjack';
@@ -183,9 +186,10 @@ window.addEventListener('tdb-game-state',event=>{
 
 const games = {
   truco: { name: 'Truco', symbol: '🃏', subtitle: 'Blefe, parceria e resenha.', players: 4, minPlayers: 2, prefix: 'TRC' },
-  blackjack: { name: 'Blackjack', symbol: '♠️', subtitle: 'Em manutenção temporária.', players: 3, minPlayers: 1, prefix: 'BLJ' },
+  pool: { name: 'Sinuca', symbol: '🎱', subtitle: '8-Ball online com física, mira e partidas entre amigos.', players: 2, minPlayers: 2, prefix: 'SNK' },
   chess: { name: 'Xadrez', symbol: '♟️', subtitle: 'Partidas rápidas 1x1 entre amigos.', players: 2, minPlayers: 2, prefix: 'XDR' },
-  music: { name: 'TDB Lobby', symbol: '◈', subtitle: 'Música, chat e compartilhamento de tela em uma sala.', players: 20, minPlayers: 1, prefix: 'MUS' }
+  music: { name: 'TDB Lobby', symbol: '◈', subtitle: 'Música, chat e compartilhamento de tela em uma sala.', players: 20, minPlayers: 1, prefix: 'MUS' },
+  blackjack: { name: 'Blackjack', symbol: '♠️', subtitle: 'Em manutenção temporária.', players: 3, minPlayers: 1, prefix: 'BLJ' }
 };
 const FEATURE_FLAGS=Object.freeze({blackjack:false});
 const CHESS_BOT_DIFFICULTIES=Object.freeze({
@@ -370,7 +374,7 @@ async function openFriendQuickProfile(id){
   document.body.appendChild(el);
   try{
     const data=window.TDBOnline?.connected?await window.TDBOnline.getPublicProfile(id):{user:f,presence:{status:'offline'},stats:{},recent:[]};
-    const u=data.user||f, stats=data.stats||{}, gameNames={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack'};
+    const u=data.user||f, stats=data.stats||{}, gameNames={truco:'Truco',pool:'Sinuca',chess:'Xadrez',blackjack:'Blackjack'};
     const presenceLabel=presenceDisplayLabel(data.presence||{status:f.status||'offline'});
     const statHtml=Object.entries(stats).map(([game,x])=>`<article><span>${escapeHtml(gameNames[game]||game)}</span><strong>${Number(x.wins||0)}V</strong><small>${Number(x.played||0)} partidas • ${Number(x.losses||0)}D • ${Number(x.draws||0)}E</small></article>`).join('')||'<p class="muted">Ainda sem partidas competitivas registradas.</p>';
     const recent=(data.recent||[]).slice(0,5).map(r=>{const won=(r.winner_ids||[]).includes(id),lost=(r.loser_ids||[]).includes(id);return `<div class="profile-public-history"><span>${escapeHtml(gameNames[r.game]||r.game)}</span><strong>${won?'Vitória':lost?'Derrota':'Empate'}</strong><small>${new Date(r.finished_at).toLocaleDateString('pt-BR')}</small></div>`}).join('')||'<div class="muted">Sem histórico recente.</div>';
@@ -383,6 +387,7 @@ function presenceDisplayLabel(p){
   if(status==='listening'||game==='music')return'Ouvindo música';
   if(status==='playing'&&game==='truco')return'No Truco';
   if(status==='playing'&&game==='chess')return'No Xadrez';
+  if(status==='playing'&&game==='pool')return'Na Sinuca';
   if(status==='playing'&&game==='blackjack')return'No Blackjack';
   if(status==='watching')return'Assistindo uma partida';
   return'Online';
@@ -399,7 +404,7 @@ function setPresence(status,extra={}){
 }
 function getActiveMatchByRoom(roomCode){ return Core.matches.byRoom(roomCode); }
 function isRoomLive(room){
-  if(!room||!['truco','chess'].includes(room.game)) return false;
+  if(!room||!['truco','pool','chess'].includes(room.game)) return false;
   return room.status==='playing' || !!getActiveMatchByRoom(room.code);
 }
 function upsertMatch(match){ Core.matches.upsert(match); Core.realtime.publish(`match:${match.matchId}`,match); return match; }
@@ -434,7 +439,7 @@ async function watchRoom(code){
   if(room.game==='blackjack'&&!isGameEnabled('blackjack')) return blackjackMaintenance();
   if(!isRoomLive(room)) return toast('Essa partida ainda não começou.');
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess'].includes(room.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','pool','chess'].includes(room.game)){
     if(!ensureOnlineMultiplayerReady()) return;
 
     const remoteRoom=await window.TDBOnline.watchRoom(code);
@@ -454,6 +459,7 @@ async function watchRoom(code){
   setPresence('watching',{roomCode:room.code,game:room.game});
 
   if(room.game==='chess' && typeof window.renderChessSpectator==='function') return window.renderChessSpectator(room);
+  if(room.game==='pool' && typeof window.renderPoolSpectator==='function') return window.renderPoolSpectator(room);
   if(room.game==='truco' && typeof window.renderTrucoSpectator==='function') return window.renderTrucoSpectator(room);
   toast('Modo espectador indisponível.');
 }
@@ -550,6 +556,7 @@ function roomCapacity(room){
   if(!room) return 0;
   if(room.game==='truco') return Number(room.trucoSeats||4);
   if(room.game==='blackjack') return 3;
+  if(room.game==='pool') return 2;
   if(room.game==='music') return Number(room.musicCapacity||20);
   return games[room.game].players;
 }
@@ -581,8 +588,8 @@ function renderAuth(mode='login'){
       </div>
       <div class="auth-copy">
         <h1>A espera ficou<br>mais divertida.</h1>
-        <p>Truco, Xadrez, Blackjack e música em um só lugar. Entre com a galera e transforme aqueles minutos de fila em uma partida.</p>
-        <div class="pill-row"><span class="pill">Truco</span><span class="pill">Blackjack</span><span class="pill">Xadrez</span><span class="pill">TDB Lobby</span></div>
+        <p>Truco, Sinuca, Xadrez e TDB Lobby em um só lugar. Entre com a galera e transforme aqueles minutos de fila em uma partida.</p>
+        <div class="pill-row"><span class="pill">Truco</span><span class="pill">Sinuca</span><span class="pill">Xadrez</span><span class="pill">TDB Lobby</span></div>
       </div>
     </aside>
     <section class="auth-panel">
@@ -699,6 +706,7 @@ function renderLiveMatches(game=null){
 }
 
 function exitActiveContext(reason='leave'){
+  window.cleanupPoolUi?.();
   OnlineGameBridge.stop();
   const room=state.activeRoom;
   if(!room) return;
@@ -776,7 +784,7 @@ function patchLobbyDynamic(){
   const pulse=document.getElementById('lobbyPulseWrap');
 
   if(live) live.innerHTML=renderLiveMatches();
-  if(gamesBox) gamesBox.innerHTML=gameCard('truco')+gameCard('blackjack')+gameCard('chess')+gameCard('music');
+  if(gamesBox) gamesBox.innerHTML=gameCard('truco')+gameCard('pool')+gameCard('chess')+gameCard('music')+gameCard('blackjack');
   if(friends) friends.innerHTML=state.friends.slice(0,3).map(friendCard).join('');
   if(pulse) pulse.innerHTML=lobbyPulseHtml();
 }
@@ -804,7 +812,7 @@ function patchGameRooms(){
 
 function minimumPlayersForRoom(room){
   if(room.game==='truco')return Number(room.trucoSeats||4);
-  if(room.game==='chess')return 2;
+  if(room.game==='chess'||room.game==='pool')return 2;
   if(room.game==='blackjack')return 1;
   return 1;
 }
@@ -820,6 +828,9 @@ function waitingHostActions(room){
   if(room.game==='chess'){
     return `${editRules}<button class="btn btn-secondary" onclick="launchChessBot()">Testar com bot • ${chessBotDifficultyLabel(room)}</button>
       <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?'Iniciar partida':'Aguardando jogadores'}</button>`;
+  }
+  if(room.game==='pool'){
+    return `${editRules}<button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?'Abrir a mesa':'Aguardando adversário'}</button>`;
   }
   if(room.game==='blackjack'){
     return `<button class="btn btn-primary" onclick="startGame()">Abrir mesa de Blackjack</button>`;
@@ -847,6 +858,7 @@ function waitingRoomMetaHtml(room){
   const meta=
     room.game==='truco' ? ` • ${cap===2?'1x1':'2x2'} • ${room.turnTimer?`${room.turnTimer}s/jogada`:'Sem limite'}` :
     room.game==='chess' ? ` • 1x1 • ${room.chessClock?Math.floor(room.chessClock/60)+' min':'Sem relógio'} • BOT ${chessBotDifficultyLabel(room)}` :
+    room.game==='pool' ? ` • 8-Ball • 1x1 • ${room.poolTurnTimer?`${room.poolTurnTimer}s/tacada`:'Sem limite'}${room.poolAllowSpectators===false?' • sem espectadores':' • espectadores'}` :
     room.game==='blackjack' ? ` • até 3 jogadores • dealer automático` :
     room.game==='music' ? ` • Lounge compartilhado` : '';
   return `${games[room.game]?.name||room.game}${meta} • ${privacyLabel(room)} • Host: <span id="waitingHostName">${escapeHtml(room.owner||'—')}</span>`;
@@ -890,14 +902,14 @@ function renderLobby(){
     <div class="section-title"><div><h2>Partidas ao vivo</h2><p>Assista sem interferir na partida.</p></div></div>
     <div class="live-grid" id="lobbyLiveGrid">${renderLiveMatches()}</div>
     <div class="section-title"><div><h2>Escolha um jogo</h2><p>As salas ficam dentro de cada jogo.</p></div></div>
-    <div class="game-grid" id="lobbyGameGrid">${gameCard('truco')}${gameCard('blackjack')}${gameCard('chess')}${gameCard('music')}</div>
+    <div class="game-grid" id="lobbyGameGrid">${gameCard('truco')}${gameCard('pool')}${gameCard('chess')}${gameCard('music')}${gameCard('blackjack')}</div>
     <div class="section-title"><div><h2>Amigos online</h2><p>Convide alguém para entrar na sua próxima mesa.</p></div><button class="link-btn" onclick="renderFriends()">Ver todos →</button></div>
     <div class="friends-grid" id="lobbyFriendsGrid">${state.friends.slice(0,3).map(friendCard).join('')}</div>
   </section>`;
 }
 
 function gameCard(key){
-  const g=games[key], art=key==='truco'?'art-truco':key==='blackjack'?'art-blackjack':key==='chess'?'art-chess':'art-music';
+  const g=games[key], art=key==='truco'?'art-truco':key==='pool'?'art-pool':key==='blackjack'?'art-blackjack':key==='chess'?'art-chess':'art-music';
   const enabled=isGameEnabled(key);
   const open=enabled?getAllRooms(key).filter(r=>r.status==='open').length:0;
   if(!enabled) return `<article class="game-card game-card-maintenance" onclick="blackjackMaintenance()">
@@ -1010,7 +1022,7 @@ function drawGamePage(){
       <button class="filter-chip ${state.roomFilter==='open'?'active':''}" onclick="setRoomFilter('open')">Abertas</button>
       <button class="filter-chip ${state.roomFilter==='playing'?'active':''}" onclick="setRoomFilter('playing')">Em andamento</button>
     </div>
-    ${['truco','chess'].includes(key)?`<div class="game-live-strip"><div class="section-title"><div><h2>Ao vivo agora</h2><p>Partidas em andamento aparecem aqui mesmo que a sala tenha acabado de iniciar.</p></div></div><div class="live-grid" id="gameLiveGrid">${renderLiveMatches(key)}</div></div>`:''}
+    ${['truco','pool','chess'].includes(key)?`<div class="game-live-strip"><div class="section-title"><div><h2>Ao vivo agora</h2><p>Partidas em andamento aparecem aqui mesmo que a sala tenha acabado de iniciar.</p></div></div><div class="live-grid" id="gameLiveGrid">${renderLiveMatches(key)}</div></div>`:''}
     <div class="rooms-layout">
       <div class="panel">
         <div class="panel-header"><h2>Salas de ${g.name}</h2><span class="muted" id="gameRoomCount">${rooms.length} encontrada${rooms.length===1?'':'s'}</span></div>
@@ -1018,7 +1030,7 @@ function drawGamePage(){
       </div>
       <aside class="panel side-info"><div class="panel-header"><h2>Como funciona</h2></div><div class="panel-body">
         <h3>Salas abertas</h3><p>Você pode entrar enquanto houver vaga. A sala pode ser pública, somente amigos, somente convite ou protegida por senha.</p>
-        <h3 style="margin-top:22px;">${key==='chess'?'Xadrez Tradicional':key==='blackjack'?'Blackjack TDB':key==='music'?'TDB Lobby':'Em andamento'}</h3><p>${key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='blackjack'?'Até 3 jogadores contra o dealer. Pedir, parar, dobrar e separar, com entrada durante a rodada para jogar na próxima.':key==='music'?'Música compartilhada, chat e transmissão de tela opcional na mesma sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
+        <h3 style="margin-top:22px;">${key==='pool'?'Sinuca 8-Ball':key==='chess'?'Xadrez Tradicional':key==='blackjack'?'Blackjack TDB':key==='music'?'TDB Lobby':'Em andamento'}</h3><p>${key==='pool'?'Partidas 1x1 com física de bolas, faltas, lisas/listradas, bola na mão e chamada da caçapa da 8.':key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='blackjack'?'Até 3 jogadores contra o dealer. Pedir, parar, dobrar e separar, com entrada durante a rodada para jogar na próxima.':key==='music'?'Música compartilhada, chat e transmissão de tela opcional na mesma sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
         <h3 style="margin-top:22px;">Seu jogo</h3><ul><li>Crie uma sala.</li><li>Compartilhe o código.</li><li>Convide amigos.</li></ul>
       </div></aside>
     </div>
@@ -1028,13 +1040,13 @@ function setRoomFilter(filter){ state.roomFilter=filter; drawGamePage(); }
 function roomRow(room){
   const g=games[room.game], live=isRoomLive(room), cap=roomCapacity(room), open=room.status==='open'&&!live, full=(room.players?.length||0)>=cap;
   const joinable=room.game==='music' ? !full : (isGameEnabled(room.game)&&open&&!full);
-  const watchable=live&&['truco','chess'].includes(room.game)&&!joinable;
+  const watchable=live&&['truco','pool','chess'].includes(room.game)&&!joinable&&(room.game!=='pool'||room.poolAllowSpectators!==false);
   const empty=!(room.players||[]).length;
   const emptyLeft=empty&&room.emptyExpiresAt?Math.max(0,Math.ceil((Number(room.emptyExpiresAt)-Date.now())/60000)):0;
   const ownerLabel=empty?'Sala vazia':`Host: ${escapeHtml(room.owner||'—')}`;
   const spectators=(room.spectators||[]).length;
   return `<div class="room-row ${empty?'room-empty-grace':''}">
-    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • ${ownerLabel} ${room.privacy==='private'?'🔒':room.privacy==='friends'?'👥':room.privacy==='invite'?'✉️':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='chess'?` • ${room.chessClock?`${Math.floor(room.chessClock/60)} min`:'sem relógio'} • BOT ${chessBotDifficultyLabel(room)}`:''}${room.game==='music'?' • ◈ Lounge':room.game==='blackjack'?' • até 3 vs dealer':''}${empty&&emptyLeft?` • expira em ~${emptyLeft} min`:''}</span></div>
+    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • ${ownerLabel} ${room.privacy==='private'?'🔒':room.privacy==='friends'?'👥':room.privacy==='invite'?'✉️':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='chess'?` • ${room.chessClock?`${Math.floor(room.chessClock/60)} min`:'sem relógio'} • BOT ${chessBotDifficultyLabel(room)}`:''}${room.game==='pool'?` • 8-Ball • ${room.poolTurnTimer?`${room.poolTurnTimer}s/tacada`:'sem limite'}`:''}${room.game==='music'?' • ◈ Lounge':room.game==='blackjack'?' • até 3 vs dealer':''}${empty&&emptyLeft?` • expira em ~${emptyLeft} min`:''}</span></div>
     <div class="room-stat"><strong>${room.players?.length||0}/${cap}</strong><span>${room.game==='music'?'Ouvintes':`Jogadores${spectators?` • 👁 ${spectators}`:''}`}</span></div>
     <div><span class="badge ${open?'open':'playing'}">${empty?'Vazia':room.game==='music'?(open?'Aberta':'Tocando'):room.game==='blackjack'?'Em manutenção':open?'Aberta':live?'Em andamento':'Indisponível'}</span></div>
     <button class="btn ${joinable?'btn-primary':watchable?'btn-secondary':'btn-dark'}" ${joinable?`onclick="requestJoinRoom('${room.code}')"`:watchable?`onclick="watchRoom('${room.code}')"`:'disabled'}>${joinable?'Entrar':watchable?'Assistir':full?'Cheia':'Jogando'}</button>
@@ -1050,6 +1062,11 @@ function openCreateRoom(){
       <div class="field"><label>Privacidade</label><select id="roomPrivacy" class="select"><option value="public">Pública</option><option value="friends">Somente amigos</option><option value="invite">Somente convite</option><option value="private">Com senha</option></select></div>
       <div class="field"><label>Senha (usada em “Com senha”)</label><input id="roomPassword" maxlength="16" placeholder="Até 16 caracteres"></div>
       ${state.selectedGame==='truco'?`<div class="field"><label>Formato do truco</label><select id="trucoSeats" class="select"><option value="2">2 jogadores (1x1)</option><option value="4" selected>4 jogadores (2x2)</option></select></div><div class="field"><label>Tempo por jogada</label><select id="turnTimer" class="select"><option value="0">Sem limite</option><option value="30">30 segundos</option><option value="60">60 segundos</option></select></div>`:''}
+      ${state.selectedGame==='pool'?`
+        <div class="field"><label>Modo</label><select class="select" disabled><option>8-Ball • 1x1</option></select><small class="field-help">Lisas contra listradas. Depois do seu grupo, encaçape a bola 8 na caçapa declarada.</small></div>
+        <div class="field"><label>Tempo por tacada</label><select id="poolTurnTimer" class="select"><option value="0">Sem limite</option><option value="30">30 segundos</option><option value="45" selected>45 segundos</option><option value="60">60 segundos</option></select></div>
+        <div class="field"><label>Ajuda de mira</label><select id="poolAimAssist" class="select"><option value="short" selected>Linha curta até o primeiro contato</option><option value="none">Sem linha de ajuda</option></select></div>
+        <div class="field"><label>Espectadores</label><select id="poolAllowSpectators" class="select"><option value="true" selected>Permitir assistir ao vivo</option><option value="false">Somente jogadores</option></select></div>`:''}
       ${state.selectedGame==='chess'?`
         <div class="field"><label>Tempo da partida</label>
           <select id="chessClock" class="select">
@@ -1149,6 +1166,9 @@ async function createRoom(){
     const password=document.getElementById('roomPassword').value.trim();
     const turnTimer=state.selectedGame==='truco' ? Number(document.getElementById('turnTimer')?.value||0) : 0;
     const trucoSeats=state.selectedGame==='truco' ? Number(document.getElementById('trucoSeats')?.value||4) : null;
+    const poolTurnTimer=state.selectedGame==='pool' ? Number(document.getElementById('poolTurnTimer')?.value||45) : null;
+    const poolAimAssist=state.selectedGame==='pool' ? (document.getElementById('poolAimAssist')?.value||'short') : null;
+    const poolAllowSpectators=state.selectedGame==='pool' ? document.getElementById('poolAllowSpectators')?.value!=='false' : null;
     const chessClock=state.selectedGame==='chess' ? Number(document.getElementById('chessClock')?.value||0) : null;
     const chessColor=state.selectedGame==='chess' ? (document.getElementById('chessColor')?.value||'random') : null;
     const chessBotDifficulty=state.selectedGame==='chess' ? chessBotDifficultyValue(document.getElementById('chessBotDifficulty')?.value||'easy') : null;
@@ -1163,7 +1183,7 @@ async function createRoom(){
     const candidate={
       code:genRoomCode(state.selectedGame),game:state.selectedGame,name,
       owner:state.user.username,ownerId:state.user.id,privacy,password,status:'open',
-      turnTimer,trucoSeats,chessClock,chessColor,chessBotDifficulty,musicControl,musicSkipMode,musicQueueLimit,blackjackTurnTimer,blackjackMinBet,blackjackStartingChips,blackjackDecks,
+      turnTimer,trucoSeats,poolTurnTimer,poolAimAssist,poolAllowSpectators,chessClock,chessColor,chessBotDifficulty,musicControl,musicSkipMode,musicQueueLimit,blackjackTurnTimer,blackjackMinBet,blackjackStartingChips,blackjackDecks,
       players:[{username:state.user.username,id:state.user.id,avatar:state.user.avatar,avatarImage:state.user.avatarImage||null,connection:'online'}],
       spectators:[],createdAt:Date.now()
     };
@@ -1348,6 +1368,14 @@ function roomRulesFields(room){
       <option value="60" ${Number(room.turnTimer||0)===60?'selected':''}>60 segundos</option>
     </select></div>`;
   }
+  if(room.game==='pool'){
+    const timer=Number(room.poolTurnTimer??45),assist=room.poolAimAssist||'short';
+    return `<div class="field"><label>Tempo por tacada</label><select id="editPoolTurnTimer" class="select">
+      ${[0,30,45,60].map(v=>`<option value="${v}" ${timer===v?'selected':''}>${v===0?'Sem limite':`${v} segundos`}</option>`).join('')}
+    </select></div>
+    <div class="field"><label>Ajuda de mira</label><select id="editPoolAimAssist" class="select"><option value="short" ${assist==='short'?'selected':''}>Linha curta até o primeiro contato</option><option value="none" ${assist==='none'?'selected':''}>Sem linha de ajuda</option></select></div>
+    <div class="field"><label>Espectadores</label><select id="editPoolAllowSpectators" class="select"><option value="true" ${room.poolAllowSpectators!==false?'selected':''}>Permitir assistir ao vivo</option><option value="false" ${room.poolAllowSpectators===false?'selected':''}>Somente jogadores</option></select></div>`;
+  }
   if(room.game==='chess'){
     const clock=Number(room.chessClock||0),diff=chessBotDifficultyValue(room);
     return `<div class="field"><label>Tempo da partida</label><select id="editChessClock" class="select">
@@ -1400,6 +1428,12 @@ async function saveRoomRules(){
     if((room.players||[]).length>seats) return toast(`A sala tem ${(room.players||[]).length} jogadores. Remova jogadores antes de mudar para ${seats}.`);
     next.trucoSeats=seats===2?2:4;
     next.turnTimer=[0,30,60].includes(Number(document.getElementById('editTurnTimer')?.value))?Number(document.getElementById('editTurnTimer').value):0;
+  }else if(room.game==='pool'){
+    const timer=Number(document.getElementById('editPoolTurnTimer')?.value??45);
+    next.poolTurnTimer=[0,30,45,60].includes(timer)?timer:45;
+    const assist=document.getElementById('editPoolAimAssist')?.value||'short';
+    next.poolAimAssist=['short','none'].includes(assist)?assist:'short';
+    next.poolAllowSpectators=document.getElementById('editPoolAllowSpectators')?.value!=='false';
   }else if(room.game==='chess'){
     next.chessClock=[0,60,180,300,600,900].includes(Number(document.getElementById('editChessClock')?.value))?Number(document.getElementById('editChessClock').value):600;
     const color=document.getElementById('editChessColor')?.value||'random';
@@ -1447,7 +1481,7 @@ function renderWaitingRoom(){
   if(rejectDisabledRoom(state.activeRoom,{leaveOnline:true})) return renderLobby();
   state.view='waiting';
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && !state.activeRoom.simulation && state.activeRoom.status==='playing' && ['truco','chess'].includes(state.activeRoom.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && !state.activeRoom.simulation && state.activeRoom.status==='playing' && ['truco','pool','chess'].includes(state.activeRoom.game)){
     OnlineGameBridge.start(state.activeRoom,'player');
   }
 
@@ -1578,16 +1612,16 @@ async function startGame(){
   if(room.game==='music') return openMusicRoom();
   if((room.players||[]).length<minimumPlayersForRoom(room)) return toast(`A sala ainda precisa de ${minimumPlayersForRoom(room)} jogador(es).`);
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess'].includes(room.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','pool','chess'].includes(room.game)){
     if(!ensureOnlineMultiplayerReady()) return;
 
-    const required=room.game==='truco'?roomCapacity(room):room.game==='chess'?2:1;
+    const required=room.game==='truco'?roomCapacity(room):['chess','pool'].includes(room.game)?2:1;
     if((room.players?.length||0)<required){
       return toast(`${g.name} precisa de ${required} jogador${required>1?'es':''}.`);
     }
 
     room.status='playing';
-    state.view=room.game==='truco'?'playing-truco':'playing-chess';
+    state.view=room.game==='truco'?'playing-truco':room.game==='pool'?'playing-pool':'playing-chess';
     updateStoredRoom(room);
     setPresence('playing',{roomCode:room.code,game:room.game});
     // Prepare the bridge identity, but do not start polling yet.
@@ -1637,6 +1671,8 @@ async function startGame(){
     return window.startChessGame?.(room,false);
   }
 
+  if(room.game==='pool') return toast('A Sinuca multiplayer precisa estar conectada ao servidor online.');
+
   if(room.game==='blackjack') return toast('O Blackjack usa o servidor online para manter o dealer e o baralho sincronizados.');
 
   if((room.players?.length||0)<g.minPlayers) return toast(`Aguarde pelo menos ${g.minPlayers} jogador${g.minPlayers>1?'es':''}.`);
@@ -1653,7 +1689,7 @@ function copyCode(code){
   else toast(`Código: ${code}`);
 }
 function toggleFullscreen(){
-  const gameLike=['playing-truco','playing-chess','playing-blackjack','music','watching'].includes(state.view)||!!document.querySelector('.blackjack-page,.chess-page,.truco-game,.truco-table,.music-page');
+  const gameLike=['playing-truco','playing-pool','playing-chess','playing-blackjack','music','watching'].includes(state.view)||!!document.querySelector('.blackjack-page,.chess-page,.pool-page,.truco-game,.truco-table,.music-page');
   if(!document.fullscreenElement){
     if(gameLike)document.body.classList.add('tdb-game-focus');
     document.documentElement.requestFullscreen?.();
@@ -1844,13 +1880,13 @@ function refreshProfilePreview(){
   if(banner){banner.classList.toggle('has-image',!!bannerValue);banner.style.backgroundImage=bannerValue?`url("${bannerValue.replace(/"/g,'%22')}")`:''}
 }
 function publicProfileStatsHtml(data){
-  const gameNames={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack'};
+  const gameNames={truco:'Truco',pool:'Sinuca',chess:'Xadrez',blackjack:'Blackjack'};
   const entries=Object.entries(data?.stats||{});
   if(!entries.length)return '<div class="profile-empty-card">Ainda sem partidas competitivas registradas.</div>';
   return entries.map(([game,x])=>`<article class="public-stat-card"><span>${escapeHtml(gameNames[game]||game)}</span><strong>${Number(x.wins||0)} vitórias</strong><small>${Number(x.played||0)} partidas • ${Number(x.losses||0)} derrotas • ${Number(x.draws||0)} empates</small></article>`).join('');
 }
 function publicProfileRecentHtml(data,id){
-  const gameNames={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack'};
+  const gameNames={truco:'Truco',pool:'Sinuca',chess:'Xadrez',blackjack:'Blackjack'};
   const rows=(data?.recent||[]).slice(0,8);
   if(!rows.length)return '<div class="profile-empty-card">Sem histórico recente.</div>';
   return rows.map(r=>{const won=(r.winner_ids||[]).includes(id),lost=(r.loser_ids||[]).includes(id);return `<div class="public-history-row"><div><strong>${escapeHtml(gameNames[r.game]||r.game)}</strong><small>${new Date(r.finished_at).toLocaleString('pt-BR')}</small></div><span class="result-pill ${won?'win':lost?'loss':'draw'}">${won?'Vitória':lost?'Derrota':'Empate'}</span></div>`}).join('');
@@ -1879,7 +1915,7 @@ async function renderPublicProfile(id){
 
 function renderProfileHistory(){
   const h=state.profileHistory;if(!h)return `<div class="panel"><div class="panel-body"><div class="muted">Carregando histórico competitivo…</div></div></div>`;
-  const gameNames={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack'};
+  const gameNames={truco:'Truco',pool:'Sinuca',chess:'Xadrez',blackjack:'Blackjack'};
   const stats=Object.entries(h.stats||{}).map(([game,x])=>`<div class="stat-card"><span>${gameNames[game]||game}</span><strong>${x.wins}</strong><small>vitórias • ${x.losses} derrotas • ${x.draws} empates • ${x.played} partidas</small></div>`).join('')||'<div class="muted">Nenhuma partida real concluída ainda.</div>';
   window.__TDB_PROFILE_RESULTS__=h.recent||[];
   const recent=(h.recent||[]).map((r,i)=>{const won=(r.winner_ids||[]).includes(state.user.id),lost=(r.loser_ids||[]).includes(state.user.id);const outcome=won?'Vitória':lost?'Derrota':'Empate';const pgn=r.game==='chess'&&r.metadata?.pgn?`<button class="link-btn" onclick="copyRecentPgn(${i})">Copiar PGN</button>`:'';return `<div class="history-row"><div><strong>${escapeHtml(gameNames[r.game]||r.game)} • ${outcome}</strong><small>${new Date(r.finished_at).toLocaleString('pt-BR')} • ${escapeHtml(r.mode||'')}</small></div>${pgn}</div>`}).join('')||'<div class="muted">Sem histórico recente.</div>';
@@ -1975,7 +2011,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'7.1.8',
+      version:'7.2.0',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)
@@ -2075,8 +2111,8 @@ async function bootAuthenticatedApp(){
         return renderLobby();
       }
       if(reconnect.room.game==='music') return openMusicRoom();
-      if(reconnect.room.status==='playing'&&['chess','truco'].includes(reconnect.room.game)){
-        state.view=reconnect.room.game==='truco'?'playing-truco':'playing-chess';
+      if(reconnect.room.status==='playing'&&['chess','truco','pool'].includes(reconnect.room.game)){
+        state.view=reconnect.room.game==='truco'?'playing-truco':reconnect.room.game==='pool'?'playing-pool':'playing-chess';
         OnlineGameBridge.start(reconnect.room,reconnect.role||'player');
         if(reconnect.state){
           window.dispatchEvent(new CustomEvent('tdb-game-state',{detail:{roomCode:reconnect.room.code,state:reconnect.state}}));

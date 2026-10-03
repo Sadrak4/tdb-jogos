@@ -20,7 +20,7 @@ export default async function handler(req,res){
       throw new Error('Já existe uma partida em andamento nesta sala.');
     }
 
-    const required=room.game==='truco'?Number(room.trucoSeats||4):room.game==='chess'?2:1;
+    const required=room.game==='truco'?Number(room.trucoSeats||4):['chess','pool'].includes(room.game)?2:1;
     if((room.players||[]).length<required) throw new Error(`A sala precisa de ${required} jogador(es).`);
     if((room.players||[]).some(p=>p.connection==='reconnecting')) throw new Error('Aguarde todos os jogadores reconectarem antes de iniciar.');
 

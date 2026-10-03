@@ -9,7 +9,7 @@ function publicRoom(room){
 }
 
 function sanitizeCreate(input,user){
-  const game=['truco','chess','music','blackjack'].includes(input.game)?input.game:'truco';
+  const game=['truco','pool','chess','music','blackjack'].includes(input.game)?input.game:'truco';
   return {
     code:String(input.code||'').toUpperCase(),
     game,
@@ -24,6 +24,9 @@ function sanitizeCreate(input,user){
     chessClock:[0,60,180,300,600,900].includes(Number(input.chessClock))?Number(input.chessClock):0,
     chessColor:['white','black','random'].includes(input.chessColor)?input.chessColor:'random',
     chessBotDifficulty:['easy','medium','hard'].includes(input.chessBotDifficulty)?input.chessBotDifficulty:'easy',
+    poolTurnTimer:[0,30,45,60].includes(Number(input.poolTurnTimer))?Number(input.poolTurnTimer):45,
+    poolAimAssist:['short','none'].includes(input.poolAimAssist)?input.poolAimAssist:'short',
+    poolAllowSpectators:input.poolAllowSpectators!==false,
     musicControl:input.musicControl==='host'?'host':'everyone',
     musicSkipMode:['host','everyone','vote'].includes(input.musicSkipMode)?input.musicSkipMode:'vote',
     musicQueueLimit:[0,3,5,10].includes(Number(input.musicQueueLimit))?Number(input.musicQueueLimit):5,
@@ -43,6 +46,8 @@ function applyEditableRules(room,input){
     ? (input.trucoSeats!==undefined&&Number(input.trucoSeats)!==Number(room.trucoSeats||4)) || (input.turnTimer!==undefined&&Number(input.turnTimer)!==Number(room.turnTimer||0))
     : room.game==='chess'
       ? (input.chessClock!==undefined&&Number(input.chessClock)!==Number(room.chessClock||0)) || (input.chessColor!==undefined&&input.chessColor!==(room.chessColor||'random')) || (input.chessBotDifficulty!==undefined&&input.chessBotDifficulty!==(room.chessBotDifficulty||'easy'))
+      : room.game==='pool'
+        ? (input.poolTurnTimer!==undefined&&Number(input.poolTurnTimer)!==Number(room.poolTurnTimer??45)) || (input.poolAimAssist!==undefined&&input.poolAimAssist!==(room.poolAimAssist||'short')) || (input.poolAllowSpectators!==undefined&&Boolean(input.poolAllowSpectators)!==(room.poolAllowSpectators!==false))
       : room.game==='music'
         ? (input.musicControl!==undefined&&input.musicControl!==(room.musicControl||'everyone')) || (input.musicSkipMode!==undefined&&input.musicSkipMode!==(room.musicSkipMode||'vote')) || (input.musicQueueLimit!==undefined&&Number(input.musicQueueLimit)!==Number(room.musicQueueLimit??5))
         : false;
@@ -69,6 +74,14 @@ function applyEditableRules(room,input){
     if([0,60,180,300,600,900].includes(clock)) room.chessClock=clock;
     if(['white','black','random'].includes(input.chessColor)) room.chessColor=input.chessColor;
     if(['easy','medium','hard'].includes(input.chessBotDifficulty)) room.chessBotDifficulty=input.chessBotDifficulty;
+  }
+
+
+  if(room.game==='pool'){
+    const timer=Number(input.poolTurnTimer);
+    if([0,30,45,60].includes(timer)) room.poolTurnTimer=timer;
+    if(['short','none'].includes(input.poolAimAssist)) room.poolAimAssist=input.poolAimAssist;
+    if(input.poolAllowSpectators!==undefined) room.poolAllowSpectators=Boolean(input.poolAllowSpectators);
   }
 
   if(room.game==='music'){
