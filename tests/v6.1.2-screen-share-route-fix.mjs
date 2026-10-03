@@ -45,6 +45,6 @@ assert('Local preview and STOP controls are shown before START confirmation',
   screen.includes("localPhase='registering'")&&screen.includes('Parar compartilhamento'));
 assert('Server START must confirm the same broadcast id',
   screen.includes('r.state.broadcastId!==broadcastId'));
-assert('Health reports 7.1.4',health.includes("version:'7.1.4'"));
+assert('Health reports 7.0.1',health.includes("version:'7.0.1'"));
 
 console.log('ALL V6.1.2 SCREEN SHARE ROUTE FIX TESTS PASSED');

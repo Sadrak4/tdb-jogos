@@ -20,5 +20,5 @@ assert('Blackjack has rebuilt casino table treatment',games.includes('.bj-stage'
 assert('Lounge has rebuilt social layout',games.includes('.music-screen')&&games.includes('.lounge-screen-stage.active'));
 assert('SVG icon system replaces text-only navigation',icons.includes("home:")&&icons.includes("screen:")&&app.includes("uiIcon('home')"));
 assert('responsive targets include compact and mobile breakpoints',responsive.includes('@media(max-width:1180px)')&&responsive.includes('@media(max-width:900px)')&&responsive.includes('@media(max-width:620px)'));
-assert('current health version is 7.1.4',health.includes("version:'7.1.4'"));
+assert('current health version is 7.0.1',health.includes("version:'7.0.1'"));
 console.log('ALL V7.0 VISUAL REBUILD TESTS PASSED');

@@ -1,9 +1,9 @@
 import { initSupabase,isSupabaseReady,getSupabaseClient,emitEvent,getRoomPrivate,setRoomPrivate } from './realtime-store.js';
 import * as Auth from './auth-service.js';
-function safeUser(u){return u?{id:u.id,username:u.username,avatar:u.avatar||null,avatarImage:u.avatar_image||u.avatarImage||null}:null}
+function safeUser(u){return u?{id:u.id,username:u.username,avatar:u.avatar||null}:null}
 async function db(){await initSupabase();if(!isSupabaseReady())throw new Error('Supabase indisponível.');return getSupabaseClient()}
-async function usersByIds(ids){if(!ids.length)return new Map();const c=await db();const {data,error}=await c.from('tdb_users').select('id,username,avatar,avatar_image').in('id',[...new Set(ids)]);if(error)throw new Error(error.message);return new Map((data||[]).map(u=>[u.id,safeUser(u)]))}
-export async function searchUsers(currentUserId,query){const c=await db(),q=String(query||'').trim();if(q.length<2)return[];let request=c.from('tdb_users').select('id,username,avatar,avatar_image').neq('id',currentUserId).limit(12);if(/^TDB-/i.test(q))request=request.ilike('id',`%${q.toUpperCase()}%`);else request=request.ilike('username',`%${q}%`);const {data,error}=await request;if(error)throw new Error(error.message);return(data||[]).map(safeUser)}
+async function usersByIds(ids){if(!ids.length)return new Map();const c=await db();const {data,error}=await c.from('tdb_users').select('id,username,avatar').in('id',[...new Set(ids)]);if(error)throw new Error(error.message);return new Map((data||[]).map(u=>[u.id,safeUser(u)]))}
+export async function searchUsers(currentUserId,query){const c=await db(),q=String(query||'').trim();if(q.length<2)return[];let request=c.from('tdb_users').select('id,username,avatar').neq('id',currentUserId).limit(12);if(/^TDB-/i.test(q))request=request.ilike('id',`%${q.toUpperCase()}%`);else request=request.ilike('username',`%${q}%`);const {data,error}=await request;if(error)throw new Error(error.message);return(data||[]).map(safeUser)}
 export async function socialSummary(userId){
   const c=await db();
   const [friends,incoming,outgoing,invites,presence]=await Promise.all([
@@ -21,7 +21,7 @@ export async function socialSummary(userId){
   ];
   const map=await usersByIds(ids);
   const presenceMap=new Map((presence.data||[]).map(p=>[p.user_id,p]));
-  const labels={truco:'Truco',pool:'Sinuca',chess:'Xadrez',blackjack:'Blackjack',music:'TDB Lobby'};
+  const labels={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack',music:'TDB Lobby'};
   const enrichedFriends=friends.map(f=>{
     const pr=presenceMap.get(f.id),age=pr?Date.now()-new Date(pr.updated_at).getTime():Infinity,data=pr?.data||{};
     let status='Offline';
@@ -46,55 +46,5 @@ export async function acceptFriendRequest(receiverId,senderId){const c=await db(
 export async function rejectFriendRequest(receiverId,senderId){const c=await db();const {error}=await c.from('tdb_friend_requests').update({status:'rejected',responded_at:new Date().toISOString()}).eq('sender_id',senderId).eq('receiver_id',receiverId).eq('status','pending');if(error)throw new Error(error.message);await emitEvent('friends',null,'rejected');return true}
 
 export async function hasValidRoomInvite(userId,roomCode){const c=await db();const {data,error}=await c.from('tdb_room_invites').select('id').eq('receiver_id',userId).eq('room_code',String(roomCode||'').toUpperCase()).in('status',['pending','accepted']).gt('expires_at',new Date().toISOString()).limit(1);if(error)throw new Error(error.message);return!!(data||[]).length}
-export async function sendRoomInvite(senderId,receiverId,roomCode){
-  if(!(await areFriends(senderId,receiverId))) throw new Error('Só é possível convidar amigos.');
-  const room=await getRoomPrivate(String(roomCode||'').toUpperCase());
-  if(!room) throw new Error('Sala não encontrada.');
-  if(room.game==='blackjack') throw new Error('Blackjack está em manutenção temporária.');
-  if(!(room.players||[]).some(p=>p.id===senderId)) throw new Error('Entre na sala antes de convidar.');
-  if((room.players||[]).some(p=>p.id===receiverId)) throw new Error('Esse amigo já está na sala.');
-  const c=await db();
-  await c.from('tdb_room_invites').update({status:'expired'}).eq('receiver_id',receiverId).eq('room_code',room.code).eq('status','pending');
-  const {data,error}=await c.from('tdb_room_invites').insert({room_code:room.code,sender_id:senderId,receiver_id:receiverId,status:'pending',expires_at:new Date(Date.now()+10*60*1000).toISOString()}).select('*').single();
-  if(error) throw new Error(error.message);
-  await emitEvent('invites',room.code,'sent');
-  return data;
-}
-export async function respondRoomInvite(userId,inviteId,accept){
-  const c=await db();
-  const {data:invite,error}=await c.from('tdb_room_invites').select('*').eq('id',inviteId).eq('receiver_id',userId).eq('status','pending').maybeSingle();
-  if(error) throw new Error(error.message);
-  if(!invite) throw new Error('Convite não encontrado ou expirado.');
-  if(new Date(invite.expires_at).getTime()<=Date.now()){
-    await c.from('tdb_room_invites').update({status:'expired'}).eq('id',invite.id);
-    throw new Error('Esse convite expirou.');
-  }
-
-  // Valida a sala antes de marcar como aceito. Assim um convite antigo não
-  // contorna jogos temporariamente desabilitados nem deixa convite aceito sem entrada.
-  let room=null;
-  if(accept){
-    room=await getRoomPrivate(invite.room_code);
-    if(!room) throw new Error('A sala do convite não existe mais.');
-    if(room.game==='blackjack') throw new Error('Blackjack está em manutenção temporária.');
-    const cap=room.game==='truco'?Number(room.trucoSeats||4):['chess','pool'].includes(room.game)?2:room.game==='music'?Number(room.musicCapacity||20):5;
-    if(!room.players?.some(p=>p.id===userId)){
-      if((room.players?.length||0)>=cap) throw new Error('A sala ficou cheia.');
-      const u=await Auth.findUserById(userId);
-      room.players=room.players||[];
-      room.players.push({id:u.id,username:u.username,avatar:u.avatar||null,avatarImage:u.avatarImage||null,connection:'online'});
-      await setRoomPrivate(room);
-    }
-  }
-
-  const {error:updateError}=await c.from('tdb_room_invites').update({status:accept?'accepted':'rejected'}).eq('id',invite.id);
-  if(updateError) throw new Error(updateError.message);
-  await emitEvent('invites',invite.room_code,accept?'accepted':'rejected');
-  if(room){
-    const copy=structuredClone(room);
-    copy.hasPassword=!!copy.password;
-    delete copy.password;
-    room=copy;
-  }
-  return{accepted:!!accept,roomCode:invite.room_code,room};
-}
+export async function sendRoomInvite(senderId,receiverId,roomCode){if(!(await areFriends(senderId,receiverId)))throw new Error('Só é possível convidar amigos.');const room=await getRoomPrivate(String(roomCode||'').toUpperCase());if(!room)throw new Error('Sala não encontrada.');if(!(room.players||[]).some(p=>p.id===senderId))throw new Error('Entre na sala antes de convidar.');if((room.players||[]).some(p=>p.id===receiverId))throw new Error('Esse amigo já está na sala.');const c=await db();await c.from('tdb_room_invites').update({status:'expired'}).eq('receiver_id',receiverId).eq('room_code',room.code).eq('status','pending');const {data,error}=await c.from('tdb_room_invites').insert({room_code:room.code,sender_id:senderId,receiver_id:receiverId,status:'pending',expires_at:new Date(Date.now()+10*60*1000).toISOString()}).select('*').single();if(error)throw new Error(error.message);await emitEvent('invites',room.code,'sent');return data}
+export async function respondRoomInvite(userId,inviteId,accept){const c=await db();const {data:invite,error}=await c.from('tdb_room_invites').select('*').eq('id',inviteId).eq('receiver_id',userId).eq('status','pending').maybeSingle();if(error)throw new Error(error.message);if(!invite)throw new Error('Convite não encontrado ou expirado.');if(new Date(invite.expires_at).getTime()<=Date.now()){await c.from('tdb_room_invites').update({status:'expired'}).eq('id',invite.id);throw new Error('Esse convite expirou.')}await c.from('tdb_room_invites').update({status:accept?'accepted':'rejected'}).eq('id',invite.id);let room=null;if(accept){room=await getRoomPrivate(invite.room_code);if(!room)throw new Error('A sala do convite não existe mais.');const cap=room.game==='truco'?Number(room.trucoSeats||4):room.game==='chess'?2:room.game==='blackjack'?3:room.game==='music'?Number(room.musicCapacity||20):5;if(!room.players?.some(p=>p.id===userId)){if((room.players?.length||0)>=cap)throw new Error('A sala ficou cheia.');const u=await Auth.findUserById(userId);room.players=room.players||[];room.players.push({id:u.id,username:u.username,avatar:u.avatar||null,connection:'online'});await setRoomPrivate(room)}}await emitEvent('invites',invite.room_code,accept?'accepted':'rejected');if(room){const copy=structuredClone(room);copy.hasPassword=!!copy.password;delete copy.password;room=copy}return{accepted:!!accept,roomCode:invite.room_code,room}}

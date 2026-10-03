@@ -1,16 +1,53 @@
-# DEPLOY — TDB v7.2.0
+# DEPLOY — TDB v7.0.1 GAMEPLAY FIX
 
-1. Não é necessário executar SQL novo para esta versão.
-2. Extraia `TDB-v7.2.0-SINUCA.zip`.
-3. Substitua os arquivos do repositório pela versão nova.
-4. Abra o GitHub Desktop e confira as alterações.
-5. Commit sugerido: `TDB v7.2.0 - Sinuca 8-Ball`.
-6. Clique em **Push origin**.
-7. Aguarde o Vercel concluir o deploy.
-8. Abra `/api/health` e confirme `"version": "7.2.0"`.
-9. Teste com duas contas: criar sala de Sinuca, entrar, iniciar, executar tacadas, provocar uma falta, voltar à sala, alterar regras e iniciar novamente.
-10. Em uma terceira conta, teste **Ao vivo agora → Assistir** quando espectadores estiverem permitidos.
+## Banco
+
+Não execute SQL novo. Esta versão não altera o schema do Supabase.
+
+## Publicar
+
+1. Abra o repositório `tdb-jogos` no GitHub Desktop.
+2. `Fetch origin`.
+3. Faça `Pull origin` se aparecer.
+4. Extraia `TDB-v7.0.1-GAMEPLAY-FIX.zip`.
+5. Copie os arquivos por cima do repositório.
+6. Commit sugerido:
+
+```text
+TDB v7.0.1 Gameplay Fix
+```
+
+7. `Commit to main`.
+8. `Push origin`.
+9. Aguarde o deploy da Vercel.
+
+## Conferir versão
+
+Abra:
+
+```text
+https://tdb-jogos.vercel.app/api/health
+```
+
+Esperado:
+
+```json
+{
+  "app": "TDB",
+  "version": "7.0.1"
+}
+```
+
+## Teste obrigatório após deploy
+
+Faça em zoom 100%:
+
+1. Truco contra bot: mesa, mão e cartas jogadas devem aparecer.
+2. Xadrez contra bot: o tabuleiro 8×8 deve aparecer e aceitar clique.
+3. TDB Lobby: player/biblioteca devem aparecer sem uma tela escura na frente.
+4. Blackjack: distribuir várias cartas; elas não devem se sobrepor.
+5. TDB Lobby screen share: testar iniciar/parar e visualizar com outra conta.
 
 ## Observação
 
-Blackjack continua bloqueado como **Em manutenção** e aparece por último no lobby.
+Os identificadores internos ainda usam `music`/`lounge-*` e o repositório continua `tdb-jogos` por compatibilidade. Isso é intencional e não muda o nome mostrado ao usuário, que agora é apenas **TDB** e **TDB Lobby**.

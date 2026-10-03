@@ -261,11 +261,9 @@ export async function updateReport(reportId,{status,adminNote}={}){
 export async function operations(){
   await initSupabase();
 
-  let maintenance={enabled:false,message:'TDB em manutenção • voltamos em breve',allowAdminAccess:true};
-  let maintenanceInternal={reason:'',activatedBy:null,activatedAt:null,updatedAt:null};
+  let maintenance={enabled:false,message:'TDB em manutenção • voltamos em breve'};
   try{
     maintenance=await getSharedValue('app:maintenance',maintenance)||maintenance;
-    maintenanceInternal=await getSharedValue('app:maintenance:internal',maintenanceInternal)||maintenanceInternal;
   }catch(err){
     console.warn('[TDB ADM] leitura da manutenção:',err?.message||err);
   }
@@ -273,7 +271,7 @@ export async function operations(){
   if(!isSupabaseReady()){
     return{
       rooms:[],
-      maintenance:{...maintenance,internal:maintenanceInternal},
+      maintenance,
       errorVersions:[],
       warnings:['Supabase indisponível: controles de manutenção continuam visíveis, mas dados operacionais podem estar incompletos.']
     };
@@ -311,45 +309,38 @@ export async function operations(){
     emptyExpiresAt:row.data?.emptyExpiresAt||null
   }));
 
-  return{rooms,maintenance:{...maintenance,internal:maintenanceInternal},errorVersions,warnings};
+  return{rooms,maintenance,errorVersions,warnings};
 }
 
-export async function setMaintenance(enabled,message='',options={}){
+export async function setMaintenance(enabled,message=''){
   await initSupabase();
   if(process.env.VERCEL&&!isSupabaseReady()){
     throw new Error('Supabase indisponível. Retome/conecte o projeto antes de alterar o modo manutenção.');
   }
 
-  const current=await getSharedValue('app:maintenance',{enabled:false,message:'TDB em manutenção • voltamos em breve',allowAdminAccess:true}).catch(()=>({enabled:false}));
-  const currentInternal=await getSharedValue('app:maintenance:internal',{reason:'',activatedBy:null,activatedAt:null}).catch(()=>({}));
-  const now=Date.now();
-  const actor=String(options.actor||'adm').slice(0,64);
-  const activatedAt=enabled?(current?.enabled?(current.activatedAt||currentInternal?.activatedAt||current.updatedAt||now):now):(current?.activatedAt||currentInternal?.activatedAt||null);
   const value={
     enabled:!!enabled,
-    message:String(message||current?.message||'TDB em manutenção • voltamos em breve').trim().slice(0,240)||'TDB em manutenção • voltamos em breve',
-    allowAdminAccess:options.allowAdminAccess!==false,
-    activatedAt,
-    updatedAt:now,
+    message:String(message||'TDB em manutenção • voltamos em breve').trim().slice(0,240)||'TDB em manutenção • voltamos em breve',
+    updatedAt:Date.now(),
     source:'admin'
   };
-  const internal={
-    reason:options.reason===undefined?String(currentInternal?.reason||'').slice(0,500):String(options.reason||'').trim().slice(0,500),
-    activatedBy:enabled?(current?.enabled?(currentInternal?.activatedBy||actor):actor):(currentInternal?.activatedBy||actor),
-    activatedAt,
-    updatedAt:now,
-    disabledAt:enabled?null:now,
-    updatedBy:actor
-  };
 
-  await Promise.all([setSharedValue('app:maintenance',value),setSharedValue('app:maintenance:internal',internal)]);
+  await setSharedValue('app:maintenance',value);
+
+  // Confirmação com pequenas tentativas para evitar falso erro após escrita no Supabase.
   let stored=null;
   for(let attempt=0;attempt<3;attempt++){
     try{stored=await getSharedValue('app:maintenance',null)}catch{}
     if(stored&&!!stored.enabled===value.enabled)break;
     await new Promise(resolve=>setTimeout(resolve,90*(attempt+1)));
   }
-  if(!stored||!!stored.enabled!==value.enabled)throw new Error('A manutenção foi enviada, mas o servidor não conseguiu confirmar o novo estado.');
-  try{await audit(value.enabled?'maintenance_on':'maintenance_off',{details:{...stored,reason:internal.reason,actor}})}catch(err){console.warn('[TDB ADM] auditoria de manutenção:',err?.message||err)}
-  return {...stored,internal};
+
+  if(!stored||!!stored.enabled!==value.enabled){
+    throw new Error('A manutenção foi enviada, mas o servidor não conseguiu confirmar o novo estado.');
+  }
+
+  try{await audit(value.enabled?'maintenance_on':'maintenance_off',{details:stored})}
+  catch(err){console.warn('[TDB ADM] auditoria de manutenção:',err?.message||err)}
+
+  return stored;
 }

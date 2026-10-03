@@ -48,8 +48,8 @@ assert('Blackjack render clears stale loading veil',blackjack.includes('TDBPlatf
 
 assert('Product is branded simply TDB',index.includes('<title>TDB</title>')&&health.includes("app:'TDB'"));
 assert('Social room is branded TDB Lobby',app.includes("name: 'TDB Lobby'")&&registry.includes("name: 'TDB Lobby'")&&music.includes('TDB LOBBY'));
-assert('Package is v7.1.4',packageJson.version==='7.1.4'&&packageJson.name==='tdb');
-assert('Health reports v7.1.4',health.includes("version:'7.1.4'"));
-assert('Presence fallback reports v7.1.4',maintenance.includes("version:String(version||'7.1.4')"));
+assert('Package is v7.0.1',packageJson.version==='7.0.1'&&packageJson.name==='tdb');
+assert('Health reports v7.0.1',health.includes("version:'7.0.1'"));
+assert('Presence fallback reports v7.0.1',maintenance.includes("version:String(version||'7.0.1')"));
 
 console.log('ALL V7.0.1 GAMEPLAY VISIBILITY TESTS PASSED');

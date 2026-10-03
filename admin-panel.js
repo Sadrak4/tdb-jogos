@@ -105,45 +105,33 @@ async function renderLogs(type=adminState.logType){
     <div class="panel admin-log-list" id="adminLogList">${adminState.logs.length?adminState.logs.map(l=>logRow(l,type)).join(''):'<div class="empty-state">Nenhum log encontrado.</div>'}</div>`,'logs');
 }
 function applyLogFilters(){const version=document.getElementById('adminLogVersion')?.value||'all',days=document.getElementById('adminLogDate')?.value||'all';let rows=adminState.logs||[];if(version!=='all')rows=rows.filter(l=>String(l.context?.version||'')===version);if(days!=='all'){const cutoff=Date.now()-Number(days)*86400000;rows=rows.filter(l=>new Date(l.created_at).getTime()>=cutoff)}const box=document.getElementById('adminLogList');if(box)box.innerHTML=rows.length?rows.map(l=>logRow(l,adminState.logType)).join(''):'<div class="empty-state">Nenhum log neste filtro.</div>'}
-function maintenanceFormValues(){
-  return{
-    message:document.getElementById('maintenanceMessage')?.value||'TDB em manutenção • voltamos em breve',
-    reason:document.getElementById('maintenanceReason')?.value||'',
-    allowAdminAccess:document.getElementById('maintenanceAdminAccess')?.checked!==false
-  };
-}
 async function renderOperations(){
   adminState.operations=await A().operations();
-  const o=adminState.operations||{},m=o.maintenance||{},internal=m.internal||{};
+  const o=adminState.operations||{},m=o.maintenance||{};
   const warnings=(o.warnings||[]).map(w=>`<div class="admin-operation-warning">${esc(w)}</div>`).join('');
   root().innerHTML=shell(`<div class="admin-head"><div><h1>Operação</h1><p>Salas, manutenção e qualidade por versão.</p></div><span class="admin-status ${m.enabled?'bad':'good'}">${m.enabled?'MANUTENÇÃO ATIVA':'SISTEMA ONLINE'}</span></div>
     ${warnings}
-    <div class="panel admin-info-panel admin-maintenance-panel"><div class="panel-header"><div><h2>Modo manutenção</h2><p class="muted">Usuários comuns ficam bloqueados. O painel administrativo permanece acessível e, quando permitido, o ADM pode usar todo o TDB para testar antes de liberar.</p></div></div>
-      <div class="admin-maintenance-grid">
-        <div class="field field-wide"><label>Mensagem pública</label><input id="maintenanceMessage" value="${esc(m.message||'TDB em manutenção • voltamos em breve')}" maxlength="240"></div>
-        <div class="field field-wide"><label>Motivo interno <small>• não aparece para usuários</small></label><textarea id="maintenanceReason" maxlength="500" rows="3" placeholder="Ex.: deploy da nova versão, teste do Xadrez, correção do Lobby…">${esc(internal.reason||'')}</textarea></div>
-        <label class="admin-maintenance-toggle"><input id="maintenanceAdminAccess" type="checkbox" ${m.allowAdminAccess!==false?'checked':''}><span><strong>Permitir acesso completo ao TDB para ADM</strong><small>Com manutenção ativa, uma sessão administrativa válida poderá abrir jogos, salas, música e perfis normalmente.</small></span></label>
-      </div>
-      <div class="admin-maintenance-meta"><span><b>Status:</b> ${m.enabled?'ATIVO':'desativado'}</span><span><b>Ativado em:</b> ${m.activatedAt?fmt(m.activatedAt):'—'}</span><span><b>Ativado por:</b> ${esc(internal.activatedBy||'—')}</span><span><b>Última alteração:</b> ${m.updatedAt?fmt(m.updatedAt):'—'}</span></div>
-      <div class="admin-maintenance-actions"><button class="btn btn-secondary" onclick="TDBAdminUI.saveMaintenance()">Salvar configurações</button>${m.enabled?`<button class="btn btn-primary" onclick="TDBAdminUI.openSiteAsAdmin()">Abrir TDB como administrador</button><button class="btn btn-dark" onclick="TDBAdminUI.previewAsUser()">Visualizar como usuário</button><button id="maintenanceToggleBtn" class="btn btn-danger" onclick="TDBAdminUI.toggleMaintenance(false)">Finalizar manutenção</button>`:`<button id="maintenanceToggleBtn" class="btn btn-danger" onclick="TDBAdminUI.toggleMaintenance(true)">Ativar manutenção</button>`}</div>
-      <small class="muted">O bloqueio é validado também no servidor. Ter apenas o link do painel não libera os jogos: o bypass exige uma sessão ADM válida.</small>
-    </div>
+    <div class="panel admin-info-panel"><h2>Modo manutenção</h2><p class="muted">Bloqueia ações de jogo e sala, mas mantém login, status e painel administrativo acessíveis.</p><div class="admin-search"><input id="maintenanceMessage" value="${esc(m.message||'TDB em manutenção • voltamos em breve')}" maxlength="240"><button id="maintenanceToggleBtn" class="btn ${m.enabled?'btn-secondary':'btn-danger'}" onclick="TDBAdminUI.toggleMaintenance(${m.enabled?'false':'true'})">${m.enabled?'Desativar manutenção':'Ativar manutenção'}</button></div><small class="muted">Estado confirmado pelo servidor: ${m.enabled?'ativo':'desativado'}${m.updatedAt?` • ${fmt(m.updatedAt)}`:''}</small></div>
     <div class="two-col"><div class="panel"><div class="panel-header"><h2>Salas recentes</h2><span>${(o.rooms||[]).length}</span></div><div class="panel-body admin-log-list">${(o.rooms||[]).map(r=>`<div class="admin-log-row"><time>${fmt(r.updated_at)}</time><span class="admin-log-source">${esc(r.game||'—')}</span><strong>${esc(r.name||r.code)}</strong><code>${esc(r.code)}</code><small>${r.players} jogador(es) • ${r.spectators} espectador(es) • ${esc(r.status)} • ${esc(r.privacy)}</small></div>`).join('')||'<div class="empty-state">Nenhuma sala.</div>'}</div></div><div class="panel"><div class="panel-header"><h2>Erros por versão</h2></div><div class="panel-body">${(o.errorVersions||[]).map(v=>`<div class="social-row"><strong>${esc(v.version)}</strong><span class="admin-status ${v.count>10?'bad':v.count>3?'warn':'good'}">${v.count} erro(s)</span></div>`).join('')||'<div class="empty-state">Sem erros recentes.</div>'}</div></div></div>`,'operations')
 }
-async function setMaintenanceFromForm(enabled,{confirmActivation=true}={}){
-  const values=maintenanceFormValues();
-  if(enabled&&confirmActivation&&!confirm('Ativar modo manutenção agora? Usuários comuns ficarão bloqueados, enquanto o ADM poderá continuar testando se essa opção estiver habilitada.'))return false;
-  const btn=document.getElementById('maintenanceToggleBtn');if(btn){btn.disabled=true;btn.textContent=enabled?'Ativando…':'Finalizando…'}
+async function toggleMaintenance(enabled){
+  const message=document.getElementById('maintenanceMessage')?.value||'';
+  if(enabled&&!confirm('Ativar modo manutenção agora? Jogadores comuns ficarão bloqueados até você desativar aqui.'))return;
+  const btn=document.getElementById('maintenanceToggleBtn');
+  if(btn){btn.disabled=true;btn.textContent=enabled?'Ativando…':'Desativando…'}
   try{
-    const result=await A().setMaintenance(enabled,values.message,{reason:values.reason,allowAdminAccess:values.allowAdminAccess});
-    if(!!result?.maintenance?.enabled!==!!enabled)throw new Error('O servidor não confirmou a alteração da manutenção.');
-    window.TDBPlatformUI?.setMaintenance?.({enabled:false});adminToast(enabled?'Modo manutenção ativado. Usuários comuns foram bloqueados.':'Modo manutenção encerrado. Usuários liberados.');await renderOperations();await window.TDBOnline?.refreshHealth?.();return true;
-  }catch(err){if(btn){btn.disabled=false;btn.textContent=enabled?'Ativar manutenção':'Finalizar manutenção'}adminToast(err.message||'Não foi possível alterar a manutenção.','error');return false}
+    const result=await A().setMaintenance(enabled,message);
+    const confirmed=!!result?.maintenance?.enabled===!!enabled;
+    if(!confirmed)throw new Error('O servidor não confirmou a alteração da manutenção.');
+    window.TDBPlatformUI?.setMaintenance?.({enabled:false});
+    adminToast(enabled?'Modo manutenção ativado. O ADM continua liberado para você.':'Modo manutenção desativado.');
+    await renderOperations();
+    await window.TDBOnline?.refreshHealth?.();
+  }catch(err){
+    if(btn){btn.disabled=false;btn.textContent=enabled?'Ativar manutenção':'Desativar manutenção'}
+    adminToast(err.message||'Não foi possível alterar a manutenção.','error');
+  }
 }
-async function toggleMaintenance(enabled){return setMaintenanceFromForm(enabled)}
-async function saveMaintenance(){const m=adminState.operations?.maintenance||{};const ok=await setMaintenanceFromForm(!!m.enabled,{confirmActivation:false});if(ok)adminToast('Configurações da manutenção salvas.')}
-function openSiteAsAdmin(){try{sessionStorage.removeItem('tdb_admin_preview_as_user')}catch{}location.hash='';location.reload()}
-function previewAsUser(){try{sessionStorage.setItem('tdb_admin_preview_as_user','1')}catch{}location.hash='';location.reload()}
 async function openTab(tab){
   adminState.tab=tab;
   try{
@@ -183,13 +171,13 @@ function searchUsers(){renderUsers(document.getElementById('adminUserSearch')?.v
 function filterReports(v){renderReports(v)}
 function showLogs(type){renderLogs(type)}
 async function logout(){await A().logout();sound('back');renderLogin()}
-function backToSite(){try{sessionStorage.removeItem('tdb_admin_preview_as_user')}catch{}location.hash='';location.reload()}
+function backToSite(){location.hash='';location.reload()}
 async function boot(){
   if(location.hash!=='#admin')return;
   const session=await A()?.session?.();
   if(session)openTab('overview');else renderLogin();
 }
-window.TDBAdminUI={boot,renderLogin,openTab,searchUsers,applyUserFilters,resetPassword,toggleBan,revoke,filterReports,applyReportFilters,showLogs,applyLogFilters,updateReport,toggleMaintenance,saveMaintenance,openSiteAsAdmin,previewAsUser,logout,backToSite};
+window.TDBAdminUI={boot,renderLogin,openTab,searchUsers,applyUserFilters,resetPassword,toggleBan,revoke,filterReports,applyReportFilters,showLogs,applyLogFilters,updateReport,toggleMaintenance,logout,backToSite};
 window.addEventListener('hashchange',()=>{if(location.hash==='#admin')boot()});
 boot();
 })();

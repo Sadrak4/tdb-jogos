@@ -1,38 +1,6 @@
-import {initSupabase,isSupabaseReady,getSupabaseClient} from './realtime-store.js';
-
+import { initSupabase,isSupabaseReady,getSupabaseClient } from './realtime-store.js';
 async function db(){await initSupabase();if(!isSupabaseReady())return null;return getSupabaseClient()}
 function realPlayer(p){return!!p?.id&&String(p.id).startsWith('TDB-')&&!p.bot}
 function pgnFromHistory(history=[]){const moves=[];for(let i=0;i<history.length;i+=2){const white=history[i]?.notation||'',black=history[i+1]?.notation||'';moves.push(`${Math.floor(i/2)+1}. ${white}${black?` ${black}`:''}`)}return moves.join(' ')}
-
-export async function recordGameResult(state,{reason=null}={}){
-  const c=await db();
-  if(!c||!state?.matchId||!['chess','truco','pool'].includes(state.game))return false;
-  let players=[],winnerIds=[],loserIds=[],resultType='draw',mode='default',metadata={};
-  if(state.game==='chess'){
-    players=[state.players?.white,state.players?.black].filter(Boolean);mode='1v1';
-    if(state.winner){winnerIds=[state.players[state.winner]?.id].filter(Boolean);loserIds=players.map(p=>p.id).filter(id=>!winnerIds.includes(id));resultType=state.status==='abandoned'?'abandonment':'win'}
-    metadata={status:state.status,drawReason:state.drawReason||null,pgn:pgnFromHistory(state.moveHistory||[]),moves:state.moveHistory||[],reason:reason||state.finishReason||null};
-  }else if(state.game==='pool'){
-    players=(state.players||[]).filter(Boolean);mode='8-ball';
-    if(state.winnerId){winnerIds=[state.winnerId];loserIds=[state.loserId||players.find(p=>p.id!==state.winnerId)?.id].filter(Boolean);resultType=String(state.finishReason||'').includes('abandon')?'abandonment':'win'}
-    metadata={variant:'8ball',reason:reason||state.finishReason||null,history:(state.history||[]).slice(0,18),groups:Object.fromEntries(players.map(p=>[p.id,p.group||null]))};
-  }else{
-    players=(state.players||[]).filter(Boolean);mode=state.mode||'default';
-    if(state.winner!==null&&state.winner!==undefined){winnerIds=players.filter(p=>p.team===state.winner).map(p=>p.id);loserIds=players.filter(p=>p.team!==state.winner).map(p=>p.id);resultType=state.phase==='abandoned'?'abandonment':'win'}
-    metadata={scores:state.scores||[],reason:reason||state.finishReason||null};
-  }
-  const counted=players.length>=2&&players.every(realPlayer);
-  const payload={match_id:state.matchId,room_code:state.roomCode||state.roomId||null,game:state.game,mode,result_type:resultType,participant_ids:players.map(p=>p.id),winner_ids:winnerIds,loser_ids:loserIds,participants:players.map(p=>({id:p.id,username:p.username,avatar:p.avatar||null,team:p.team??null,color:p.color??null,group:p.group??null})),metadata,counted,started_at:state.startedAt?new Date(state.startedAt).toISOString():null,finished_at:new Date().toISOString()};
-  const {error}=await c.from('tdb_game_results').upsert(payload,{onConflict:'match_id',ignoreDuplicates:true});
-  if(error)throw new Error(error.message);
-  return counted;
-}
-
-export async function profileHistory(userId){
-  const c=await db();if(!c)return{stats:{},recent:[]};
-  const {data,error}=await c.from('tdb_game_results').select('*').contains('participant_ids',[userId]).eq('counted',true).order('finished_at',{ascending:false}).limit(100);
-  if(error)throw new Error(error.message);
-  const rows=data||[],stats={};
-  for(const r of rows){const s=stats[r.game]||(stats[r.game]={played:0,wins:0,losses:0,draws:0});s.played++;if((r.winner_ids||[]).includes(userId))s.wins++;else if((r.loser_ids||[]).includes(userId))s.losses++;else s.draws++}
-  return{stats,recent:rows.slice(0,20)};
-}
+export async function recordGameResult(state,{reason=null}={}){const c=await db();if(!c||!state?.matchId||!['chess','truco'].includes(state.game))return false;let players=[],winnerIds=[],loserIds=[],resultType='draw',mode='default',metadata={};if(state.game==='chess'){players=[state.players?.white,state.players?.black].filter(Boolean);mode='1v1';if(state.winner){winnerIds=[state.players[state.winner]?.id].filter(Boolean);loserIds=players.map(p=>p.id).filter(id=>!winnerIds.includes(id));resultType=state.status==='abandoned'?'abandonment':'win'}metadata={status:state.status,drawReason:state.drawReason||null,pgn:pgnFromHistory(state.moveHistory||[]),moves:state.moveHistory||[],reason:reason||state.finishReason||null}}else{players=(state.players||[]).filter(Boolean);mode=state.mode||'default';if(state.winner!==null&&state.winner!==undefined){winnerIds=players.filter(p=>p.team===state.winner).map(p=>p.id);loserIds=players.filter(p=>p.team!==state.winner).map(p=>p.id);resultType=state.phase==='abandoned'?'abandonment':'win'}metadata={scores:state.scores||[],reason:reason||state.finishReason||null}}const counted=players.length>=2&&players.every(realPlayer);const payload={match_id:state.matchId,room_code:state.roomCode||state.roomId||null,game:state.game,mode,result_type:resultType,participant_ids:players.map(p=>p.id),winner_ids:winnerIds,loser_ids:loserIds,participants:players.map(p=>({id:p.id,username:p.username,avatar:p.avatar||null,team:p.team??null,color:p.color??null})),metadata,counted,started_at:state.startedAt?new Date(state.startedAt).toISOString():null,finished_at:new Date().toISOString()};const {error}=await c.from('tdb_game_results').upsert(payload,{onConflict:'match_id',ignoreDuplicates:true});if(error)throw new Error(error.message);return counted}
+export async function profileHistory(userId){const c=await db();if(!c)return{stats:{},recent:[]};const {data,error}=await c.from('tdb_game_results').select('*').contains('participant_ids',[userId]).eq('counted',true).order('finished_at',{ascending:false}).limit(100);if(error)throw new Error(error.message);const rows=data||[],stats={};for(const r of rows){const s=stats[r.game]||(stats[r.game]={played:0,wins:0,losses:0,draws:0});s.played++;if((r.winner_ids||[]).includes(userId))s.wins++;else if((r.loser_ids||[]).includes(userId))s.losses++;else s.draws++}return{stats,recent:rows.slice(0,20)}}
