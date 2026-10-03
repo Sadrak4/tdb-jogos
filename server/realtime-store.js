@@ -76,7 +76,7 @@ export async function initSupabase(){
     try{
       supabaseClient=createClient(url,secret,{
         auth:{persistSession:false,autoRefreshToken:false},
-        global:{headers:{'X-Client-Info':'tdb-jogos-server/7.2.2'}}
+        global:{headers:{'X-Client-Info':'tdb-jogos-server/7.2.3'}}
       });
       const checks=await withTimeout(Promise.all([
         supabaseClient.from('tdb_rooms').select('code',{head:true,count:'exact'}).limit(1),

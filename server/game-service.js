@@ -70,7 +70,7 @@ export async function refreshGame(code){
     const room=await getRoomPrivate(code);
     if(room){const ticked=Blackjack.tick(state,room,Date.now());state=ticked.state}
   }
-  if(state.game==='pool'&&state.status==='playing')state=Pool.tick(state,Date.now());
+  if(state.game==='pool'&&state.status==='playing'){const now=Date.now();state=Pool.tick(state,now);state=Pool.runBotTurn(state,now)}
   if((state.version||0)!==beforeVersion||isTerminal(state)){
     await saveGame(code,state);
     await finalizeIfNeeded(state,state.status==='timeout'?'timeout':state.lastAutoAction?.type||null);

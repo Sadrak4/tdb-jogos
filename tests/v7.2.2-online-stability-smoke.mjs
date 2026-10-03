@@ -4,7 +4,7 @@ import * as Pool from '../server/pool-engine.js';
 
 const read=(p)=>fs.readFileSync(new URL(`../${p}`,import.meta.url),'utf8');
 const pkg=JSON.parse(read('package.json'));
-assert.equal(pkg.version,'7.2.2','package version must be 7.2.2');
+assert.match(pkg.version,/^7\.2\.[23]$/,'package version must remain on the 7.2.x stability line');
 
 const client=read('core/online-client.js');
 assert.match(client,/REQUEST_TIMEOUT/,'online client must surface request timeout');

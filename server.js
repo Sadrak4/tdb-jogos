@@ -43,7 +43,7 @@ async function start(port,attempt=0){
     const url=`http://localhost:${port}`;
     console.log('');
     console.log('======================================');
-    console.log(' TDB v7.2.2 - Estabilidade online / Sinuca');
+    console.log(' TDB v7.2.3 - Estabilidade online / Sinuca');
     console.log('======================================');
     console.log(`Site: ${url}`);
     console.log(`Health: ${url}/api/health`);

@@ -836,7 +836,9 @@ function waitingHostActions(room){
       <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?'Iniciar partida':'Aguardando jogadores'}</button>`;
   }
   if(room.game==='pool'){
-    return `${editRules}<button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?'Abrir a mesa':'Aguardando adversário'}</button>`;
+    const hasHumanOpponent=(room.players||[]).filter(p=>!p.bot&&!String(p.id||'').startsWith('BOT-')).length>=2;
+    return `${editRules}<button class="btn btn-secondary" onclick="startPoolWithBot()">🎱 Jogar contra BOT</button>
+      <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?(hasHumanOpponent?'Abrir a mesa':'Abrir a mesa'):'Aguardando adversário'}</button>`;
   }
   if(room.game==='blackjack'){
     return `<button class="btn btn-primary" onclick="startGame()">Abrir mesa de Blackjack</button>`;
@@ -1608,7 +1610,7 @@ function openMusicRoom(){
 }
 window.openMusicRoom=openMusicRoom;
 
-async function startGame(){
+async function startGame(startOptions={}){
   return guardedAction('start-game',async()=>{
   const room=state.activeRoom;
   if(!room) return toast('Sala não encontrada.');
@@ -1616,13 +1618,14 @@ async function startGame(){
   if(!isGameEnabled(room.game)) return blackjackMaintenance();
 
   if(room.game==='music') return openMusicRoom();
-  if((room.players||[]).length<minimumPlayersForRoom(room)) return toast(`A sala ainda precisa de ${minimumPlayersForRoom(room)} jogador(es).`);
+  const withPoolBot=room.game==='pool'&&startOptions?.withPoolBot===true;
+  if(!withPoolBot&&(room.players||[]).length<minimumPlayersForRoom(room)) return toast(`A sala ainda precisa de ${minimumPlayersForRoom(room)} jogador(es).`);
 
   if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','pool','chess'].includes(room.game)){
     if(!ensureOnlineMultiplayerReady()) return;
 
     const required=room.game==='truco'?roomCapacity(room):['chess','pool'].includes(room.game)?2:1;
-    if((room.players?.length||0)<required){
+    if(!withPoolBot&&(room.players?.length||0)<required){
       return toast(`${g.name} precisa de ${required} jogador${required>1?'es':''}.`);
     }
 
@@ -1635,7 +1638,7 @@ async function startGame(){
     let ok=false;
     window.TDBPlatformUI?.showLoading?.('Sincronizando partida…');
     try{
-      ok=await window.TDBOnline.startGame(room.code);
+      ok=await window.TDBOnline.startGame(room.code,{withBot:withPoolBot});
     }finally{
       window.TDBPlatformUI?.hideLoading?.();
     }
@@ -1696,6 +1699,18 @@ async function startGame(){
 
   });
 }
+
+async function startPoolWithBot(){
+  const room=state.activeRoom;
+  if(!room||room.game!=='pool')return toast('Entre em uma sala de Sinuca primeiro.');
+  if(room.ownerId!==state.user?.id)return toast('Somente o host pode adicionar o BOT.');
+  const humans=(room.players||[]).filter(p=>!p.bot&&!String(p.id||'').startsWith('BOT-'));
+  if(humans.length>1)return toast('Já existe um adversário real na sala.');
+  if(Core.mode!=='online'||!window.TDBOnline?.connected)return toast('O BOT da Sinuca usa o servidor online.');
+  return startGame({withPoolBot:true});
+}
+window.startPoolWithBot=startPoolWithBot;
+
 function copyCode(code){
   if(navigator.clipboard) navigator.clipboard.writeText(code).then(()=>toast('Código copiado.'));
   else toast(`Código: ${code}`);
@@ -2023,7 +2038,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'7.2.2',
+      version:'7.2.3',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)

@@ -62,6 +62,12 @@ export default async function handler(req,res){
     let player=room.players.find(p=>p.id===user.id);
     const now=Date.now();
     if(!player){
+      // O BOT da Sinuca funciona como adversário de teste, não como vaga permanente.
+      // Se um jogador real entrar enquanto a sala estiver aberta, o BOT sai automaticamente.
+      if(room.game==='pool'&&room.status==='open'&&room.players.some(p=>p.bot||String(p.id||'').startsWith('BOT-'))){
+        room.players=room.players.filter(p=>!p.bot&&!String(p.id||'').startsWith('BOT-'));
+        room.poolBotEnabled=false;
+      }
       if(room.players.length>=capacity(room))return res.status(409).json({ok:false,error:'Sala cheia.'});
       const wasEmpty=room.players.length===0;
       player={id:user.id,username:user.username,avatar:user.avatar||null,avatarImage:user.avatarImage||null,connection:'online',lastSeenAt:now};

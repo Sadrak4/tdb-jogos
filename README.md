@@ -1,44 +1,18 @@
-# TDB v7.2.2 — Estabilidade Online + Sinuca 8-Ball
+# TDB v7.2.3 — Sinuca com BOT
 
-A v7.2.2 mantém tudo da v7.2.1/v7.2.0 e faz uma revisão do multiplayer depois da entrada da **Sinuca 8-Ball**.
+A v7.2.3 mantém as correções de estabilidade online da v7.2.2 e adiciona um BOT de Sinuca para permitir iniciar e testar a mesa com apenas uma conta.
 
-## Jogos no lobby
+## Destaques
 
-1. Truco
-2. Sinuca
-3. Xadrez
-4. TDB Lobby
-5. Blackjack — Em manutenção
+- Sinuca 8-Ball multiplayer com física autoritativa no servidor.
+- **Jogar contra BOT** diretamente na sala de espera.
+- Bot TDB com mira básica, escolha de alvo, força, bola na mão e chamada da bola 8.
+- Jogadores reais substituem automaticamente o BOT quando entram numa sala aberta.
+- Música continua sem limite por pessoa.
+- Blackjack continua em manutenção.
 
-## Principais pontos desta versão
-
-- Sinuca 8-Ball 1x1 online com motor próprio e física autoritativa no servidor.
-- Entrada de amigo/sala revisada.
-- Recuperação automática de salas presas como `playing` sem partida real.
-- Start e revanche transacionais.
-- Timeouts de cliente e servidor para impedir loading infinito.
-- Recuperação visual da Sinuca se a sincronização falhar.
-- Menos writes de presença durante partidas.
-- Espectador só entra quando existe partida oficial ativa.
-- TDB Lobby continua com fila de músicas sem limite por pessoa.
-
-Leia `ATUALIZACAO-v7.2.2.md` para a lista completa e `REVISAO-v7.2.2.md` para os testes realizados.
+Leia `ATUALIZACAO-v7.2.3.md` para os detalhes desta versão.
 
 ## Supabase
 
-Se seu banco já está atualizado até a v7.1.7, **a v7.2.2 não exige SQL novo**.
-
-## Desenvolvimento local
-
-```bash
-npm install
-npm run dev
-```
-
-## Testes principais
-
-```bash
-npm run test:v720
-npm run test:v721
-npm run test:v722
-```
+Se o banco já está atualizado até a v7.1.7, a **v7.2.3 não exige SQL novo**.
