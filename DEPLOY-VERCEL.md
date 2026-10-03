@@ -1,53 +1,26 @@
-# DEPLOY — TDB v7.0.1 GAMEPLAY FIX
+# DEPLOY — TDB v7.2.2
 
-## Banco
+1. Não execute SQL novo para esta versão.
+2. Extraia `TDB-v7.2.2-ONLINE-STABILITY.zip`.
+3. Substitua os arquivos do repositório pelos arquivos desta versão.
+4. Abra o GitHub Desktop e confira as alterações.
+5. Commit sugerido: `TDB v7.2.2 - Online Stability`.
+6. Clique em **Push origin**.
+7. Aguarde o Vercel concluir o deploy e mostrar **Ready**.
+8. Abra `/api/health` e confirme `"version": "7.2.2"`.
 
-Não execute SQL novo. Esta versão não altera o schema do Supabase.
+## Teste recomendado após o deploy
 
-## Publicar
+Use duas contas/dispositivos diferentes:
 
-1. Abra o repositório `tdb-jogos` no GitHub Desktop.
-2. `Fetch origin`.
-3. Faça `Pull origin` se aparecer.
-4. Extraia `TDB-v7.0.1-GAMEPLAY-FIX.zip`.
-5. Copie os arquivos por cima do repositório.
-6. Commit sugerido:
+1. Conta A cria uma sala pública de Sinuca.
+2. Conta B entra pelo lobby/código/convite.
+3. Confirme que os dois aparecem na sala.
+4. Host inicia a partida.
+5. Faça pelo menos uma tacada em cada conta.
+6. Atualize uma das páginas e confira a reconexão.
+7. Finalize/saia e volte para a sala.
+8. Teste uma revanche.
+9. Se tiver uma terceira conta, teste **Ao vivo agora → Assistir**.
 
-```text
-TDB v7.0.1 Gameplay Fix
-```
-
-7. `Commit to main`.
-8. `Push origin`.
-9. Aguarde o deploy da Vercel.
-
-## Conferir versão
-
-Abra:
-
-```text
-https://tdb-jogos.vercel.app/api/health
-```
-
-Esperado:
-
-```json
-{
-  "app": "TDB",
-  "version": "7.0.1"
-}
-```
-
-## Teste obrigatório após deploy
-
-Faça em zoom 100%:
-
-1. Truco contra bot: mesa, mão e cartas jogadas devem aparecer.
-2. Xadrez contra bot: o tabuleiro 8×8 deve aparecer e aceitar clique.
-3. TDB Lobby: player/biblioteca devem aparecer sem uma tela escura na frente.
-4. Blackjack: distribuir várias cartas; elas não devem se sobrepor.
-5. TDB Lobby screen share: testar iniciar/parar e visualizar com outra conta.
-
-## Observação
-
-Os identificadores internos ainda usam `music`/`lounge-*` e o repositório continua `tdb-jogos` por compatibilidade. Isso é intencional e não muda o nome mostrado ao usuário, que agora é apenas **TDB** e **TDB Lobby**.
+A fila de músicas do TDB Lobby continua sem limite por pessoa e o Blackjack continua em manutenção.

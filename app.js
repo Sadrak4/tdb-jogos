@@ -38,6 +38,29 @@ const state = {
 };
 window.TDBAppState=state;
 
+const SIDEBAR_COLLAPSE_KEY='tdb_sidebar_collapsed';
+function applySidebarState(collapsed=Core.storage.get(SIDEBAR_COLLAPSE_KEY,false)){
+  const value=!!collapsed;
+  document.body?.classList.toggle('tdb-sidebar-collapsed',value);
+  document.documentElement?.classList.toggle('tdb-sidebar-collapsed',value);
+  return value;
+}
+let sidebarToggleLocked=false;
+function toggleSidebar(){
+  if(sidebarToggleLocked) return;
+  sidebarToggleLocked=true;
+  const next=!document.body?.classList.contains('tdb-sidebar-collapsed');
+  Core.storage.set(SIDEBAR_COLLAPSE_KEY,next);
+  applySidebarState(next);
+  const button=document.querySelector('.sidebar-toggle');
+  if(button){
+    button.setAttribute('aria-expanded',String(!next));
+    button.setAttribute('title',next?'Abrir barra lateral':'Esconder barra lateral');
+  }
+  window.setTimeout(()=>{sidebarToggleLocked=false},190);
+}
+window.toggleSidebar=toggleSidebar;
+applySidebarState();
 
 window.addEventListener('tdb-online-sync',event=>{
   if(Core.mode!=='online'||window.__TDB_EXPLICIT_LOGOUT__===true) return;
@@ -54,6 +77,10 @@ window.addEventListener('tdb-online-sync',event=>{
       const previousConnections=new Map((state.activeRoom.players||[]).map(p=>[p.id,p.connection||'online']));
       state.activeRoom=latest;
       Core.rooms.setActive(latest);
+      if(rejectDisabledRoom(latest,{leaveOnline:true})){
+        if(state.view!=='lobby') state.view='lobby';
+        return renderLobby();
+      }
       for(const p of latest.players||[]){
         const before=previousConnections.get(p.id);
         const after=p.connection||'online';
@@ -66,7 +93,7 @@ window.addEventListener('tdb-online-sync',event=>{
       if(state.view==='waiting'){
         patchWaitingRoom(previousOwner!==latest.ownerId);
 
-        if(latest.status==='playing' && ['truco','chess','blackjack'].includes(latest.game) && OnlineGameBridge.roomCode!==latest.code){
+        if(latest.status==='playing' && ['truco','pool','chess'].includes(latest.game) && OnlineGameBridge.roomCode!==latest.code){
           OnlineGameBridge.start(latest,'player');
         }
       }
@@ -93,6 +120,9 @@ window.addEventListener('tdb-online-status',event=>{
   const ping=document.getElementById('onlinePingPill');
   if(ping) ping.textContent=Number.isFinite(detail.latencyMs)?`${detail.latencyMs} ms`:'';
   window.TDBPlatformUI?.setMaintenance?.(detail.maintenance||{enabled:false});
+  if(detail.connected && state.activeRoom?.status==='playing' && ['truco','pool','chess'].includes(state.activeRoom.game) && !OnlineGameBridge.roomCode){
+    OnlineGameBridge.start(state.activeRoom,currentRole(state.activeRoom)==='spectator'?'spectator':'player');
+  }
   if(!el) return;
   el.classList.remove('online','warning','connecting','offline');
   const phase=detail.phase||'connecting';
@@ -114,9 +144,11 @@ const OnlineGameBridge={
   roomCode:null,
   role:'player',
   start(room,role='player'){
-    if(Core.mode!=='online' || !window.TDBOnline?.connected) return false;
+    if(Core.mode!=='online' || !window.TDBOnline?.joinGame || !room?.code) return false;
     this.roomCode=room.code;
     this.role=role;
+    // joinGame mantém polling de recuperação mesmo se a conexão ainda estiver
+    // terminando de subir. Isso evita o Xadrez depender de F5 para abrir.
     window.TDBOnline.joinGame(room.code,state.user.id,role);
     return true;
   },
@@ -142,7 +174,17 @@ window.addEventListener('tdb-game-state',event=>{
   }else if(gameState.game==='truco'){
     state.view='playing-truco';
     applyOnlineTrucoState(gameState,OnlineGameBridge.role);
+  }else if(gameState.game==='pool'){
+    state.view='playing-pool';
+    try{
+      if(typeof window.applyOnlinePoolState!=='function')throw new Error('Módulo visual da Sinuca não carregou.');
+      window.applyOnlinePoolState(gameState,state.activeRoom,OnlineGameBridge.role);
+    }catch(err){
+      console.error('[TDB Sinuca] Falha ao aplicar estado:',err);
+      window.renderPoolRecovery?.(err);
+    }
   }else if(gameState.game==='blackjack'){
+    if(!isGameEnabled('blackjack')) return rejectDisabledRoom(state.activeRoom||{code:roomCode,game:'blackjack'},{leaveOnline:true});
     state.view='playing-blackjack';
     window.applyOnlineBlackjackState?.(gameState,state.activeRoom,OnlineGameBridge.role);
   }
@@ -150,10 +192,40 @@ window.addEventListener('tdb-game-state',event=>{
 
 const games = {
   truco: { name: 'Truco', symbol: '🃏', subtitle: 'Blefe, parceria e resenha.', players: 4, minPlayers: 2, prefix: 'TRC' },
-  blackjack: { name: 'Blackjack', symbol: '♠️', subtitle: 'Mesa premium contra dealer automático.', players: 3, minPlayers: 1, prefix: 'BLJ' },
+  pool: { name: 'Sinuca', symbol: '🎱', subtitle: '8-Ball online com física, mira e partidas entre amigos.', players: 2, minPlayers: 2, prefix: 'SNK' },
   chess: { name: 'Xadrez', symbol: '♟️', subtitle: 'Partidas rápidas 1x1 entre amigos.', players: 2, minPlayers: 2, prefix: 'XDR' },
-  music: { name: 'TDB Lobby', symbol: '◈', subtitle: 'Música, chat e compartilhamento de tela em uma sala.', players: 20, minPlayers: 1, prefix: 'MUS' }
+  music: { name: 'TDB Lobby', symbol: '◈', subtitle: 'Música, chat e compartilhamento de tela em uma sala.', players: 20, minPlayers: 1, prefix: 'MUS' },
+  blackjack: { name: 'Blackjack', symbol: '♠️', subtitle: 'Em manutenção temporária.', players: 3, minPlayers: 1, prefix: 'BLJ' }
 };
+const FEATURE_FLAGS=Object.freeze({blackjack:false});
+const CHESS_BOT_DIFFICULTIES=Object.freeze({
+  easy:{label:'Fácil',description:'Joga legalmente, enxerga capturas simples e ainda comete erros.'},
+  medium:{label:'Médio',description:'Avalia material, desenvolvimento, ameaças e algumas respostas à frente.'},
+  hard:{label:'Difícil',description:'Pesquisa mais variantes, prioriza táticas, segurança do rei e finais.'}
+});
+function chessBotDifficultyValue(value){
+  const raw=typeof value==='object'?(value?.chessBotDifficulty||value?.botDifficulty):value;
+  return Object.prototype.hasOwnProperty.call(CHESS_BOT_DIFFICULTIES,String(raw||'').toLowerCase())?String(raw).toLowerCase():'easy';
+}
+function chessBotDifficultyLabel(value){return CHESS_BOT_DIFFICULTIES[chessBotDifficultyValue(value)].label}
+window.chessBotDifficultyLabel=chessBotDifficultyLabel;
+function isGameEnabled(key){return key!=='blackjack'||FEATURE_FLAGS.blackjack===true}
+function blackjackMaintenance(){toast('Blackjack está em manutenção. Ele volta em uma próxima atualização.')}
+function rejectDisabledRoom(room,{leaveOnline=false,notify=true}={}){
+  if(!room || isGameEnabled(room.game)) return false;
+  OnlineGameBridge.stop();
+  if(state.activeRoom?.code===room.code){
+    saveActiveRoom(null);
+  }
+  if(state.selectedGame===room.game) state.selectedGame=null;
+  if(leaveOnline && Core.mode==='online' && window.TDBOnline?.connected && room.code){
+    Promise.resolve(window.TDBOnline.leaveRoom?.(room.code)).catch(()=>{});
+  }
+  state.view='lobby';
+  if(notify) setTimeout(blackjackMaintenance,40);
+  return true;
+}
+window.blackjackMaintenance=blackjackMaintenance;
 
 Core.sound.setEnabled(state.settings.sound);
 window.TDBSound?.configure?.({enabled:state.settings.sound,master:(state.settings.masterVolume??55)/100,ui:(state.settings.uiVolume??42)/100,game:(state.settings.gameVolume??50)/100,notification:(state.settings.notificationVolume??48)/100});
@@ -227,6 +299,24 @@ function initials(name='Jogador'){
 function escapeHtml(str=''){
   return String(str).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
+function safeRemoteImage(value){
+  const raw=String(value||'').trim();
+  if(!raw) return '';
+  try{
+    const u=new URL(raw,location.href);
+    return ['http:','https:'].includes(u.protocol)?u.href:'';
+  }catch{return ''}
+}
+function avatarHtml(user,className='avatar'){
+  const image=safeRemoteImage(user?.avatarImage||user?.avatar_image||'');
+  const fallback=escapeHtml(user?.avatar||initials(user?.username||'Jogador'));
+  const label=escapeHtml(user?.username||'Jogador');
+  return `<div class="${escapeHtml(className)}${image?' has-photo':''}">${image?`<img src="${escapeHtml(image)}" alt="Foto de ${label}" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove();this.parentElement.classList.remove('has-photo');this.parentElement.textContent='${fallback}'">`:fallback}</div>`;
+}
+function profileBannerStyle(value){
+  const image=safeRemoteImage(value);
+  return image?` style="background-image:url('${escapeHtml(image)}')"`:'';
+}
 function toast(msg){
   const el=document.getElementById('toast');
   el.textContent=msg; el.classList.add('show');
@@ -290,11 +380,11 @@ async function openFriendQuickProfile(id){
   document.body.appendChild(el);
   try{
     const data=window.TDBOnline?.connected?await window.TDBOnline.getPublicProfile(id):{user:f,presence:{status:'offline'},stats:{},recent:[]};
-    const u=data.user||f, stats=data.stats||{}, gameNames={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack'};
+    const u=data.user||f, stats=data.stats||{}, gameNames={truco:'Truco',pool:'Sinuca',chess:'Xadrez',blackjack:'Blackjack'};
     const presenceLabel=presenceDisplayLabel(data.presence||{status:f.status||'offline'});
     const statHtml=Object.entries(stats).map(([game,x])=>`<article><span>${escapeHtml(gameNames[game]||game)}</span><strong>${Number(x.wins||0)}V</strong><small>${Number(x.played||0)} partidas • ${Number(x.losses||0)}D • ${Number(x.draws||0)}E</small></article>`).join('')||'<p class="muted">Ainda sem partidas competitivas registradas.</p>';
     const recent=(data.recent||[]).slice(0,5).map(r=>{const won=(r.winner_ids||[]).includes(id),lost=(r.loser_ids||[]).includes(id);return `<div class="profile-public-history"><span>${escapeHtml(gameNames[r.game]||r.game)}</span><strong>${won?'Vitória':lost?'Derrota':'Empate'}</strong><small>${new Date(r.finished_at).toLocaleDateString('pt-BR')}</small></div>`}).join('')||'<div class="muted">Sem histórico recente.</div>';
-    el.querySelector('.modal-body').innerHTML=`${u.banner?`<div class="profile-banner" style="background-image:url('${escapeHtml(u.banner)}')"></div>`:''}<div class="profile-card profile-public-card"><div class="profile-avatar-xl">${escapeHtml(u.avatar||initials(u.username))}</div><h2>${escapeHtml(u.username)}</h2><div class="code-box">${escapeHtml(u.id)}</div><p class="presence-line"><i class="dot ${data.presence?.status==='offline'?'offline':data.presence?.status==='away'?'busy':'online'}"></i>${escapeHtml(presenceLabel)}</p></div><div class="profile-public-stats">${statHtml}</div><h3 class="profile-public-subtitle">Partidas recentes</h3><div class="profile-public-recent">${recent}</div><div class="modal-foot">${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${u.id}')">Convidar para minha sala</button>`:'<span class="muted">Entre em uma sala para convidar este amigo.</span>'}</div>`;
+    el.querySelector('.modal-body').innerHTML=`${u.banner?`<div class="profile-banner" style="background-image:url('${escapeHtml(u.banner)}')"></div>`:''}<div class="profile-card profile-public-card">${avatarHtml(u,'profile-avatar-xl')}<h2>${escapeHtml(u.username)}</h2><div class="code-box">${escapeHtml(u.id)}</div><p class="presence-line"><i class="dot ${data.presence?.status==='offline'?'offline':data.presence?.status==='away'?'busy':'online'}"></i>${escapeHtml(presenceLabel)}</p></div><div class="profile-public-stats">${statHtml}</div><h3 class="profile-public-subtitle">Partidas recentes</h3><div class="profile-public-recent">${recent}</div><div class="modal-foot">${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${u.id}')">Convidar para minha sala</button>`:'<span class="muted">Entre em uma sala para convidar este amigo.</span>'}</div>`;
   }catch(err){const body=el.querySelector('.modal-body');if(body)body.innerHTML=`<div class="empty-state">${escapeHtml(err.message||'Não foi possível carregar o perfil.')}</div>`}
 }
 function presenceDisplayLabel(p){
@@ -303,6 +393,7 @@ function presenceDisplayLabel(p){
   if(status==='listening'||game==='music')return'Ouvindo música';
   if(status==='playing'&&game==='truco')return'No Truco';
   if(status==='playing'&&game==='chess')return'No Xadrez';
+  if(status==='playing'&&game==='pool')return'Na Sinuca';
   if(status==='playing'&&game==='blackjack')return'No Blackjack';
   if(status==='watching')return'Assistindo uma partida';
   return'Online';
@@ -318,6 +409,10 @@ function setPresence(status,extra={}){
   if(state.user?.id) Core.presence.set(state.user.id,status,extra);
 }
 function getActiveMatchByRoom(roomCode){ return Core.matches.byRoom(roomCode); }
+function isRoomLive(room){
+  if(!room||!['truco','pool','chess'].includes(room.game)) return false;
+  return room.status==='playing' || !!getActiveMatchByRoom(room.code);
+}
 function upsertMatch(match){ Core.matches.upsert(match); Core.realtime.publish(`match:${match.matchId}`,match); return match; }
 function finishMatch(matchId,reason='finished'){
   const matches=Core.matches.list(); const m=matches.find(x=>x.matchId===matchId); if(!m) return;
@@ -335,19 +430,22 @@ function currentRole(room){
 }
 function addSpectator(room,user){
   room.spectators=room.spectators||[];
-  if(!room.spectators.some(s=>s.id===user.id)) room.spectators.push({id:user.id,username:user.username,avatar:user.avatar});
+  if(!room.spectators.some(s=>s.id===user.id)) room.spectators.push({id:user.id,username:user.username,avatar:user.avatar,avatarImage:user.avatarImage||null});
   syncLocalRoom(room);
 }
 function removeSpectator(room,userId){ room.spectators=(room.spectators||[]).filter(s=>s.id!==userId); syncLocalRoom(room); }
-function publicLiveMatches(){
-  return state.rooms.filter(r=>r.status==='playing').map(room=>({room,match:getActiveMatchByRoom(room.code),spectators:(room.spectators||[]).length}));
+function publicLiveMatches(game=null){
+  return state.rooms
+    .filter(room=>isRoomLive(room) && (!game||room.game===game))
+    .map(room=>({room:{...room,status:'playing'},match:getActiveMatchByRoom(room.code),spectators:(room.spectators||[]).length}));
 }
 async function watchRoom(code){
   let room=getRoomByCode(code);
   if(!room) return toast('Sala não encontrada.');
-  if(room.status!=='playing') return toast('Essa partida ainda não começou.');
+  if(room.game==='blackjack'&&!isGameEnabled('blackjack')) return blackjackMaintenance();
+  if(!isRoomLive(room)) return toast('Essa partida ainda não começou.');
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess','blackjack'].includes(room.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','pool','chess'].includes(room.game)){
     if(!ensureOnlineMultiplayerReady()) return;
 
     const remoteRoom=await window.TDBOnline.watchRoom(code);
@@ -367,6 +465,7 @@ async function watchRoom(code){
   setPresence('watching',{roomCode:room.code,game:room.game});
 
   if(room.game==='chess' && typeof window.renderChessSpectator==='function') return window.renderChessSpectator(room);
+  if(room.game==='pool' && typeof window.renderPoolSpectator==='function') return window.renderPoolSpectator(room);
   if(room.game==='truco' && typeof window.renderTrucoSpectator==='function') return window.renderTrucoSpectator(room);
   toast('Modo espectador indisponível.');
 }
@@ -463,6 +562,7 @@ function roomCapacity(room){
   if(!room) return 0;
   if(room.game==='truco') return Number(room.trucoSeats||4);
   if(room.game==='blackjack') return 3;
+  if(room.game==='pool') return 2;
   if(room.game==='music') return Number(room.musicCapacity||20);
   return games[room.game].players;
 }
@@ -494,8 +594,8 @@ function renderAuth(mode='login'){
       </div>
       <div class="auth-copy">
         <h1>A espera ficou<br>mais divertida.</h1>
-        <p>Truco, Xadrez, Blackjack e música em um só lugar. Entre com a galera e transforme aqueles minutos de fila em uma partida.</p>
-        <div class="pill-row"><span class="pill">Truco</span><span class="pill">Blackjack</span><span class="pill">Xadrez</span><span class="pill">TDB Lobby</span></div>
+        <p>Truco, Sinuca, Xadrez e TDB Lobby em um só lugar. Entre com a galera e transforme aqueles minutos de fila em uma partida.</p>
+        <div class="pill-row"><span class="pill">Truco</span><span class="pill">Sinuca</span><span class="pill">Xadrez</span><span class="pill">TDB Lobby</span></div>
       </div>
     </aside>
     <section class="auth-panel">
@@ -585,25 +685,25 @@ function renderAuth(mode='login'){
 
 function topbar(active='home'){
   return `<header class="topbar">
+    <button class="sidebar-toggle" type="button" onclick="toggleSidebar()" title="Esconder/mostrar barra lateral" aria-label="Esconder ou mostrar barra lateral" aria-expanded="${!document.body?.classList.contains('tdb-sidebar-collapsed')}"><span>‹</span></button>
     <div class="topbar-left">
       <div class="top-brand" onclick="goHome()" style="cursor:pointer">${logoTag()}<strong>TDB</strong></div>
       <nav class="nav-links">
         <button data-label="Início" class="nav-link ${active==='home'?'active':''}" onclick="goHome()">${uiIcon('home')}<span>Início</span></button>
         <button data-label="Amigos" class="nav-link ${active==='friends'?'active':''}" onclick="renderFriends()">${uiIcon('friends')}<span>Amigos</span></button>
-        <button data-label="Perfil" class="nav-link ${active==='profile'?'active':''}" onclick="renderProfile()">${uiIcon('profile')}<span>Perfil</span></button>
         <button data-label="Configurações" class="nav-link ${active==='settings'?'active':''}" onclick="renderSettings()">${uiIcon('settings')}<span>Configurações</span></button>
       </nav>
     </div>
     <div class="topbar-right">
       <span id="onlineStatusPill" class="online-status-pill ${window.TDBOnline?.readyForMultiplayer?'online':window.TDBOnline?.phase==='reconnecting'||window.TDBOnline?.phase==='connecting'?'connecting':'offline'}">${window.TDBOnline?.readyForMultiplayer?(window.TDBOnline?.realtime?'ONLINE':'ONLINE • FALLBACK'):window.TDBOnline?.phase==='reconnecting'?'RECONECTANDO…':window.TDBOnline?.phase==='connecting'?'CONECTANDO…':'OFFLINE'}</span><span id="onlinePingPill" class="online-ping-pill">${Number.isFinite(window.TDBOnline?.latencyMs)?`${window.TDBOnline.latencyMs} ms`:''}</span>
-      <div class="profile-mini" onclick="renderProfile()" style="cursor:pointer"><div class="avatar">${escapeHtml(state.user?.avatar||initials(state.user?.username))}</div><div class="profile-lines"><strong>${escapeHtml(state.user?.username||'Jogador')}</strong><small>${escapeHtml(state.user?.id||'')}</small></div></div>
+      <div class="profile-mini" onclick="renderProfile()" style="cursor:pointer">${avatarHtml(state.user,'avatar')}<div class="profile-lines"><strong>${escapeHtml(state.user?.username||'Jogador')}</strong><small>${escapeHtml(state.user?.id||'')}</small></div></div>
       <button class="btn btn-dark" title="Sair" onclick="logout()">${uiIcon('logout')}<span>Sair</span></button>
     </div>
   </header>`;
 }
 
-function renderLiveMatches(){
-  const live=publicLiveMatches();
+function renderLiveMatches(game=null){
+  const live=publicLiveMatches(game);
   if(!live.length) return `<div class="live-empty">Nenhuma partida ao vivo agora.</div>`;
   return live.map(({room,spectators})=>{
     const names=(room.players||[]).map(p=>escapeHtml(p.username)).join(room.game==='music'?' • ':' vs ');
@@ -612,6 +712,7 @@ function renderLiveMatches(){
 }
 
 function exitActiveContext(reason='leave'){
+  window.cleanupPoolUi?.();
   OnlineGameBridge.stop();
   const room=state.activeRoom;
   if(!room) return;
@@ -689,7 +790,7 @@ function patchLobbyDynamic(){
   const pulse=document.getElementById('lobbyPulseWrap');
 
   if(live) live.innerHTML=renderLiveMatches();
-  if(gamesBox) gamesBox.innerHTML=gameCard('truco')+gameCard('blackjack')+gameCard('chess')+gameCard('music');
+  if(gamesBox) gamesBox.innerHTML=gameCard('truco')+gameCard('pool')+gameCard('chess')+gameCard('music')+gameCard('blackjack');
   if(friends) friends.innerHTML=state.friends.slice(0,3).map(friendCard).join('');
   if(pulse) pulse.innerHTML=lobbyPulseHtml();
 }
@@ -698,7 +799,7 @@ function visibleRoomsForSelectedGame(){
   if(!state.selectedGame) return [];
   let rooms=getAllRooms(state.selectedGame);
   if(state.roomFilter==='open') rooms=rooms.filter(r=>r.status==='open');
-  if(state.roomFilter==='playing') rooms=rooms.filter(r=>r.status==='playing');
+  if(state.roomFilter==='playing') rooms=rooms.filter(r=>isRoomLive(r));
   return rooms;
 }
 
@@ -706,16 +807,18 @@ function patchGameRooms(){
   if(state.view!=='game') return;
   const list=document.getElementById('gameRoomList');
   const count=document.getElementById('gameRoomCount');
+  const live=document.getElementById('gameLiveGrid');
   if(!list) return;
 
   const rooms=visibleRoomsForSelectedGame();
   list.innerHTML=rooms.length?rooms.map(roomRow).join(''):`<div class="empty-state">Nenhuma sala nesse filtro.</div>`;
   if(count) count.textContent=`${rooms.length} encontrada${rooms.length===1?'':'s'}`;
+  if(live) live.innerHTML=renderLiveMatches(state.selectedGame);
 }
 
 function minimumPlayersForRoom(room){
   if(room.game==='truco')return Number(room.trucoSeats||4);
-  if(room.game==='chess')return 2;
+  if(room.game==='chess'||room.game==='pool')return 2;
   if(room.game==='blackjack')return 1;
   return 1;
 }
@@ -723,18 +826,22 @@ function waitingHostActions(room){
   const cap=roomCapacity(room);
   const enough=(room.players||[]).length>=minimumPlayersForRoom(room);
   const startDisabled=enough?'':`disabled title="Aguardando jogadores"`;
+  const editRules=`<button class="btn btn-secondary room-rules-button" onclick="openEditRoomRules()">${uiIcon('settings')} Editar regras</button>`;
   if(room.game==='truco'){
-    return `<button class="btn btn-secondary" onclick="startTrucoWithBots()">Testar com ${cap===2?'1 bot':'3 bots'}</button>
+    return `${editRules}<button class="btn btn-secondary" onclick="startTrucoWithBots()">Testar com ${cap===2?'1 bot':'3 bots'}</button>
       <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?'Iniciar partida':'Aguardando jogadores'}</button>`;
   }
   if(room.game==='chess'){
-    return `<button class="btn btn-secondary" onclick="launchChessBot()">Testar com bot</button>
+    return `${editRules}<button class="btn btn-secondary" onclick="launchChessBot()">Testar com bot • ${chessBotDifficultyLabel(room)}</button>
       <button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?'Iniciar partida':'Aguardando jogadores'}</button>`;
+  }
+  if(room.game==='pool'){
+    return `${editRules}<button class="btn btn-primary" ${startDisabled} onclick="startGame()">${enough?'Abrir a mesa':'Aguardando adversário'}</button>`;
   }
   if(room.game==='blackjack'){
     return `<button class="btn btn-primary" onclick="startGame()">Abrir mesa de Blackjack</button>`;
   }
-  if(room.game==='music')return `<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Lobby</button>`;
+  if(room.game==='music')return `${editRules}<button class="btn btn-primary" onclick="openMusicRoom()">Abrir TDB Lobby</button>`;
   return `<button class="btn btn-primary" ${startDisabled} onclick="startGame()">Iniciar partida</button>`;
 }
 
@@ -752,26 +859,41 @@ function waitingPlayersHtml(room){
     ${cap>6?`<div class="player-slot empty">Capacidade da sala: ${cap}</div>`:''}`;
 }
 
+function waitingRoomMetaHtml(room){
+  const cap=roomCapacity(room);
+  const meta=
+    room.game==='truco' ? ` • ${cap===2?'1x1':'2x2'} • ${room.turnTimer?`${room.turnTimer}s/jogada`:'Sem limite'}` :
+    room.game==='chess' ? ` • 1x1 • ${room.chessClock?Math.floor(room.chessClock/60)+' min':'Sem relógio'} • BOT ${chessBotDifficultyLabel(room)}` :
+    room.game==='pool' ? ` • 8-Ball • 1x1 • ${room.poolTurnTimer?`${room.poolTurnTimer}s/tacada`:'Sem limite'}${room.poolAllowSpectators===false?' • sem espectadores':' • espectadores'}` :
+    room.game==='blackjack' ? ` • até 3 jogadores • dealer automático` :
+    room.game==='music' ? ` • Lounge compartilhado` : '';
+  return `${games[room.game]?.name||room.game}${meta} • ${privacyLabel(room)} • Host: <span id="waitingHostName">${escapeHtml(room.owner||'—')}</span>`;
+}
+
 function patchWaitingRoom(forceActions=false){
   if(state.view!=='waiting' || !state.activeRoom) return;
   const room=state.activeRoom;
   const list=document.getElementById('waitingPlayerList');
   const host=document.getElementById('waitingHostName');
+  const meta=document.getElementById('waitingRoomMeta');
   const actions=document.getElementById('waitingActions');
 
   if(list) list.innerHTML=waitingPlayersHtml(room);
-  if(host) host.textContent=room.owner||'—';
+  if(meta) meta.innerHTML=waitingRoomMetaHtml(room);
+  else if(host) host.textContent=room.owner||'—';
 
   if(actions && (forceActions || actions.dataset.ownerId!==String(room.ownerId||''))){
     const isHost=room.ownerId===state.user.id;
     actions.dataset.ownerId=String(room.ownerId||'');
     actions.innerHTML=`<button class="btn btn-dark" onclick="leaveRoom()">Sair da sala</button>
+      ${isHost?`<button class="btn btn-danger" onclick="deleteCurrentRoom()">Apagar sala agora</button>`:''}
       ${isHost?waitingHostActions(room):waitingNonHostAction(room)}`;
   }
 }
 
 
 function renderLobby(){
+  window.cleanupPoolUi?.();
   if(!state.user) return renderAuth('login');
   state.view='lobby';
   if(location.protocol!=='file:' && window.TDBOnline?.connected) refreshSocialData(false);
@@ -787,15 +909,20 @@ function renderLobby(){
     <div class="section-title"><div><h2>Partidas ao vivo</h2><p>Assista sem interferir na partida.</p></div></div>
     <div class="live-grid" id="lobbyLiveGrid">${renderLiveMatches()}</div>
     <div class="section-title"><div><h2>Escolha um jogo</h2><p>As salas ficam dentro de cada jogo.</p></div></div>
-    <div class="game-grid" id="lobbyGameGrid">${gameCard('truco')}${gameCard('blackjack')}${gameCard('chess')}${gameCard('music')}</div>
+    <div class="game-grid" id="lobbyGameGrid">${gameCard('truco')}${gameCard('pool')}${gameCard('chess')}${gameCard('music')}${gameCard('blackjack')}</div>
     <div class="section-title"><div><h2>Amigos online</h2><p>Convide alguém para entrar na sua próxima mesa.</p></div><button class="link-btn" onclick="renderFriends()">Ver todos →</button></div>
     <div class="friends-grid" id="lobbyFriendsGrid">${state.friends.slice(0,3).map(friendCard).join('')}</div>
   </section>`;
 }
 
 function gameCard(key){
-  const g=games[key], art=key==='truco'?'art-truco':key==='blackjack'?'art-blackjack':key==='chess'?'art-chess':'art-music';
-  const open=getAllRooms(key).filter(r=>r.status==='open').length;
+  const g=games[key], art=key==='truco'?'art-truco':key==='pool'?'art-pool':key==='blackjack'?'art-blackjack':key==='chess'?'art-chess':'art-music';
+  const enabled=isGameEnabled(key);
+  const open=enabled?getAllRooms(key).filter(r=>r.status==='open').length:0;
+  if(!enabled) return `<article class="game-card game-card-maintenance" onclick="blackjackMaintenance()">
+    <div class="game-art ${art}"></div><div class="game-symbol">${g.symbol}</div>
+    <div class="game-content"><span class="game-count maintenance">MANUTENÇÃO</span><h3>${g.name}</h3><p>Estamos reconstruindo a experiência desta mesa.</p><button class="btn btn-dark" disabled>Indisponível agora</button></div>
+  </article>`;
   return `<article class="game-card" onclick="renderGame('${key}')">
     <div class="game-art ${art}"></div><div class="game-symbol">${g.symbol}</div>
     <div class="game-content"><span class="game-count">${open} sala${open===1?'':'s'} aberta${open===1?'':'s'}</span><h3>${g.name}</h3><p>${g.subtitle}</p><button class="btn btn-primary">Ver salas ${uiIcon('chevron')}</button></div>
@@ -806,9 +933,9 @@ function friendCard(f){
   const busy=/^(Jogando|Ouvindo|Na sala)/.test(status);
   const offline=status==='Offline';
   return `<div class="friend-card">
-    <div class="avatar">${escapeHtml(f.avatar||initials(f.username))}</div>
-    <div class="friend-meta" onclick="openFriendQuickProfile('${f.id}')"><strong>${escapeHtml(f.username)}</strong><span><i class="dot ${offline?'offline':busy?'busy':'online'}"></i>${escapeHtml(status)}</span><small>${escapeHtml(f.id)} • abrir perfil rápido</small></div>
-    <button class="btn btn-dark" onclick="event.stopPropagation();inviteFriend('${f.id}')">Convidar</button>
+    ${avatarHtml(f,'avatar')}
+    <div class="friend-meta" onclick="renderPublicProfile('${f.id}')"><strong>${escapeHtml(f.username)}</strong><span><i class="dot ${offline?'offline':busy?'busy':'online'}"></i>${escapeHtml(status)}</span><small>${escapeHtml(f.id)}</small></div>
+    <div class="friend-card-actions"><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();renderPublicProfile('${f.id}')">Visitar perfil</button><button class="btn btn-dark btn-sm" onclick="event.stopPropagation();inviteFriend('${f.id}')">Convidar</button></div>
   </div>`;
 }
 
@@ -831,7 +958,7 @@ async function openInviteFriendsModal(){
     <div class="modal-body">
       <div class="invite-friend-list">
         ${state.friends.length?state.friends.map(f=>`<div class="social-row">
-          <div class="avatar">${escapeHtml(f.avatar||initials(f.username))}</div>
+          ${avatarHtml(f,'avatar')}
           <div class="friend-meta"><strong>${escapeHtml(f.username)}</strong><small>${escapeHtml(f.id)}</small></div>
           <button class="btn btn-primary btn-sm" onclick="inviteFriendFromModal('${f.id}',this)">Convidar</button>
         </div>`).join(''):'<div class="muted">Você ainda não tem amigos adicionados.</div>'}
@@ -884,6 +1011,8 @@ async function inviteFriend(id){
 
 
 function renderGame(key){
+  window.cleanupPoolUi?.();
+  if(!isGameEnabled(key)){blackjackMaintenance();return renderLobby()}
   state.selectedGame=key; state.view='game'; state.roomFilter='all';
   drawGamePage();
 }
@@ -901,6 +1030,7 @@ function drawGamePage(){
       <button class="filter-chip ${state.roomFilter==='open'?'active':''}" onclick="setRoomFilter('open')">Abertas</button>
       <button class="filter-chip ${state.roomFilter==='playing'?'active':''}" onclick="setRoomFilter('playing')">Em andamento</button>
     </div>
+    ${['truco','pool','chess'].includes(key)?`<div class="game-live-strip"><div class="section-title"><div><h2>Ao vivo agora</h2><p>Partidas em andamento aparecem aqui mesmo que a sala tenha acabado de iniciar.</p></div></div><div class="live-grid" id="gameLiveGrid">${renderLiveMatches(key)}</div></div>`:''}
     <div class="rooms-layout">
       <div class="panel">
         <div class="panel-header"><h2>Salas de ${g.name}</h2><span class="muted" id="gameRoomCount">${rooms.length} encontrada${rooms.length===1?'':'s'}</span></div>
@@ -908,7 +1038,7 @@ function drawGamePage(){
       </div>
       <aside class="panel side-info"><div class="panel-header"><h2>Como funciona</h2></div><div class="panel-body">
         <h3>Salas abertas</h3><p>Você pode entrar enquanto houver vaga. A sala pode ser pública, somente amigos, somente convite ou protegida por senha.</p>
-        <h3 style="margin-top:22px;">${key==='chess'?'Xadrez Tradicional':key==='blackjack'?'Blackjack TDB':key==='music'?'TDB Lobby':'Em andamento'}</h3><p>${key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='blackjack'?'Até 3 jogadores contra o dealer. Pedir, parar, dobrar e separar, com entrada durante a rodada para jogar na próxima.':key==='music'?'Música compartilhada, chat e transmissão de tela opcional na mesma sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
+        <h3 style="margin-top:22px;">${key==='pool'?'Sinuca 8-Ball':key==='chess'?'Xadrez Tradicional':key==='blackjack'?'Blackjack TDB':key==='music'?'TDB Lobby':'Em andamento'}</h3><p>${key==='pool'?'Partidas 1x1 com física de bolas, faltas, lisas/listradas, bola na mão e chamada da caçapa da 8.':key==='chess'?'Partidas 1x1 com movimentos legais, xeque, mate, roque, en passant e promoção.':key==='blackjack'?'Até 3 jogadores contra o dealer. Pedir, parar, dobrar e separar, com entrada durante a rodada para jogar na próxima.':key==='music'?'Música compartilhada, chat e transmissão de tela opcional na mesma sala.':'Continuam visíveis para mostrar onde a galera está jogando.'}</p>
         <h3 style="margin-top:22px;">Seu jogo</h3><ul><li>Crie uma sala.</li><li>Compartilhe o código.</li><li>Convide amigos.</li></ul>
       </div></aside>
     </div>
@@ -916,21 +1046,22 @@ function drawGamePage(){
 }
 function setRoomFilter(filter){ state.roomFilter=filter; drawGamePage(); }
 function roomRow(room){
-  const g=games[room.game], cap=roomCapacity(room), open=room.status==='open', full=(room.players?.length||0)>=cap;
-  const joinable=['music','blackjack'].includes(room.game) ? !full : (open&&!full);
-  const watchable=room.status==='playing'&&['truco','chess','blackjack'].includes(room.game)&&!joinable;
+  const g=games[room.game], live=isRoomLive(room), cap=roomCapacity(room), open=room.status==='open'&&!live, full=(room.players?.length||0)>=cap;
+  const joinable=room.game==='music' ? !full : (isGameEnabled(room.game)&&open&&!full);
+  const watchable=live&&['truco','pool','chess'].includes(room.game)&&!joinable&&(room.game!=='pool'||room.poolAllowSpectators!==false);
   const empty=!(room.players||[]).length;
   const emptyLeft=empty&&room.emptyExpiresAt?Math.max(0,Math.ceil((Number(room.emptyExpiresAt)-Date.now())/60000)):0;
   const ownerLabel=empty?'Sala vazia':`Host: ${escapeHtml(room.owner||'—')}`;
   const spectators=(room.spectators||[]).length;
   return `<div class="room-row ${empty?'room-empty-grace':''}">
-    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • ${ownerLabel} ${room.privacy==='private'?'🔒':room.privacy==='friends'?'👥':room.privacy==='invite'?'✉️':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='music'?' • ◈ Lounge':room.game==='blackjack'?' • até 3 vs dealer':''}${empty&&emptyLeft?` • expira em ~${emptyLeft} min`:''}</span></div>
+    <div class="room-name"><strong>${escapeHtml(room.name)}</strong><span>${room.code} • ${ownerLabel} ${room.privacy==='private'?'🔒':room.privacy==='friends'?'👥':room.privacy==='invite'?'✉️':''}${room.game==='truco'?` • ${cap===2?'1x1':'2x2'}`:''}${room.game==='chess'?` • ${room.chessClock?`${Math.floor(room.chessClock/60)} min`:'sem relógio'} • BOT ${chessBotDifficultyLabel(room)}`:''}${room.game==='pool'?` • 8-Ball • ${room.poolTurnTimer?`${room.poolTurnTimer}s/tacada`:'sem limite'}`:''}${room.game==='music'?' • ◈ Lounge':room.game==='blackjack'?' • até 3 vs dealer':''}${empty&&emptyLeft?` • expira em ~${emptyLeft} min`:''}</span></div>
     <div class="room-stat"><strong>${room.players?.length||0}/${cap}</strong><span>${room.game==='music'?'Ouvintes':`Jogadores${spectators?` • 👁 ${spectators}`:''}`}</span></div>
-    <div><span class="badge ${open?'open':'playing'}">${empty?'Vazia':room.game==='music'?(open?'Aberta':'Tocando'):room.game==='blackjack'?(open?'Aberta':'Rodada em andamento'):open?'Aberta':'Em andamento'}</span></div>
+    <div><span class="badge ${open?'open':'playing'}">${empty?'Vazia':room.game==='music'?(open?'Aberta':'Tocando'):room.game==='blackjack'?'Em manutenção':open?'Aberta':live?'Em andamento':'Indisponível'}</span></div>
     <button class="btn ${joinable?'btn-primary':watchable?'btn-secondary':'btn-dark'}" ${joinable?`onclick="requestJoinRoom('${room.code}')"`:watchable?`onclick="watchRoom('${room.code}')"`:'disabled'}>${joinable?'Entrar':watchable?'Assistir':full?'Cheia':'Jogando'}</button>
   </div>`;
 }
 function openCreateRoom(){
+  if(!isGameEnabled(state.selectedGame)) return blackjackMaintenance();
   const g=games[state.selectedGame];
   document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="modalBackdrop"><div class="modal">
     <div class="modal-head"><h3>Criar jogo de ${g.name}</h3><button class="icon-btn" onclick="closeModal()">×</button></div>
@@ -939,6 +1070,11 @@ function openCreateRoom(){
       <div class="field"><label>Privacidade</label><select id="roomPrivacy" class="select"><option value="public">Pública</option><option value="friends">Somente amigos</option><option value="invite">Somente convite</option><option value="private">Com senha</option></select></div>
       <div class="field"><label>Senha (usada em “Com senha”)</label><input id="roomPassword" maxlength="16" placeholder="Até 16 caracteres"></div>
       ${state.selectedGame==='truco'?`<div class="field"><label>Formato do truco</label><select id="trucoSeats" class="select"><option value="2">2 jogadores (1x1)</option><option value="4" selected>4 jogadores (2x2)</option></select></div><div class="field"><label>Tempo por jogada</label><select id="turnTimer" class="select"><option value="0">Sem limite</option><option value="30">30 segundos</option><option value="60">60 segundos</option></select></div>`:''}
+      ${state.selectedGame==='pool'?`
+        <div class="field"><label>Modo</label><select class="select" disabled><option>8-Ball • 1x1</option></select><small class="field-help">Lisas contra listradas. Depois do seu grupo, encaçape a bola 8 na caçapa declarada.</small></div>
+        <div class="field"><label>Tempo por tacada</label><select id="poolTurnTimer" class="select"><option value="0">Sem limite</option><option value="30">30 segundos</option><option value="45" selected>45 segundos</option><option value="60">60 segundos</option></select></div>
+        <div class="field"><label>Ajuda de mira</label><select id="poolAimAssist" class="select"><option value="short" selected>Linha curta até o primeiro contato</option><option value="none">Sem linha de ajuda</option></select></div>
+        <div class="field"><label>Espectadores</label><select id="poolAllowSpectators" class="select"><option value="true" selected>Permitir assistir ao vivo</option><option value="false">Somente jogadores</option></select></div>`:''}
       ${state.selectedGame==='chess'?`
         <div class="field"><label>Tempo da partida</label>
           <select id="chessClock" class="select">
@@ -956,6 +1092,14 @@ function openCreateRoom(){
             <option value="white">Brancas</option>
             <option value="black">Pretas</option>
           </select>
+        </div>
+        <div class="field"><label>Dificuldade do BOT</label>
+          <select id="chessBotDifficulty" class="select">
+            <option value="easy" selected>Fácil</option>
+            <option value="medium">Médio</option>
+            <option value="hard">Difícil</option>
+          </select>
+          <small class="field-help">Usada ao escolher “Testar com bot”. Pode ser alterada depois sem recriar a sala.</small>
         </div>`:''}
       ${state.selectedGame==='blackjack'?`
         <div class="field"><label>Tempo por decisão</label><select id="blackjackTurnTimer" class="select"><option value="15">15 segundos</option><option value="20" selected>20 segundos</option><option value="30">30 segundos</option><option value="0">Sem limite</option></select></div>
@@ -977,7 +1121,7 @@ function openCreateRoom(){
             <option value="host">Somente host</option>
           </select>
         </div>
-        <div class="field"><label>Limite de músicas por pessoa</label><select id="musicQueueLimit" class="select"><option value="3">3</option><option value="5" selected>5</option><option value="10">10</option><option value="0">Sem limite</option></select></div>`:''}
+        <div class="mini-note">Fila de músicas sem limite por pessoa.</div>`:''}
     </div></div>
     <div class="modal-foot"><button class="btn btn-dark" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="createRoom()">Criar sala</button></div>
   </div></div>`);
@@ -1020,6 +1164,7 @@ function ensureOnlineMultiplayerReady(){
 }
 
 async function createRoom(){
+  if(!isGameEnabled(state.selectedGame)){ blackjackMaintenance(); return; }
   if(!ensureOnlineLogin()) return;
   if(location.protocol!=='file:' && window.TDBOnline && !ensureOnlineMultiplayerReady()) return;
 
@@ -1029,11 +1174,15 @@ async function createRoom(){
     const password=document.getElementById('roomPassword').value.trim();
     const turnTimer=state.selectedGame==='truco' ? Number(document.getElementById('turnTimer')?.value||0) : 0;
     const trucoSeats=state.selectedGame==='truco' ? Number(document.getElementById('trucoSeats')?.value||4) : null;
+    const poolTurnTimer=state.selectedGame==='pool' ? Number(document.getElementById('poolTurnTimer')?.value||45) : null;
+    const poolAimAssist=state.selectedGame==='pool' ? (document.getElementById('poolAimAssist')?.value||'short') : null;
+    const poolAllowSpectators=state.selectedGame==='pool' ? document.getElementById('poolAllowSpectators')?.value!=='false' : null;
     const chessClock=state.selectedGame==='chess' ? Number(document.getElementById('chessClock')?.value||0) : null;
     const chessColor=state.selectedGame==='chess' ? (document.getElementById('chessColor')?.value||'random') : null;
+    const chessBotDifficulty=state.selectedGame==='chess' ? chessBotDifficultyValue(document.getElementById('chessBotDifficulty')?.value||'easy') : null;
     const musicControl=state.selectedGame==='music' ? (document.getElementById('musicControl')?.value||'everyone') : null;
     const musicSkipMode=state.selectedGame==='music' ? (document.getElementById('musicSkipMode')?.value||'vote') : null;
-    const musicQueueLimit=state.selectedGame==='music' ? Number(document.getElementById('musicQueueLimit')?.value||5) : null;
+    const musicQueueLimit=state.selectedGame==='music' ? 0 : null;
     const blackjackTurnTimer=state.selectedGame==='blackjack' ? Number(document.getElementById('blackjackTurnTimer')?.value||20) : null;
     const blackjackMinBet=state.selectedGame==='blackjack' ? Number(document.getElementById('blackjackMinBet')?.value||25) : null;
     const blackjackStartingChips=state.selectedGame==='blackjack' ? Number(document.getElementById('blackjackStartingChips')?.value||1000) : null;
@@ -1042,8 +1191,8 @@ async function createRoom(){
     const candidate={
       code:genRoomCode(state.selectedGame),game:state.selectedGame,name,
       owner:state.user.username,ownerId:state.user.id,privacy,password,status:'open',
-      turnTimer,trucoSeats,chessClock,chessColor,musicControl,musicSkipMode,musicQueueLimit,blackjackTurnTimer,blackjackMinBet,blackjackStartingChips,blackjackDecks,
-      players:[{username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online'}],
+      turnTimer,trucoSeats,poolTurnTimer,poolAimAssist,poolAllowSpectators,chessClock,chessColor,chessBotDifficulty,musicControl,musicSkipMode,musicQueueLimit,blackjackTurnTimer,blackjackMinBet,blackjackStartingChips,blackjackDecks,
+      players:[{username:state.user.username,id:state.user.id,avatar:state.user.avatar,avatarImage:state.user.avatarImage||null,connection:'online'}],
       spectators:[],createdAt:Date.now()
     };
 
@@ -1080,6 +1229,10 @@ window.addEventListener('tdb-room-join-result',event=>{
   }
 
   const room=result.room;
+  if(rejectDisabledRoom(room,{leaveOnline:true})){
+    closeModal();
+    return renderLobby();
+  }
   const i=state.rooms.findIndex(r=>r.code===room.code);
   if(i>=0) state.rooms[i]=room;
   else state.rooms.push(room);
@@ -1089,10 +1242,9 @@ window.addEventListener('tdb-room-join-result',event=>{
   closeModal();
 
   // Set the destination before realtime room updates can redraw the room list.
-  state.view=room.game==='music'?'music':room.game==='blackjack'&&room.status==='playing'?'playing-blackjack':'waiting';
+  state.view=room.game==='music'?'music':'waiting';
 
   if(room.game==='music') return openMusicRoom();
-  if(room.game==='blackjack'&&room.status==='playing'){OnlineGameBridge.start(room,'player');return;}
   renderWaitingRoom();
 });
 
@@ -1101,6 +1253,7 @@ async function requestJoinRoom(code){
   if(location.protocol!=='file:' && window.TDBOnline && !ensureOnlineMultiplayerReady()) return;
   const room=getRoomByCode(code);
   if(!room) return toast('Sala não encontrada.');
+  if(!isGameEnabled(room.game)) return blackjackMaintenance();
 
   if(Core.mode==='online' && window.TDBOnline?.connected){
     let password='';
@@ -1131,13 +1284,14 @@ function joinRoom(code,password=''){
   const source=typeof code==='object' ? code : getRoomByCode(code);
   const room=structuredClone(source);
   if(!room) return toast('Sala não encontrada.');
-  if(room.status!=='open' && !['music','blackjack'].includes(room.game)) return toast('Essa partida já está em andamento.');
+  if(!isGameEnabled(room.game)) return blackjackMaintenance();
+  if(room.status!=='open' && room.game!=='music') return toast('Essa partida já está em andamento.');
   if(room.password && room.password!==password) return toast('Senha incorreta.');
 
   if(!room.players.some(p=>p.id===state.user.id)){
     if(room.players.length>=roomCapacity(room)) return toast('A sala está cheia.');
     const wasEmpty=room.players.length===0;
-    room.players.push({username:state.user.username,id:state.user.id,avatar:state.user.avatar,connection:'online'});
+    room.players.push({username:state.user.username,id:state.user.id,avatar:state.user.avatar,avatarImage:state.user.avatarImage||null,connection:'online'});
     if(wasEmpty){
       room.owner=state.user.username;
       room.ownerId=state.user.id;
@@ -1171,6 +1325,7 @@ async function joinByCode(){
 
   const room=getRoomByCode(code);
   if(!room) return toast('Sala não encontrada.');
+  if(!isGameEnabled(room.game)) return blackjackMaintenance();
   state.selectedGame=room.game;
 
   if(Core.mode==='online' && window.TDBOnline?.connected){
@@ -1209,7 +1364,118 @@ function launchChessBot(){
 }
 window.launchChessBot=launchChessBot;
 
+function roomRulesFields(room){
+  if(room.game==='truco'){
+    return `<div class="field"><label>Formato do Truco</label><select id="editTrucoSeats" class="select">
+      <option value="2" ${Number(room.trucoSeats||4)===2?'selected':''}>2 jogadores (1x1)</option>
+      <option value="4" ${Number(room.trucoSeats||4)===4?'selected':''}>4 jogadores (2x2)</option>
+    </select></div>
+    <div class="field"><label>Tempo por jogada</label><select id="editTurnTimer" class="select">
+      <option value="0" ${Number(room.turnTimer||0)===0?'selected':''}>Sem limite</option>
+      <option value="30" ${Number(room.turnTimer||0)===30?'selected':''}>30 segundos</option>
+      <option value="60" ${Number(room.turnTimer||0)===60?'selected':''}>60 segundos</option>
+    </select></div>`;
+  }
+  if(room.game==='pool'){
+    const timer=Number(room.poolTurnTimer??45),assist=room.poolAimAssist||'short';
+    return `<div class="field"><label>Tempo por tacada</label><select id="editPoolTurnTimer" class="select">
+      ${[0,30,45,60].map(v=>`<option value="${v}" ${timer===v?'selected':''}>${v===0?'Sem limite':`${v} segundos`}</option>`).join('')}
+    </select></div>
+    <div class="field"><label>Ajuda de mira</label><select id="editPoolAimAssist" class="select"><option value="short" ${assist==='short'?'selected':''}>Linha curta até o primeiro contato</option><option value="none" ${assist==='none'?'selected':''}>Sem linha de ajuda</option></select></div>
+    <div class="field"><label>Espectadores</label><select id="editPoolAllowSpectators" class="select"><option value="true" ${room.poolAllowSpectators!==false?'selected':''}>Permitir assistir ao vivo</option><option value="false" ${room.poolAllowSpectators===false?'selected':''}>Somente jogadores</option></select></div>`;
+  }
+  if(room.game==='chess'){
+    const clock=Number(room.chessClock||0),diff=chessBotDifficultyValue(room);
+    return `<div class="field"><label>Tempo da partida</label><select id="editChessClock" class="select">
+      ${[0,60,180,300,600,900].map(v=>`<option value="${v}" ${clock===v?'selected':''}>${v===0?'Sem relógio':`${v/60} minuto${v===60?'':'s'}`}</option>`).join('')}
+    </select></div>
+    <div class="field"><label>Sua cor na próxima partida</label><select id="editChessColor" class="select">
+      <option value="random" ${(room.chessColor||'random')==='random'?'selected':''}>Aleatória</option>
+      <option value="white" ${room.chessColor==='white'?'selected':''}>Brancas</option>
+      <option value="black" ${room.chessColor==='black'?'selected':''}>Pretas</option>
+    </select></div>
+    <div class="field"><label>Dificuldade do BOT</label><select id="editChessBotDifficulty" class="select">
+      ${Object.entries(CHESS_BOT_DIFFICULTIES).map(([key,value])=>`<option value="${key}" ${diff===key?'selected':''}>${value.label}</option>`).join('')}
+    </select><small class="field-help" id="botDifficultyHelp">${escapeHtml(CHESS_BOT_DIFFICULTIES[diff].description)}</small></div>`;
+  }
+  if(room.game==='music'){
+    return `<div class="field"><label>Quem controla o player</label><select id="editMusicControl" class="select">
+      <option value="everyone" ${room.musicControl!=='host'?'selected':''}>Todos na sala</option>
+      <option value="host" ${room.musicControl==='host'?'selected':''}>Somente host</option>
+    </select></div>
+    <div class="field"><label>Quem pode pular</label><select id="editMusicSkipMode" class="select">
+      ${['vote','everyone','host'].map(v=>`<option value="${v}" ${room.musicSkipMode===v?'selected':''}>${v==='vote'?'Votação para pular':v==='everyone'?'Todos podem pular':'Somente host'}</option>`).join('')}
+    </select></div>
+    <div class="mini-note">Fila de músicas sem limite por pessoa.</div>`;
+  }
+  return `<div class="mini-note">Não há regras editáveis para este modo.</div>`;
+}
+function openEditRoomRules(){
+  const room=state.activeRoom;
+  if(!room) return toast('Sala não encontrada.');
+  if(room.ownerId!==state.user?.id) return toast('Somente o host pode editar as regras.');
+  if(room.status==='playing') return toast('Volte para a sala antes de alterar as regras da próxima partida.');
+  document.getElementById('modalBackdrop')?.remove();
+  document.body.insertAdjacentHTML('beforeend',`<div class="modal-backdrop" id="modalBackdrop"><div class="modal room-rules-modal">
+    <div class="modal-head"><div><h3>Editar regras da sala</h3><p class="muted small">As mudanças valem para a próxima partida. Não é necessário recriar a sala.</p></div><button class="icon-btn" onclick="closeModal()">×</button></div>
+    <div class="modal-body"><div class="form-grid">${roomRulesFields(room)}</div></div>
+    <div class="modal-foot"><button class="btn btn-dark" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveRoomRules()">Salvar regras</button></div>
+  </div></div>`);
+  const diff=document.getElementById('editChessBotDifficulty');
+  if(diff) diff.addEventListener('change',()=>{const help=document.getElementById('botDifficultyHelp');if(help)help.textContent=CHESS_BOT_DIFFICULTIES[chessBotDifficultyValue(diff.value)].description});
+}
+async function saveRoomRules(){
+  const room=state.activeRoom;
+  if(!room||room.ownerId!==state.user?.id) return toast('Somente o host pode editar as regras.');
+  if(room.status==='playing') return toast('A partida está em andamento. Altere as regras quando voltar à sala.');
+  const next=structuredClone(room);
+  if(room.game==='truco'){
+    const seats=Number(document.getElementById('editTrucoSeats')?.value||room.trucoSeats||4);
+    if((room.players||[]).length>seats) return toast(`A sala tem ${(room.players||[]).length} jogadores. Remova jogadores antes de mudar para ${seats}.`);
+    next.trucoSeats=seats===2?2:4;
+    next.turnTimer=[0,30,60].includes(Number(document.getElementById('editTurnTimer')?.value))?Number(document.getElementById('editTurnTimer').value):0;
+  }else if(room.game==='pool'){
+    const timer=Number(document.getElementById('editPoolTurnTimer')?.value??45);
+    next.poolTurnTimer=[0,30,45,60].includes(timer)?timer:45;
+    const assist=document.getElementById('editPoolAimAssist')?.value||'short';
+    next.poolAimAssist=['short','none'].includes(assist)?assist:'short';
+    next.poolAllowSpectators=document.getElementById('editPoolAllowSpectators')?.value!=='false';
+  }else if(room.game==='chess'){
+    next.chessClock=[0,60,180,300,600,900].includes(Number(document.getElementById('editChessClock')?.value))?Number(document.getElementById('editChessClock').value):600;
+    const color=document.getElementById('editChessColor')?.value||'random';
+    next.chessColor=['white','black','random'].includes(color)?color:'random';
+    next.chessBotDifficulty=chessBotDifficultyValue(document.getElementById('editChessBotDifficulty')?.value||'easy');
+  }else if(room.game==='music'){
+    next.musicControl=document.getElementById('editMusicControl')?.value==='host'?'host':'everyone';
+    const skip=document.getElementById('editMusicSkipMode')?.value||'vote';
+    next.musicSkipMode=['host','everyone','vote'].includes(skip)?skip:'vote';
+    next.musicQueueLimit=0;
+  }
+  window.TDBPlatformUI?.showLoading?.('Salvando regras…');
+  try{
+    let saved=next;
+    if(Core.mode==='online'&&window.TDBOnline?.connected){
+      saved=await window.TDBOnline.upsertRoom(next);
+      if(!saved) throw new Error('Não foi possível salvar as regras.');
+    }else updateStoredRoom(next);
+    state.activeRoom=saved||next;
+    Core.rooms.setActive(state.activeRoom);
+    const idx=state.rooms.findIndex(r=>r.code===state.activeRoom.code);
+    if(idx>=0)state.rooms[idx]=state.activeRoom;
+    else state.rooms.push(state.activeRoom);
+    closeModal();
+    toast('Regras da sala atualizadas para a próxima partida.');
+    renderWaitingRoom();
+  }catch(err){
+    console.error('[TDB] Falha ao atualizar regras da sala:',err);
+    toast(err?.message||'Não foi possível atualizar as regras.');
+  }finally{window.TDBPlatformUI?.hideLoading?.()}
+}
+window.openEditRoomRules=openEditRoomRules;
+window.saveRoomRules=saveRoomRules;
+
 function renderWaitingRoom(){
+  window.cleanupPoolUi?.();
   if(state.activeRoom?.simulation && state.botReturnRoom){
     const latest=state.rooms.find(r=>r.code===state.botReturnRoom.code) || state.botReturnRoom;
     state.activeRoom=structuredClone(latest);
@@ -1218,9 +1484,10 @@ function renderWaitingRoom(){
   }
 
   if(!state.activeRoom) return renderLobby();
+  if(rejectDisabledRoom(state.activeRoom,{leaveOnline:true})) return renderLobby();
   state.view='waiting';
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && !state.activeRoom.simulation && state.activeRoom.status==='playing' && ['truco','chess','blackjack'].includes(state.activeRoom.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && !state.activeRoom.simulation && state.activeRoom.status==='playing' && ['truco','pool','chess'].includes(state.activeRoom.game)){
     OnlineGameBridge.start(state.activeRoom,'player');
   }
 
@@ -1230,20 +1497,15 @@ function renderWaitingRoom(){
   const isHost=room.ownerId===state.user.id;
   const cap=roomCapacity(room);
 
-  const meta=
-    room.game==='truco' ? ` • ${cap===2?'1x1':'2x2'}` :
-    room.game==='chess' ? ` • 1x1 • ${room.chessClock?Math.floor(room.chessClock/60)+' min':'Sem relógio'}` :
-    room.game==='blackjack' ? ` • até 3 jogadores • dealer automático` :
-    room.game==='music' ? ` • Lounge compartilhado` : '';
-
   const hostActions=waitingHostActions(room);
   const nonHostAction=waitingNonHostAction(room);
 
   app.innerHTML=`${topbar()}
   <section class="waiting-room fade-in"><div class="waiting-card">
+    <button class="waiting-back-button" onclick="backToGameLobby()">${uiIcon('back')} <span>Voltar ao lobby</span></button>
     <div class="waiting-hero"><div class="game-head"><div class="big-symbol">${g.symbol}</div><div>
       <h1>${escapeHtml(room.name)}</h1>
-      <p>${g.name}${meta} • ${privacyLabel(room)} • Host: <span id="waitingHostName">${escapeHtml(room.owner)}</span></p>
+      <p id="waitingRoomMeta">${waitingRoomMetaHtml(room)}</p>
       <div class="code-box">Código: <strong>${room.code}</strong><button class="link-btn" onclick="copyCode('${room.code}')">Copiar</button></div>
     </div></div></div>
 
@@ -1260,6 +1522,7 @@ function renderWaitingRoom(){
 
     <div class="waiting-actions" id="waitingActions" data-owner-id="${escapeHtml(room.ownerId||'')}">
       <button class="btn btn-dark" onclick="leaveRoom()">Sair da sala</button>
+      ${isHost?`<button class="btn btn-danger" onclick="deleteCurrentRoom()">Apagar sala agora</button>`:''}
       ${isHost?hostActions:nonHostAction}
     </div>
   </div></section>`;
@@ -1267,7 +1530,7 @@ function renderWaitingRoom(){
 function playerSlot(p,isHost){
   const canKick=isHost && p.id!==state.user.id;
   const known=state.knownRoomPlayers.has(p.id);state.knownRoomPlayers.add(p.id);
-  return `<div class="player-slot ${known?'':'player-entry'}"><div class="avatar">${escapeHtml(p.avatar||initials(p.username))}</div><div class="slot-main"><strong>${escapeHtml(p.username)} ${p.id===state.activeRoom.ownerId?'<span class="host-tag">HOST</span>':''}</strong><div class="muted small">${escapeHtml(p.id||'Jogador')}${connectionLabel(p)}</div></div>${canKick?`<button class="btn btn-danger btn-sm" onclick="kickPlayer('${p.id}')">Expulsar</button>`:''}</div>`;
+  return `<div class="player-slot ${known?'':'player-entry'}">${avatarHtml(p,'avatar')}<div class="slot-main"><strong>${escapeHtml(p.username)} ${p.id===state.activeRoom.ownerId?'<span class="host-tag">HOST</span>':''}</strong><div class="muted small">${escapeHtml(p.id||'Jogador')}${connectionLabel(p)}</div></div>${canKick?`<button class="btn btn-danger btn-sm" onclick="kickPlayer('${p.id}')">Expulsar</button>`:''}</div>`;
 }
 async function kickPlayer(id){
   const room=state.activeRoom;if(!room) return;
@@ -1278,6 +1541,36 @@ async function kickPlayer(id){
   }
   room.players=room.players.filter(p=>p.id!==id);updateStoredRoom(room);toast('Jogador removido da sala.');patchWaitingRoom(true);
 }
+async function deleteCurrentRoom(){
+  const room=state.activeRoom;
+  if(!room) return;
+  if(room.ownerId!==state.user?.id) return toast('Somente o host pode apagar a sala.');
+  if(room.status==='playing') return toast('Encerre a partida antes de apagar a sala.');
+  if(!confirm(`Apagar a sala ${room.name}? Ela será removida imediatamente, sem esperar os 5 minutos.`)) return;
+  const code=room.code;
+  if(Core.mode==='online'&&window.TDBOnline?.connected){
+    const ok=await window.TDBOnline.removeRoom?.(code);
+    if(!ok) return;
+  }else{
+    destroyRoomAndMatch(code,'host-delete');
+  }
+  saveActiveRoom(null);
+  state.rooms=state.rooms.filter(r=>r.code!==code);
+  toast('Sala apagada.');
+  return drawGamePage();
+}
+window.deleteCurrentRoom=deleteCurrentRoom;
+
+function backToGameLobby(){
+  const game=state.activeRoom?.game||state.selectedGame;
+  try{exitActiveContext('back-to-game-lobby')}catch{}
+  setPresence('lobby');
+  state.selectedGame=game;
+  state.view='game';
+  drawGamePage();
+}
+window.backToGameLobby=backToGameLobby;
+
 function leaveRoom(){
   try{
     exitActiveContext('leave-room');
@@ -1320,40 +1613,47 @@ async function startGame(){
   const room=state.activeRoom;
   if(!room) return toast('Sala não encontrada.');
   const g=games[room.game];
+  if(!isGameEnabled(room.game)) return blackjackMaintenance();
 
   if(room.game==='music') return openMusicRoom();
   if((room.players||[]).length<minimumPlayersForRoom(room)) return toast(`A sala ainda precisa de ${minimumPlayersForRoom(room)} jogador(es).`);
 
-  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','chess','blackjack'].includes(room.game)){
+  if(Core.mode==='online' && window.TDBOnline?.connected && ['truco','pool','chess'].includes(room.game)){
     if(!ensureOnlineMultiplayerReady()) return;
 
-    const required=room.game==='truco'?roomCapacity(room):room.game==='chess'?2:1;
+    const required=room.game==='truco'?roomCapacity(room):['chess','pool'].includes(room.game)?2:1;
     if((room.players?.length||0)<required){
       return toast(`${g.name} precisa de ${required} jogador${required>1?'es':''}.`);
     }
 
-    room.status='playing';
-    state.view=room.game==='truco'?'playing-truco':room.game==='chess'?'playing-chess':'playing-blackjack';
-    updateStoredRoom(room);
-    setPresence('playing',{roomCode:room.code,game:room.game});
-    // Prepare the bridge identity, but do not start polling yet.
-    // Polling before /games/start could fetch the previous terminal match and reopen its result.
+    // Prepare the bridge identity, but do not mark the room as playing locally
+    // before the server confirms. This prevents a failed start from trapping the UI.
     OnlineGameBridge.stop();
     OnlineGameBridge.roomCode=room.code;
     OnlineGameBridge.role='player';
-    window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
 
+    let ok=false;
     window.TDBPlatformUI?.showLoading?.('Sincronizando partida…');
-    const ok=await window.TDBOnline.startGame(room.code);
-    window.TDBPlatformUI?.hideLoading?.();
+    try{
+      ok=await window.TDBOnline.startGame(room.code);
+    }finally{
+      window.TDBPlatformUI?.hideLoading?.();
+    }
     if(!ok){
       OnlineGameBridge.stop();
-      room.status='open';
       state.view='waiting';
-      updateStoredRoom(room);
+      const latest=Core.rooms.list().find(r=>r.code===room.code);
+      if(latest){state.activeRoom=latest;Core.rooms.setActive(latest)}
       renderWaitingRoom();
       return;
     }
+
+    const latest=Core.rooms.list().find(r=>r.code===room.code);
+    if(latest){state.activeRoom=latest;Core.rooms.setActive(latest)}
+    else{room.status='playing';updateStoredRoom(room)}
+    state.view=room.game==='truco'?'playing-truco':room.game==='pool'?'playing-pool':'playing-chess';
+    setPresence('playing',{roomCode:room.code,game:room.game});
+    window.TDBSound?.play?.('gameStart',{channel:'game-start',dedupeMs:180});
 
     // The fresh state was already returned by /games/start. Now enable recovery polling.
     window.TDBOnline.joinGame(room.code,state.user.id,'player');
@@ -1383,6 +1683,8 @@ async function startGame(){
     return window.startChessGame?.(room,false);
   }
 
+  if(room.game==='pool') return toast('A Sinuca multiplayer precisa estar conectada ao servidor online.');
+
   if(room.game==='blackjack') return toast('O Blackjack usa o servidor online para manter o dealer e o baralho sincronizados.');
 
   if((room.players?.length||0)<g.minPlayers) return toast(`Aguarde pelo menos ${g.minPlayers} jogador${g.minPlayers>1?'es':''}.`);
@@ -1399,7 +1701,7 @@ function copyCode(code){
   else toast(`Código: ${code}`);
 }
 function toggleFullscreen(){
-  const gameLike=['playing-truco','playing-chess','playing-blackjack','music','watching'].includes(state.view)||!!document.querySelector('.blackjack-page,.chess-page,.truco-game,.truco-table,.music-page');
+  const gameLike=['playing-truco','playing-pool','playing-chess','playing-blackjack','music','watching'].includes(state.view)||!!document.querySelector('.blackjack-page,.chess-page,.pool-page,.truco-game,.truco-table,.music-page');
   if(!document.fullscreenElement){
     if(gameLike)document.body.classList.add('tdb-game-focus');
     document.documentElement.requestFullscreen?.();
@@ -1436,7 +1738,7 @@ function renderFriends(skipRefresh=false){
 function renderUserSearchResults(){
   const rows=state.userSearch||[];
   if(!rows.length) return '<div class="mini-note">Pesquise por nome ou pelo ID TDB-...</div>';
-  return rows.map(u=>`<div class="social-row"><div class="avatar">${escapeHtml(u.avatar||initials(u.username))}</div><div class="friend-meta"><strong>${escapeHtml(u.username)}</strong><small>${escapeHtml(u.id)}</small></div><button class="btn btn-secondary btn-sm" onclick="sendFriendRequest('${u.id}')">Enviar pedido</button></div>`).join('');
+  return rows.map(u=>`<div class="social-row">${avatarHtml(u,'avatar')}<div class="friend-meta"><strong>${escapeHtml(u.username)}</strong><small>${escapeHtml(u.id)}</small></div><div class="social-row-actions"><button class="btn btn-dark btn-sm" onclick="renderPublicProfile('${u.id}')">Ver perfil</button><button class="btn btn-secondary btn-sm" onclick="sendFriendRequest('${u.id}')">Enviar pedido</button></div></div>`).join('');
 }
 
 function showRoomInviteToast(invite){
@@ -1479,11 +1781,11 @@ async function acceptRoomInviteToast(inviteId){
     const room=result.room;
     const index=state.rooms.findIndex(x=>x.code===room.code);
     if(index>=0) state.rooms[index]=room; else state.rooms.push(room);
+    if(!isGameEnabled(room.game)) return blackjackMaintenance();
     state.selectedGame=room.game;
     saveActiveRoom(room);
     toast('Convite aceito.');
     if(room.game==='music') return openMusicRoom();
-    if(room.game==='blackjack'&&room.status==='playing'){state.view='playing-blackjack';OnlineGameBridge.start(room,'player');return;}
     state.view='waiting';
     return renderWaitingRoom();
   }
@@ -1538,7 +1840,8 @@ async function respondRoomInvite(inviteId,accept){
   await refreshSocialData(false);
   if(accept&&r.room){
     const room=r.room;const i=state.rooms.findIndex(x=>x.code===room.code);if(i>=0)state.rooms[i]=room;else state.rooms.push(room);
-    state.selectedGame=room.game;saveActiveRoom(room);toast('Convite aceito.');if(room.game==='music')return openMusicRoom();if(room.game==='blackjack'&&room.status==='playing'){state.view='playing-blackjack';OnlineGameBridge.start(room,'player');return;}return renderWaitingRoom();
+    if(rejectDisabledRoom(room,{leaveOnline:true})) return renderLobby();
+    state.selectedGame=room.game;saveActiveRoom(room);toast('Convite aceito.');if(room.game==='music')return openMusicRoom();return renderWaitingRoom();
   }
   if(accept&&r.roomCode){toast('Convite aceito. Entrando na sala…');return requestJoinRoom(r.roomCode)}
   toast('Convite recusado.');
@@ -1548,19 +1851,83 @@ async function respondRoomInvite(inviteId,accept){
 
 function renderProfile(){
   state.view='profile';
-  app.innerHTML=`${topbar('profile')}<section class="dashboard fade-in">
-    <div class="page-head"><div><h1 class="page-title">Seu perfil</h1><p class="muted">Histórico competitivo considera apenas partidas contra jogadores reais.</p></div></div>
-    <div class="profile-grid">
-      <div class="panel profile-card">${state.user.banner?`<div class="profile-banner" style="background-image:url('${escapeHtml(state.user.banner)}')"></div>`:''}<div class="profile-avatar-xl">${escapeHtml(state.user.avatar||initials(state.user.username))}</div><h2>${escapeHtml(state.user.username)}</h2><div class="code-box">${escapeHtml(state.user.id)} <button class="link-btn" onclick="copyCode('${state.user.id}')">Copiar</button></div><p class="muted">${currentStatus()}</p></div>
-      <div class="panel"><div class="panel-header"><h2>Editar perfil</h2></div><div class="panel-body"><div class="form-grid"><div class="field"><label>Nome de usuário</label><input id="editUsername" maxlength="24" value="${escapeHtml(state.user.username)}"></div><div class="field"><label>Avatar curto</label><input id="editAvatar" maxlength="2" value="${escapeHtml(state.user.avatar||initials(state.user.username))}"></div><div class="field field-wide"><label>Banner (URL de imagem, opcional)</label><input id="editBanner" maxlength="1000" placeholder="https://..." value="${escapeHtml(state.user.banner||'')}"></div><button class="btn btn-primary" onclick="saveProfile()">Salvar alterações</button></div></div></div>
+  const banner=safeRemoteImage(state.user?.banner);
+  const avatarImage=safeRemoteImage(state.user?.avatarImage||state.user?.avatar_image);
+  app.innerHTML=`${topbar('profile')}<section class="dashboard profile-page fade-in">
+    <div class="page-head profile-page-head"><div><span class="eyebrow">PERFIL TDB</span><h1 class="page-title">Seu perfil</h1><p class="muted">Personalize como você aparece para seus amigos e acompanhe seu histórico competitivo.</p></div></div>
+    <div class="profile-hero panel">
+      <div class="profile-cover${banner?' has-image':''}"${banner?` style="background-image:url('${escapeHtml(banner)}')"`:''}><div class="profile-cover-shade"></div></div>
+      <div class="profile-identity-row">
+        ${avatarHtml(state.user,'profile-avatar-xl')}
+        <div class="profile-identity-copy"><div class="profile-name-line"><h2>${escapeHtml(state.user.username)}</h2><span class="profile-status-chip"><i class="dot online"></i>${escapeHtml(currentStatus())}</span></div><div class="profile-id-line"><span>${escapeHtml(state.user.id)}</span><button class="link-btn" onclick="copyCode('${state.user.id}')">Copiar ID</button></div></div>
+      </div>
+    </div>
+    <div class="profile-edit-layout">
+      <div class="panel profile-editor"><div class="panel-header"><div><h2>Editar perfil</h2><p class="muted">Banner e foto aparecem também para seus amigos.</p></div></div><div class="panel-body">
+        <div class="profile-edit-preview">
+          <div id="profileBannerPreview" class="profile-mini-cover${banner?' has-image':''}"${banner?` style="background-image:url('${escapeHtml(banner)}')"`:''}></div>
+          <div id="profileAvatarPreview">${avatarHtml({...state.user,avatarImage},'profile-preview-avatar')}</div>
+        </div>
+        <div class="form-grid profile-form-grid">
+          <div class="field"><label>Nome de usuário</label><input id="editUsername" maxlength="24" value="${escapeHtml(state.user.username)}"></div>
+          <div class="field"><label>Iniciais (fallback)</label><input id="editAvatar" maxlength="2" value="${escapeHtml(state.user.avatar||initials(state.user.username))}"></div>
+          <div class="field field-wide"><label>Foto de perfil (URL da imagem)</label><input id="editAvatarImage" maxlength="1000" placeholder="https://..." value="${escapeHtml(avatarImage||'')}" oninput="refreshProfilePreview()"><small>Use um link direto de imagem HTTPS. Se estiver vazio, aparecem suas iniciais.</small></div>
+          <div class="field field-wide"><label>Banner (URL da imagem)</label><input id="editBanner" maxlength="1000" placeholder="https://..." value="${escapeHtml(banner||'')}" oninput="refreshProfilePreview()"><small>Recomendado: imagem horizontal, por exemplo 1600×500.</small></div>
+          <button class="btn btn-primary profile-save-btn" onclick="saveProfile()">Salvar alterações</button>
+        </div>
+      </div></div>
+      <div class="panel profile-tips"><div class="panel-header"><h2>Como seu perfil aparece</h2></div><div class="panel-body"><p>Seus amigos verão sua foto, banner, presença, estatísticas e partidas recentes.</p><div class="profile-tip"><strong>Foto</strong><span>Quadrada funciona melhor.</span></div><div class="profile-tip"><strong>Banner</strong><span>Use uma imagem larga para evitar cortes.</span></div><div class="profile-tip"><strong>Privacidade</strong><span>Senha e dados de login nunca aparecem no perfil público.</span></div></div></div>
     </div>
     <div id="profileCompetitive">${renderProfileHistory()}</div>
   </section>`;
   refreshProfileHistory();
 }
+function refreshProfilePreview(){
+  const avatarValue=safeRemoteImage(document.getElementById('editAvatarImage')?.value||'');
+  const bannerValue=safeRemoteImage(document.getElementById('editBanner')?.value||'');
+  const user={...state.user,avatarImage:avatarValue,avatar:document.getElementById('editAvatar')?.value.trim()||initials(document.getElementById('editUsername')?.value||state.user.username)};
+  const avatarWrap=document.getElementById('profileAvatarPreview');
+  if(avatarWrap) avatarWrap.innerHTML=avatarHtml(user,'profile-preview-avatar');
+  const banner=document.getElementById('profileBannerPreview');
+  if(banner){banner.classList.toggle('has-image',!!bannerValue);banner.style.backgroundImage=bannerValue?`url("${bannerValue.replace(/"/g,'%22')}")`:''}
+}
+function publicProfileStatsHtml(data){
+  const gameNames={truco:'Truco',pool:'Sinuca',chess:'Xadrez',blackjack:'Blackjack'};
+  const entries=Object.entries(data?.stats||{});
+  if(!entries.length)return '<div class="profile-empty-card">Ainda sem partidas competitivas registradas.</div>';
+  return entries.map(([game,x])=>`<article class="public-stat-card"><span>${escapeHtml(gameNames[game]||game)}</span><strong>${Number(x.wins||0)} vitórias</strong><small>${Number(x.played||0)} partidas • ${Number(x.losses||0)} derrotas • ${Number(x.draws||0)} empates</small></article>`).join('');
+}
+function publicProfileRecentHtml(data,id){
+  const gameNames={truco:'Truco',pool:'Sinuca',chess:'Xadrez',blackjack:'Blackjack'};
+  const rows=(data?.recent||[]).slice(0,8);
+  if(!rows.length)return '<div class="profile-empty-card">Sem histórico recente.</div>';
+  return rows.map(r=>{const won=(r.winner_ids||[]).includes(id),lost=(r.loser_ids||[]).includes(id);return `<div class="public-history-row"><div><strong>${escapeHtml(gameNames[r.game]||r.game)}</strong><small>${new Date(r.finished_at).toLocaleString('pt-BR')}</small></div><span class="result-pill ${won?'win':lost?'loss':'draw'}">${won?'Vitória':lost?'Derrota':'Empate'}</span></div>`}).join('');
+}
+async function renderPublicProfile(id){
+  if(!state.user)return renderAuth('login');
+  const playerId=String(id||'').trim().toUpperCase();
+  if(!playerId)return;
+  state.view='public-profile';
+  app.innerHTML=`${topbar('friends')}<section class="dashboard public-profile-page fade-in"><div class="page-head"><div><button class="profile-back-link" onclick="renderFriends(true)">← Voltar aos amigos</button><h1 class="page-title">Perfil do jogador</h1></div></div><div class="panel profile-loading-panel">Carregando perfil…</div></section>`;
+  try{
+    const data=window.TDBOnline?.connected?await window.TDBOnline.getPublicProfile(playerId):null;
+    if(state.view!=='public-profile')return;
+    if(!data?.user)throw new Error('Perfil não encontrado.');
+    const u=data.user,banner=safeRemoteImage(u.banner),presenceLabel=presenceDisplayLabel(data.presence||{});
+    app.innerHTML=`${topbar('friends')}<section class="dashboard public-profile-page fade-in">
+      <div class="page-head"><div><button class="profile-back-link" onclick="renderFriends(true)">← Voltar aos amigos</button><span class="eyebrow">PERFIL PÚBLICO</span><h1 class="page-title">${escapeHtml(u.username)}</h1></div>${state.activeRoom?`<button class="btn btn-primary" onclick="inviteFriend('${u.id}')">Convidar para minha sala</button>`:''}</div>
+      <div class="profile-hero panel public-profile-hero"><div class="profile-cover${banner?' has-image':''}"${banner?` style="background-image:url('${escapeHtml(banner)}')"`:''}><div class="profile-cover-shade"></div></div><div class="profile-identity-row">${avatarHtml(u,'profile-avatar-xl')}<div class="profile-identity-copy"><div class="profile-name-line"><h2>${escapeHtml(u.username)}</h2><span class="profile-status-chip"><i class="dot ${data.presence?.status==='offline'?'offline':data.presence?.status==='away'?'busy':'online'}"></i>${escapeHtml(presenceLabel)}</span></div><div class="profile-id-line"><span>${escapeHtml(u.id)}</span><button class="link-btn" onclick="copyCode('${u.id}')">Copiar ID</button></div></div></div></div>
+      <div class="section-title"><div><h2>Estatísticas</h2><p>Partidas competitivas contra jogadores reais.</p></div></div><div class="public-profile-stats">${publicProfileStatsHtml(data)}</div>
+      <div class="section-title"><div><h2>Partidas recentes</h2><p>Últimos resultados registrados.</p></div></div><div class="panel"><div class="panel-body public-profile-history">${publicProfileRecentHtml(data,u.id)}</div></div>
+    </section>`;
+  }catch(err){
+    if(state.view==='public-profile') app.innerHTML=`${topbar('friends')}<section class="dashboard fade-in"><button class="profile-back-link" onclick="renderFriends(true)">← Voltar aos amigos</button><div class="empty-state">${escapeHtml(err.message||'Não foi possível carregar o perfil.')}</div></section>`;
+  }
+}
+
 function renderProfileHistory(){
   const h=state.profileHistory;if(!h)return `<div class="panel"><div class="panel-body"><div class="muted">Carregando histórico competitivo…</div></div></div>`;
-  const gameNames={truco:'Truco',chess:'Xadrez',blackjack:'Blackjack'};
+  const gameNames={truco:'Truco',pool:'Sinuca',chess:'Xadrez',blackjack:'Blackjack'};
   const stats=Object.entries(h.stats||{}).map(([game,x])=>`<div class="stat-card"><span>${gameNames[game]||game}</span><strong>${x.wins}</strong><small>vitórias • ${x.losses} derrotas • ${x.draws} empates • ${x.played} partidas</small></div>`).join('')||'<div class="muted">Nenhuma partida real concluída ainda.</div>';
   window.__TDB_PROFILE_RESULTS__=h.recent||[];
   const recent=(h.recent||[]).map((r,i)=>{const won=(r.winner_ids||[]).includes(state.user.id),lost=(r.loser_ids||[]).includes(state.user.id);const outcome=won?'Vitória':lost?'Derrota':'Empate';const pgn=r.game==='chess'&&r.metadata?.pgn?`<button class="link-btn" onclick="copyRecentPgn(${i})">Copiar PGN</button>`:'';return `<div class="history-row"><div><strong>${escapeHtml(gameNames[r.game]||r.game)} • ${outcome}</strong><small>${new Date(r.finished_at).toLocaleString('pt-BR')} • ${escapeHtml(r.mode||'')}</small></div>${pgn}</div>`}).join('')||'<div class="muted">Sem histórico recente.</div>';
@@ -1575,12 +1942,13 @@ function copyRecentPgn(i){const pgn=window.__TDB_PROFILE_RESULTS__?.[i]?.metadat
 async function saveProfile(){
   const username=document.getElementById('editUsername').value.trim();
   const avatar=document.getElementById('editAvatar').value.trim()||initials(username);
+  const avatarImage=document.getElementById('editAvatarImage')?.value.trim()||'';
   const banner=document.getElementById('editBanner')?.value.trim()||'';
   if(username.length<3) return toast('Use pelo menos 3 caracteres.');
 
   if(location.protocol!=='file:' && window.TDBOnline?.connected && window.TDBOnline?.supabase){
     try{
-      const updated=await window.TDBOnline.updateProfile(username,avatar,banner);
+      const updated=await window.TDBOnline.updateProfile(username,avatar,banner,avatarImage);
       state.user=updated;
       Core.auth.setCurrentUser(updated);
       const idx=state.users.findIndex(u=>u.id===updated.id);
@@ -1594,8 +1962,8 @@ async function saveProfile(){
 
   if(state.users.some(u=>u.id!==state.user.id&&(u.username||'').toLowerCase()===username.toLowerCase())) return toast('Esse nome já está em uso.');
   const idx=state.users.findIndex(u=>u.id===state.user.id);
-  state.user.username=username; state.user.avatar=avatar; state.user.banner=banner||null;
-  if(idx>=0) state.users[idx]={...state.users[idx],username,avatar,banner:banner||null};
+  state.user.username=username; state.user.avatar=avatar; state.user.avatarImage=safeRemoteImage(avatarImage)||null; state.user.banner=safeRemoteImage(banner)||null;
+  if(idx>=0) state.users[idx]={...state.users[idx],username,avatar,avatarImage:state.user.avatarImage,banner:state.user.banner};
   saveUsers(); saveSession(state.user);
   toast('Perfil atualizado.'); renderProfile();
 }
@@ -1655,7 +2023,7 @@ async function submitBugReport(){
       view:state.view,
       game:state.selectedGame||state.activeRoom?.game||null,
       roomCode:state.activeRoom?.code||null,
-      version:'7.1.0',
+      version:'7.2.2',
       onlinePhase:window.TDBOnline?.phase||null,
       latencyMs:window.TDBOnline?.latencyMs??null,
       browser:navigator.userAgent.slice(0,500)
@@ -1736,8 +2104,14 @@ async function bootAuthenticatedApp(){
     const serverUser=await window.TDBAuthOnline.session();
 
     if(!serverUser){
-      clearLocalSessionState();
+      const transient=window.__TDB_AUTH_TRANSIENT_ERROR__;
       __tdbSessionBooting=false;
+      if(transient&&window.TDBAuthOnline?.hasToken){
+        window.TDBPlatformUI?.hideLoading?.();
+        app.innerHTML=`<section class="spectator-placeholder connection-recovery"><div class="game-symbol">TDB</div><span class="eyebrow">CONEXÃO</span><h1>O servidor demorou para responder</h1><p>Sua sessão foi mantida. O TDB não vai mais ficar preso em uma tela de carregamento.</p><button class="btn btn-primary" onclick="location.reload()">Tentar novamente</button></section>`;
+        return;
+      }
+      clearLocalSessionState();
       return renderAuth('login');
     }
 
@@ -1750,9 +2124,13 @@ async function bootAuthenticatedApp(){
     if(reconnect?.room){
       state.activeRoom=reconnect.room;state.selectedGame=reconnect.room.game;Core.rooms.setActive(reconnect.room);
       __tdbSessionBooting=false;
+      if(rejectDisabledRoom(reconnect.room,{leaveOnline:true})){
+        await refreshSocialData(false);
+        return renderLobby();
+      }
       if(reconnect.room.game==='music') return openMusicRoom();
-      if(reconnect.room.status==='playing'&&['chess','truco','blackjack'].includes(reconnect.room.game)){
-        state.view=reconnect.room.game==='truco'?'playing-truco':reconnect.room.game==='chess'?'playing-chess':'playing-blackjack';
+      if(reconnect.room.status==='playing'&&['chess','truco','pool'].includes(reconnect.room.game)){
+        state.view=reconnect.room.game==='truco'?'playing-truco':reconnect.room.game==='pool'?'playing-pool':'playing-chess';
         OnlineGameBridge.start(reconnect.room,reconnect.role||'player');
         if(reconnect.state){
           window.dispatchEvent(new CustomEvent('tdb-game-state',{detail:{roomCode:reconnect.room.code,state:reconnect.state}}));
@@ -1768,7 +2146,10 @@ async function bootAuthenticatedApp(){
 
   __tdbSessionBooting=false;
   if(state.user){
-    if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===state.user.id)){if(state.activeRoom.game==='blackjack'&&state.activeRoom.status==='playing'){state.view='playing-blackjack';OnlineGameBridge.start(state.activeRoom,'player');return;}return renderWaitingRoom();}
+    if(state.activeRoom && state.activeRoom.players?.some(p=>p.id===state.user.id)){
+      if(rejectDisabledRoom(state.activeRoom)) return renderLobby();
+      return renderWaitingRoom();
+    }
     return renderLobby();
   }
   renderAuth('login');
@@ -1802,6 +2183,8 @@ window.toggleFullscreen=toggleFullscreen;
 window.renderFriends=renderFriends;
 window.addFriendById=addFriendById;
 window.renderProfile=renderProfile;
+window.renderPublicProfile=renderPublicProfile;
+window.refreshProfilePreview=refreshProfilePreview;
 window.openInviteFriendsModal=openInviteFriendsModal;
 window.closeInviteFriendsModal=closeInviteFriendsModal;
 window.inviteFriendFromModal=inviteFriendFromModal;
@@ -1858,7 +2241,7 @@ function startTrucoWithBots(){
   const cap=roomCapacity(room);
   if(cap===2){
     room.players=[
-      {username:user.username,id:user.id,avatar:user.avatar,bot:false},
+      {username:user.username,id:user.id,avatar:user.avatar,avatarImage:user.avatarImage||null,bot:false},
       {username:'Bot Rival',id:'BOT-RIVAL',avatar:'R',bot:true}
     ];
   }else{
@@ -1868,7 +2251,7 @@ function startTrucoWithBots(){
       {username:'Bot Copas',id:'BOT-COPAS',avatar:'C',bot:true}
     ];
     room.players=[
-      {username:user.username,id:user.id,avatar:user.avatar,bot:false},
+      {username:user.username,id:user.id,avatar:user.avatar,avatarImage:user.avatarImage||null,bot:false},
       bots[0],bots[1],bots[2]
     ];
   }
@@ -1955,7 +2338,7 @@ function startTrucoGame(room,localBots=false){
   let players=[];
 
   if(cap===2){
-    const p0=room.players[0] || {username:state.user.username,id:state.user.id,avatar:state.user.avatar,bot:false};
+    const p0=room.players[0] || {username:state.user.username,id:state.user.id,avatar:state.user.avatar,avatarImage:state.user.avatarImage||null,bot:false};
     const p1=room.players[1] || {username:'Bot Rival',id:'BOT-RIVAL',avatar:'R',bot:true};
     players=[
       {...p0, seat:0, team:0, bot:!!p0.bot},
@@ -2238,6 +2621,7 @@ function mountTrucoScreen(){
         <div id="trucoDealAnim"></div>
         <div id="trucoMyHand"></div>
         <div id="trucoOverlay"></div>
+        <div id="trucoCallFeedback"></div>
         <div id="trucoRoundFlash"></div><div id="trucoHandSummary"></div>
       </div>
 
@@ -2496,6 +2880,7 @@ function updateTrucoScreen(){
 
   syncMyHandStable();
   set('trucoOverlay',renderOverlay());
+  set('trucoCallFeedback',truco.callFeedback&&Date.now()<truco.callFeedback.until?`<div class="truco-call-feedback">${escapeHtml(truco.callFeedback.message)}</div>`:'');
   set('trucoActions',renderTrucoActions());
   set('trucoLog',truco.logs.map(l=>`<div>• ${escapeHtml(l)}</div>`).join(''));
   if(truco.phase==='raise-response' && truco.pendingRaise?.targetTeam===localTrucoTeam()) maybeAutoFriendlyVote();
@@ -2621,7 +3006,8 @@ function renderSeat(idx,pos){
     else hand=`<div class="enemy-hand">${cards.map(()=>cardBackMini()).join('')}</div>`;
   }
   let roleText='Adversário';
-  if(truco.mode==='2v2') roleText=(p.team===localTrucoTeam()?'Sua dupla':'Adversário');
+  if(truco.spectatorMode) roleText=`Jogador • T${p.team+1}`;
+  else if(truco.mode==='2v2') roleText=(p.team===localTrucoTeam()?'Sua dupla':'Adversário');
   else roleText=(p.seat===localTrucoSeat()?'Você':'Adversário');
 
   return `<div class="player-seat seat-${pos}">
@@ -2668,8 +3054,13 @@ function renderMyHand(){
 
 function renderOverlay(){
   if(truco.winner!==null){
-    const canRematch=!truco.onlineMode || truco.room?.ownerId===state.user.id;
-    return `<div class="game-message"><h2>${truco.winner===localTrucoTeam()?'VITÓRIA':'DERROTA'}</h2><p>${truco.winner===localTrucoTeam()?'Sua dupla chegou aos 12 pontos.':'A dupla adversária chegou aos 12 pontos.'}</p><div class="choices">${canRematch?`<button class="btn btn-primary" onclick="restartTrucoMatch()">Nova partida</button>`:''}<button class="btn btn-dark" onclick="returnFromTruco()">Voltar à sala</button></div>${truco.onlineMode&&!canRematch?'<small class="muted">O host pode iniciar a próxima partida.</small>':''}</div>`;
+    const canRematch=!truco.spectatorMode && (!truco.onlineMode || truco.room?.ownerId===state.user.id);
+    const winnerTitle=truco.spectatorMode?`TIME ${Number(truco.winner)+1} VENCEU`:(truco.winner===localTrucoTeam()?'VITÓRIA':'DERROTA');
+    const winnerText=truco.spectatorMode?`O Time ${Number(truco.winner)+1} chegou aos 12 pontos.`:(truco.winner===localTrucoTeam()?'Sua dupla chegou aos 12 pontos.':'A dupla adversária chegou aos 12 pontos.');
+    return `<div class="game-message"><h2>${winnerTitle}</h2><p>${winnerText}</p><div class="choices">${canRematch?`<button class="btn btn-primary" onclick="restartTrucoMatch()">Nova partida</button>`:''}<button class="btn btn-dark" onclick="returnFromTruco()">Voltar à sala</button></div>${truco.onlineMode&&!canRematch?'<small class="muted">O host pode iniciar a próxima partida.</small>':''}</div>`;
+  }
+  if(truco.spectatorMode && truco.phase==='eleven-decision'){
+    return `<div class="game-message"><h2>MÃO DE 11</h2><p>O Time ${Number(truco.handOfEleven?.team||0)+1} está decidindo a mão.</p></div>`;
   }
   if(truco.phase==='eleven-decision'){
     const t=truco.handOfEleven.team;
@@ -2696,6 +3087,9 @@ function renderOverlay(){
     const teamPlayers=truco.players.filter(p=>p.team===pr.targetTeam);
     const teamTitle=pr.to===3?'TRUCO!':pr.to===6?'SEIS!':pr.to===9?'NOVE!':'DOZE!';
     const rows=teamPlayers.map(p=>`<div class="raise-row"><strong>${escapeHtml(p.username)}</strong><span>${statusLabelForVote(pr.votes[p.seat])}</span></div>`).join('');
+    if(truco.spectatorMode){
+      return `<div class="game-message truco-call"><h2>${teamTitle}</h2><p>Time ${Number(pr.targetTeam)+1} está respondendo.</p><div class="raise-status">${rows}</div></div>`;
+    }
     if(pr.targetTeam===localTrucoTeam()){
       const myVote=pr.votes?.[localTrucoSeat()];
       return `<div class="game-message truco-call"><h2>${teamTitle}</h2><p>${escapeHtml((truco.players.find(p=>p.seat===pr.byPlayer)||{username:'Jogador'}).username)} aumentou a mão. O pedido só entra se a dupla concordar. Se um correr, a dupla corre.</p>
@@ -2716,6 +3110,7 @@ function renderOverlay(){
 }
 function renderTrucoActions(){
   if(truco.winner!==null) return '';
+  if(truco.spectatorMode) return `<div class="truco-actions"><div class="player-prompt">ASSISTINDO AO VIVO • modo espectador</div><button class="btn btn-dark" onclick="leaveTrucoTable()">Sair da transmissão</button></div>`;
   const myTurn=truco.current===localTrucoSeat() && truco.phase==='playing' && !truco.spectatorMode;
   if(truco.phase==='dealing') return `<div class="truco-actions"><div class="player-prompt">Distribuindo as cartas...</div></div>`;
   const canHide=myTurn && truco.round>0 && !truco.ironHand;
@@ -2909,6 +3304,10 @@ function applyRequestRaise({playerIdx}){
   playTrucoSound();
   renderTruco();
 
+  const targetBots=truco.players.filter(bot=>bot.team===truco.pendingRaise?.targetTeam&&bot.bot);
+  if(targetBots.length){
+    showTrucoCallFeedback(`${targetBots.length===1?targetBots[0].username:'Bots adversários'} • ANALISANDO...`,1500);
+  }
   scheduleBotRaiseVotes();
   maybeAutoFriendlyVote();
   startBotRaiseWatchdog(token);
@@ -3009,7 +3408,7 @@ function scheduleBotRaiseVotes(){
   targetBots.forEach((player,idx)=>{
     setTimeout(()=>{
       forceBotRaiseResponse(player,token);
-    },420 + idx*260);
+    },1650 + idx*650);
   });
 }
 
@@ -3026,7 +3425,7 @@ function startBotRaiseWatchdog(token){
     );
 
     waitingBots.forEach(player=>forceBotRaiseResponse(player,token));
-  },1100);
+  },3200);
 
   // Absolute second fallback: no bot-controlled vote may remain null.
   setTimeout(()=>{
@@ -3041,7 +3440,21 @@ function startBotRaiseWatchdog(token){
     }
 
     evaluateRaiseVotes();
-  },1800);
+  },4600);
+}
+function showTrucoCallFeedback(message,duration=1500){
+  if(!truco) return;
+  truco.callFeedback={message,until:Date.now()+duration};
+  const slot=document.getElementById('trucoCallFeedback');
+  if(slot) slot.innerHTML=`<div class="truco-call-feedback">${escapeHtml(message)}</div>`;
+  clearTimeout(window.__tdbTrucoCallFeedbackTimer);
+  window.__tdbTrucoCallFeedbackTimer=setTimeout(()=>{
+    if(truco?.callFeedback&&Date.now()>=truco.callFeedback.until){
+      truco.callFeedback=null;
+      const current=document.getElementById('trucoCallFeedback');
+      if(current) current.innerHTML='';
+    }
+  },duration+30);
 }
 function evaluateRaiseVotes(){
   const pr=truco.pendingRaise;
@@ -3107,8 +3520,9 @@ function applyRespondRaise({action,bot=false,responderIdx=0}){
   pr.votes[seat]=action;
 
   if(bot && responder){
-    const label=action==='accept'?'aceitou':action==='run'?'correu':'pediu aumento';
-    logTruco(`${responder.username} ${label}.`);
+    const label=action==='accept'?'ACEITOU':action==='run'?'CORREU':'PEDIU AUMENTO';
+    logTruco(`${responder.username} ${label.toLowerCase()}.`);
+    showTrucoCallFeedback(`${responder.username} • ${label}`,2400);
   }
 
   renderTruco();
@@ -3128,7 +3542,7 @@ function maybeAutoFriendlyVote(){
 
   setTimeout(()=>{
     forceBotRaiseResponse(partner,token);
-  },480);
+  },1350);
 }
 
 function decideEleven(play){

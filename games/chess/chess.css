@@ -802,3 +802,60 @@
   .chess-turn-banner{flex-direction:column;gap:2px}
   .chess-result-stats{grid-template-columns:1fr}
 }
+
+/* =========================================================
+   v7.1.3 — authoritative desktop fit / larger board
+   Keep the right panel fully inside the viewport and let the
+   board consume the remaining space instead of being capped
+   by older layout rules above.
+   ========================================================= */
+.chess-screen,
+.chess-screen *{box-sizing:border-box}
+
+@media (min-width:981px){
+  .chess-screen{
+    width:100% !important;
+    max-width:100vw !important;
+    height:calc(100dvh - var(--topbar-h)) !important;
+    min-height:0 !important;
+    margin:0 !important;
+    padding:6px 8px !important;
+    overflow:hidden !important;
+    grid-template-columns:minmax(145px,190px) minmax(0,1fr) minmax(230px,280px) !important;
+    gap:8px !important;
+  }
+  .chess-left-panel,.chess-center,.chess-right-panel{
+    min-width:0 !important;
+    max-width:100% !important;
+  }
+  .chess-right-panel{
+    width:100% !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    scrollbar-gutter:stable;
+  }
+  .chess-center{
+    height:100% !important;
+    display:grid !important;
+    grid-template-rows:auto auto minmax(0,1fr) auto !important;
+    gap:5px !important;
+  }
+  .chess-player-bar{min-height:42px !important;padding:4px 8px !important}
+  .chess-turn-banner{min-height:26px !important;padding:3px 8px !important}
+  .chess-board-shell{width:100% !important;height:100% !important;min-height:0 !important;overflow:hidden !important}
+  .chess-board{
+    width:min(100%,calc(100dvh - var(--topbar-h) - 116px)) !important;
+    height:auto !important;
+    max-width:none !important;
+    max-height:100% !important;
+    aspect-ratio:1/1 !important;
+  }
+  .chess-history{max-height:none !important;height:min(34dvh,360px) !important;overflow:auto !important}
+}
+
+/* On common notebook widths the secondary left card yields first;
+   the board and move/history panel remain visible. */
+@media (min-width:981px) and (max-width:1279px){
+  .chess-screen{grid-template-columns:minmax(0,1fr) minmax(225px,260px) !important}
+  .chess-left-panel{display:none !important}
+}

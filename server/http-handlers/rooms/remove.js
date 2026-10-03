@@ -9,6 +9,7 @@ export default async function handler(req,res){
     const room=await getRoomPrivate(code);
     if(!room) return res.json({ok:true});
     if(room.ownerId!==user.id) throw new Error('Somente o host pode encerrar a sala.');
+    if(room.status==='playing') throw new Error('Encerre a partida antes de apagar a sala.');
     await applyMutation({type:'room:remove',code});
     res.json({ok:true});
   }catch(err){sendApiError(res,err)}

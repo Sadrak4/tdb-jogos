@@ -175,7 +175,7 @@ async function startShare(){
   const v=videoTrack();
   if(v){
     try{v.contentHint='detail'}catch{}
-    v.addEventListener('ended',()=>stopShare({reason:'browser'}),{once:true});
+    v.addEventListener('ended',()=>{if(localStream===stream)stopShare({reason:'browser'})},{once:true});
   }
   for(const t of stream.getAudioTracks())t.addEventListener('ended',()=>render(true));
 
@@ -200,6 +200,33 @@ async function startShare(){
     notify(friendlyScreenError(err,'registro da transmissão'));
   }
 }
+async function switchShareSource(){
+  if(!localStream||!isBroadcaster()) return notify('Inicie um compartilhamento antes de trocar a origem.');
+  if(!navigator.mediaDevices?.getDisplayMedia) return notify('Seu navegador não oferece troca de compartilhamento.');
+  let stream;
+  try{stream=await captureDisplay()}
+  catch(err){
+    if(!['NotAllowedError','AbortError'].includes(err?.name))notify(friendlyScreenError(err,'troca da tela'));
+    return;
+  }
+  if(!stream?.getVideoTracks?.().length){stopTracks(stream);return notify('Nenhuma tela ou janela foi selecionada.')}
+  const oldStream=localStream;
+  localStream=stream;
+  const v=videoTrack();
+  if(v){
+    try{v.contentHint='detail'}catch{}
+    v.addEventListener('ended',()=>{if(localStream===stream)stopShare({reason:'browser'})},{once:true});
+  }
+  for(const t of stream.getAudioTracks())t.addEventListener('ended',()=>render(true));
+  // A origem mudou: refaz as ofertas para os espectadores existentes sem
+  // encerrar a transmissão da sala nem mudar o broadcastId.
+  closeAllBroadcasterPeers();
+  stopTracks(oldStream);
+  render(true);
+  try{await processBroadcaster()}catch(err){console.warn('[TDB Screen Share source switch]',err)}
+  notify('Origem alterada. Os espectadores serão reconectados automaticamente.');
+}
+
 async function stopShare({silent=false,reason='user'}={}){
   const hadCapture=!!localStream;
   const wasBroadcaster=isBroadcaster()||hadCapture||localPhase==='registering';
@@ -468,7 +495,7 @@ function renderStage(force=false){
     return;
   }
   if(mode==='local'){
-    root.innerHTML=`<div class="lounge-stage-head"><div><span class="lounge-live-dot"></span><div><strong>VOCÊ ESTÁ COMPARTILHANDO</strong><small>${localPhase==='registering'?'Publicando transmissão na sala…':`${shareState?.viewerCount||0} espectador(es) • ${esc(connectionSummary())}`}</small></div></div><div class="lounge-stage-actions"><button class="btn btn-secondary btn-sm" onclick="TDBScreenShare.fullscreen()">Tela cheia</button><button class="btn btn-danger btn-sm" onclick="TDBScreenShare.stopShare()">Parar compartilhamento</button></div></div><div class="lounge-stage-video-wrap"><video id="loungeScreenLocalStageVideo" autoplay muted playsinline></video></div>`;
+    root.innerHTML=`<div class="lounge-stage-head"><div><span class="lounge-live-dot"></span><div><strong>VOCÊ ESTÁ COMPARTILHANDO</strong><small>${localPhase==='registering'?'Publicando transmissão na sala…':`${shareState?.viewerCount||0} espectador(es) • ${esc(connectionSummary())}`}</small></div></div><div class="lounge-stage-actions"><button class="btn btn-secondary btn-sm" onclick="TDBScreenShare.switchShareSource()">Trocar tela/janela</button><button class="btn btn-secondary btn-sm" onclick="TDBScreenShare.fullscreen()">Tela cheia</button><button class="btn btn-danger btn-sm" onclick="TDBScreenShare.stopShare()">Parar compartilhamento</button></div></div><div class="lounge-stage-video-wrap"><video id="loungeScreenLocalStageVideo" autoplay muted playsinline></video></div>`;
     attachLocalPreviews();return;
   }
   if(mode==='orphan'){
@@ -509,7 +536,7 @@ function render(force=false){
   }
 
   if(localStream){
-    root.innerHTML=`<div class="lounge-share-live-head"><span class="lounge-live-dot"></span><div><strong>${localPhase==='registering'?'INICIANDO TRANSMISSÃO…':'VOCÊ ESTÁ TRANSMITINDO'}</strong><small>${shareState?.viewerCount||0} espectador(es) • ${esc(connectionSummary())}${audioTrack()?' • áudio da tela incluído':''}</small></div></div><video id="loungeScreenLocalPreview" class="lounge-screen-preview" autoplay muted playsinline></video><div class="lounge-share-buttons"><button class="btn btn-danger full" onclick="TDBScreenShare.stopShare()">Parar compartilhamento</button></div>`;
+    root.innerHTML=`<div class="lounge-share-live-head"><span class="lounge-live-dot"></span><div><strong>${localPhase==='registering'?'INICIANDO TRANSMISSÃO…':'VOCÊ ESTÁ TRANSMITINDO'}</strong><small>${shareState?.viewerCount||0} espectador(es) • ${esc(connectionSummary())}${audioTrack()?' • áudio da tela incluído':''}</small></div></div><video id="loungeScreenLocalPreview" class="lounge-screen-preview" autoplay muted playsinline></video><div class="lounge-share-buttons"><button class="btn btn-secondary full" onclick="TDBScreenShare.switchShareSource()">Trocar tela / janela / aba</button><button class="btn btn-danger full" onclick="TDBScreenShare.stopShare()">Parar compartilhamento</button></div>`;
     attachLocalPreviews();return;
   }
 
@@ -548,5 +575,5 @@ window.addEventListener('tdb-screen-share-update',e=>{if(room&&e.detail?.roomCod
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&room)poll(true)});
 window.addEventListener('pagehide',()=>{stopTracks(localStream);localStream=null;closeAllBroadcasterPeers();closeViewerPeer()});
 
-window.TDBScreenShare={mount,leaveRoom,startShare,stopShare,watchShare,stopWatching,fullscreen,poll,retryViewer,enableRemoteAudio};
+window.TDBScreenShare={mount,leaveRoom,startShare,switchShareSource,stopShare,watchShare,stopWatching,fullscreen,poll,retryViewer,enableRemoteAudio};
 })();

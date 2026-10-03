@@ -11,6 +11,7 @@ create table if not exists public.tdb_users (
   username text not null,
   username_normalized text not null unique,
   avatar text,
+  avatar_image text,
   salt text not null,
   password_hash text not null,
   created_at timestamptz not null default now()

@@ -14,6 +14,30 @@ let schemaReady=false;
 let initPromise=null;
 let lastError=null;
 let lastInitAt=0;
+const SUPABASE_INIT_TIMEOUT_MS=4500;
+const SUPABASE_QUERY_TIMEOUT_MS=6500;
+function withTimeout(promise,ms=SUPABASE_INIT_TIMEOUT_MS,label='Supabase'){
+  let timer;
+  const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(`${label} não respondeu em ${Math.ceil(ms/1000)}s.`)),ms)});
+  return Promise.race([Promise.resolve(promise),timeout]).finally(()=>clearTimeout(timer));
+}
+export async function runSupabaseQuery(query,label='Supabase',ms=SUPABASE_QUERY_TIMEOUT_MS){
+  const controller=new AbortController();
+  let timedOut=false;
+  const timer=setTimeout(()=>{timedOut=true;controller.abort()},Math.max(250,Number(ms)||SUPABASE_QUERY_TIMEOUT_MS));
+  try{
+    let q=query;
+    if(q&&typeof q.abortSignal==='function')q=q.abortSignal(controller.signal);
+    return await withTimeout(Promise.resolve(q),Math.max(250,Number(ms)||SUPABASE_QUERY_TIMEOUT_MS)+150,label);
+  }catch(err){
+    if(timedOut||controller.signal.aborted){
+      const timeoutErr=new Error(`${label} não respondeu dentro do tempo esperado.`);
+      timeoutErr.code='SUPABASE_TIMEOUT';
+      throw timeoutErr;
+    }
+    throw err;
+  }finally{clearTimeout(timer)}
+}
 
 function envSecret(){
   return process.env.SUPABASE_SECRET_KEY
@@ -52,9 +76,9 @@ export async function initSupabase(){
     try{
       supabaseClient=createClient(url,secret,{
         auth:{persistSession:false,autoRefreshToken:false},
-        global:{headers:{'X-Client-Info':'tdb-jogos-server/6.0'}}
+        global:{headers:{'X-Client-Info':'tdb-jogos-server/7.2.2'}}
       });
-      const checks=await Promise.all([
+      const checks=await withTimeout(Promise.all([
         supabaseClient.from('tdb_rooms').select('code',{head:true,count:'exact'}).limit(1),
         supabaseClient.from('tdb_game_results').select('match_id',{head:true,count:'exact'}).limit(1),
         supabaseClient.from('tdb_friend_requests').select('sender_id',{head:true,count:'exact'}).limit(1),
@@ -62,7 +86,7 @@ export async function initSupabase(){
         supabaseClient.from('tdb_reports').select('id',{head:true,count:'exact'}).limit(1),
         supabaseClient.from('tdb_admin_sessions').select('token',{head:true,count:'exact'}).limit(1),
         supabaseClient.from('tdb_users').select('id,banned',{head:true,count:'exact'}).limit(1)
-      ]);
+      ]),SUPABASE_INIT_TIMEOUT_MS,'Supabase');
       const schemaError=checks.find(x=>x.error)?.error;
       if(schemaError){supabaseReady=true;schemaReady=false;lastError=`Schema v5.5 pendente: ${schemaError.message}`;return false;}
 
@@ -102,11 +126,11 @@ export async function emitEvent(topic,roomCode=null,kind='update'){
 
   if(isSupabaseReady()){
     try{
-      const {error}=await supabaseClient.from('tdb_events').insert({
+      const {error}=await runSupabaseQuery(supabaseClient.from('tdb_events').insert({
         topic:String(topic||'general'),
         room_code:roomCode||null,
         kind:String(kind||'update')
-      });
+      }),'Evento do Supabase',3500);
       if(error) console.warn('[TDB Supabase event]',error.message);
 
       // Small probabilistic cleanup so this tiny invalidation table does not grow forever.
@@ -125,7 +149,7 @@ export async function emitEvent(topic,roomCode=null,kind='update'){
 async function listTable(table){
   await initSupabase();
   if(!isSupabaseReady()) return null;
-  const {data,error}=await supabaseClient.from(table).select('*');
+  const {data,error}=await runSupabaseQuery(supabaseClient.from(table).select('*'),`Tabela ${table} do Supabase`);
   if(error) throw new Error(error.message);
   return data||[];
 }
@@ -135,10 +159,10 @@ export async function snapshot(){
 
   if(isSupabaseReady()){
     const [roomsRes,matchesRes,presenceRes,sharedRes]=await Promise.all([
-      supabaseClient.from('tdb_rooms').select('data').neq('status','closed'),
-      supabaseClient.from('tdb_matches').select('data').neq('status','finished'),
-      supabaseClient.from('tdb_presence').select('user_id,data,updated_at'),
-      supabaseClient.from('tdb_shared').select('key,value').like('key','music:%')
+      runSupabaseQuery(supabaseClient.from('tdb_rooms').select('data').neq('status','closed'),'Salas do Supabase'),
+      runSupabaseQuery(supabaseClient.from('tdb_matches').select('data').neq('status','finished'),'Partidas do Supabase'),
+      runSupabaseQuery(supabaseClient.from('tdb_presence').select('user_id,data,updated_at'),'Presença do Supabase'),
+      runSupabaseQuery(supabaseClient.from('tdb_shared').select('key,value').like('key','music:%'),'Estado compartilhado do Supabase')
     ]);
 
     for(const r of [roomsRes,matchesRes,presenceRes,sharedRes]){
@@ -186,7 +210,7 @@ export async function snapshot(){
 
 async function upsertRoom(room){
   if(isSupabaseReady()){
-    const {error}=await supabaseClient.from('tdb_rooms').upsert({
+    const {error}=await runSupabaseQuery(supabaseClient.from('tdb_rooms').upsert({
       code:room.code,
       game:room.game||null,
       owner_id:room.ownerId||null,
@@ -194,7 +218,7 @@ async function upsertRoom(room){
       privacy:room.privacy||'public',
       data:room,
       updated_at:new Date().toISOString()
-    },{onConflict:'code'});
+    },{onConflict:'code'}),'Salvar sala no Supabase');
     if(error) throw new Error(error.message);
   }else{
     MEMORY.rooms.set(room.code,clone(room));
@@ -204,7 +228,7 @@ async function upsertRoom(room){
 
 async function removeRoom(code){
   if(isSupabaseReady()){
-    const {error}=await supabaseClient.from('tdb_rooms').delete().eq('code',code);
+    const {error}=await runSupabaseQuery(supabaseClient.from('tdb_rooms').delete().eq('code',code),'Remover sala do Supabase');
     if(error) throw new Error(error.message);
   }else MEMORY.rooms.delete(code);
   await emitEvent('rooms',code,'remove');
@@ -212,14 +236,14 @@ async function removeRoom(code){
 
 async function upsertMatch(match){
   if(isSupabaseReady()){
-    const {error}=await supabaseClient.from('tdb_matches').upsert({
+    const {error}=await runSupabaseQuery(supabaseClient.from('tdb_matches').upsert({
       match_id:match.matchId,
       room_code:match.roomCode||null,
       game:match.game||null,
       status:match.status||'playing',
       data:match,
       updated_at:new Date().toISOString()
-    },{onConflict:'match_id'});
+    },{onConflict:'match_id'}),'Salvar partida no Supabase');
     if(error) throw new Error(error.message);
   }else MEMORY.matches.set(match.matchId,clone(match));
   await emitEvent('matches',match.roomCode||null,'upsert');
@@ -228,9 +252,9 @@ async function upsertMatch(match){
 async function removeMatch(matchId){
   let roomCode=null;
   if(isSupabaseReady()){
-    const {data}=await supabaseClient.from('tdb_matches').select('room_code').eq('match_id',matchId).maybeSingle();
+    const {data}=await runSupabaseQuery(supabaseClient.from('tdb_matches').select('room_code').eq('match_id',matchId).maybeSingle(),'Localizar partida no Supabase');
     roomCode=data?.room_code||null;
-    const {error}=await supabaseClient.from('tdb_matches').delete().eq('match_id',matchId);
+    const {error}=await runSupabaseQuery(supabaseClient.from('tdb_matches').delete().eq('match_id',matchId),'Remover partida do Supabase');
     if(error) throw new Error(error.message);
   }else{
     roomCode=MEMORY.matches.get(matchId)?.roomCode||null;
@@ -242,12 +266,12 @@ async function removeMatch(matchId){
 async function setPresence(userId,status,extra={}){
   const payload={userId,status:status||'online',...extra,updatedAt:Date.now()};
   if(isSupabaseReady()){
-    const {error}=await supabaseClient.from('tdb_presence').upsert({
+    const {error}=await runSupabaseQuery(supabaseClient.from('tdb_presence').upsert({
       user_id:userId,
       status:payload.status,
       data:payload,
       updated_at:new Date().toISOString()
-    },{onConflict:'user_id'});
+    },{onConflict:'user_id'}),'Atualizar presença no Supabase');
     if(error) throw new Error(error.message);
   }else MEMORY.presence.set(userId,clone(payload));
   await emitEvent('presence',extra?.roomCode||null,'set');
@@ -286,11 +310,11 @@ export async function getSharedValue(key,fallback=null){
   await initSupabase();
 
   if(isSupabaseReady()){
-    const {data,error}=await supabaseClient
+    const {data,error}=await runSupabaseQuery(supabaseClient
       .from('tdb_shared')
       .select('value')
       .eq('key',key)
-      .maybeSingle();
+      .maybeSingle(),'Ler estado compartilhado do Supabase');
 
     if(error) throw new Error(error.message);
     return data?.value ?? fallback;
@@ -310,11 +334,11 @@ export async function setSharedValue(key,value){
   await initSupabase();
 
   if(isSupabaseReady()){
-    const {error}=await supabaseClient.from('tdb_shared').upsert({
+    const {error}=await runSupabaseQuery(supabaseClient.from('tdb_shared').upsert({
       key,
       value,
       updated_at:new Date().toISOString()
-    },{onConflict:'key'});
+    },{onConflict:'key'}),'Salvar estado compartilhado no Supabase');
     if(error) throw new Error(error.message);
   }else MEMORY.shared.set(key,clone(value));
 
@@ -326,7 +350,7 @@ export async function setSharedValue(key,value){
 export async function removeSharedValue(key){
   await initSupabase();
   if(isSupabaseReady()){
-    const {error}=await supabaseClient.from('tdb_shared').delete().eq('key',key);
+    const {error}=await runSupabaseQuery(supabaseClient.from('tdb_shared').delete().eq('key',key),'Remover estado compartilhado do Supabase');
     if(error) throw new Error(error.message);
   }else MEMORY.shared.delete(key);
   const {topic,roomCode}=sharedEventMeta(key);
@@ -339,10 +363,10 @@ export async function listSharedValues(prefix){
   const out=[];
   if(isSupabaseReady()){
     const safePrefix=String(prefix||'');
-    const {data,error}=await supabaseClient
+    const {data,error}=await runSupabaseQuery(supabaseClient
       .from('tdb_shared')
       .select('key,value,updated_at')
-      .like('key',`${safePrefix}%`);
+      .like('key',`${safePrefix}%`),'Listar estado compartilhado do Supabase');
     if(error) throw new Error(error.message);
     for(const row of data||[])out.push({key:row.key,value:clone(row.value),updatedAt:row.updated_at?new Date(row.updated_at).getTime():0});
     return out;
@@ -357,11 +381,11 @@ export async function getRoomPrivate(code){
   await initSupabase();
 
   if(isSupabaseReady()){
-    const {data,error}=await supabaseClient
+    const {data,error}=await runSupabaseQuery(supabaseClient
       .from('tdb_rooms')
       .select('data')
       .eq('code',code)
-      .maybeSingle();
+      .maybeSingle(),'Ler sala do Supabase');
 
     if(error) throw new Error(error.message);
     return data?.data?clone(data.data):null;

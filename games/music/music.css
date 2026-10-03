@@ -1162,3 +1162,59 @@
   .lounge-screen-stage.active{min-height:300px}
   .lounge-screen-floating-stop{width:calc(100% - 24px);justify-content:space-between;bottom:12px}
 }
+
+/* =========================================================
+   v7.1.3 — authoritative Lobby width fix
+   Older responsive rules could re-enable a third column on
+   notebook widths and push the right tools panel off-screen.
+   ========================================================= */
+.music-screen,
+.music-screen *{box-sizing:border-box}
+.music-screen{
+  width:100% !important;
+  max-width:1600px !important;
+  padding-left:8px !important;
+  padding-right:8px !important;
+  overflow-x:hidden !important;
+}
+.music-sidebar,.music-main,.music-add-panel,.music-player-card,.music-queue-card{
+  min-width:0 !important;
+  max-width:100% !important;
+}
+.music-add-panel{overflow-x:hidden !important}
+.music-add-panel input,.music-add-panel select,.music-add-panel textarea,.music-add-panel .btn{
+  max-width:100% !important;
+}
+
+@media (min-width:1280px){
+  .music-screen{
+    grid-template-columns:minmax(180px,220px) minmax(0,1fr) minmax(245px,300px) !important;
+    gap:8px !important;
+  }
+  .music-add-panel{
+    grid-column:auto !important;
+    display:flex !important;
+    flex-direction:column !important;
+    height:100% !important;
+    overflow-y:auto !important;
+  }
+}
+
+@media (min-width:851px) and (max-width:1279px){
+  .music-screen{
+    height:auto !important;
+    min-height:calc(100dvh - var(--topbar-h)) !important;
+    grid-template-columns:minmax(175px,210px) minmax(0,1fr) !important;
+    gap:8px !important;
+    overflow-y:auto !important;
+  }
+  .music-add-panel{
+    grid-column:1/-1 !important;
+    width:100% !important;
+    height:auto !important;
+    max-height:none !important;
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    overflow:visible !important;
+  }
+}

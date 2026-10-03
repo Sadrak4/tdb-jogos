@@ -1,18 +1,44 @@
-# TDB v7.1.0
+# TDB v7.2.2 — Estabilidade Online + Sinuca 8-Ball
 
-## Entregue nesta atualização
-- Perfil 2.0: banner opcional, avatar, status/presença, estatísticas e histórico recente.
-- Perfil de amigos: clicar em um amigo abre perfil completo, presença, estatísticas, últimas partidas e convite para a sala atual.
-- Presença: Online, Ausente automático após 5 min, No Truco, No Xadrez, No Blackjack, Ouvindo música e Assistindo partida.
-- Truco: mantidas e validadas as melhorias já existentes da base v7 (placar, indicação de turno, animações, Truco/6/9/12, histórico/log e resultado).
-- Xadrez: mantidas e validadas as funções já existentes (relógio opcional, último movimento, capturas, promoção, empate, desistência, revanche e histórico/PGN).
-- TDB Lobby/Música: mantidas fila compartilhada, autor da música, voto para pular, sincronização e bloqueio/permissões do host.
-- Admin 2.0: mantido painel com usuários online, salas, partidas, reportes, banimento, sessões, logs, manutenção e métricas.
-- Modularização: presença/idle foi retirada do fluxo principal para `core/presence-manager.js`; perfil público ganhou endpoint próprio `profile/public`.
+A v7.2.2 mantém tudo da v7.2.1/v7.2.0 e faz uma revisão do multiplayer depois da entrada da **Sinuca 8-Ball**.
 
-## Banco de dados
-Esta versão ADICIONA a coluna `banner` em `tdb_users`.
-Execute `SUPABASE-MIGRATION-v7.1.0.sql` uma vez no SQL Editor do Supabase.
+## Jogos no lobby
 
-## Base preservada
-A v7.1.0 parte da v7.0.1 Gameplay Fix e preserva os fixes de visibilidade/layout dos quatro módulos.
+1. Truco
+2. Sinuca
+3. Xadrez
+4. TDB Lobby
+5. Blackjack — Em manutenção
+
+## Principais pontos desta versão
+
+- Sinuca 8-Ball 1x1 online com motor próprio e física autoritativa no servidor.
+- Entrada de amigo/sala revisada.
+- Recuperação automática de salas presas como `playing` sem partida real.
+- Start e revanche transacionais.
+- Timeouts de cliente e servidor para impedir loading infinito.
+- Recuperação visual da Sinuca se a sincronização falhar.
+- Menos writes de presença durante partidas.
+- Espectador só entra quando existe partida oficial ativa.
+- TDB Lobby continua com fila de músicas sem limite por pessoa.
+
+Leia `ATUALIZACAO-v7.2.2.md` para a lista completa e `REVISAO-v7.2.2.md` para os testes realizados.
+
+## Supabase
+
+Se seu banco já está atualizado até a v7.1.7, **a v7.2.2 não exige SQL novo**.
+
+## Desenvolvimento local
+
+```bash
+npm install
+npm run dev
+```
+
+## Testes principais
+
+```bash
+npm run test:v720
+npm run test:v721
+npm run test:v722
+```

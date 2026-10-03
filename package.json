@@ -1,11 +1,19 @@
 {
   "name": "tdb",
-  "version": "7.1.0",
+  "version": "7.2.2",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "test:audit": "node tests/v7.2.2-online-stability-smoke.mjs",
+    "test:maintenance": "node tests/v7.1.5-maintenance-admin-smoke.mjs",
+    "test:v716": "node tests/v7.1.6-lobby-live-ux-smoke.mjs",
+    "test:v717": "node tests/v7.1.7-profile-chess-smoke.mjs",
+    "test:v718": "node tests/v7.1.8-chess-room-bot-smoke.mjs",
+    "test:v720": "node tests/v7.2.0-pool-engine-smoke.mjs",
+    "test:v721": "node tests/v7.2.1-music-unlimited-smoke.mjs",
+    "test:v722": "node tests/v7.2.2-online-stability-smoke.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
