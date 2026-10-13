@@ -21,6 +21,31 @@ let musicRenderCache={queue:'',history:'',favorites:'',presets:'',members:''};
 
 let lastPlayerError=null;
 let lastRemoteSeekAt=0;
+let requestedVideoId='';
+let lastVideoLoadAt=0;
+let lastPlaybackRevision=-1;
+let lastSyncCheckAt=0;
+let musicToolView='add';
+// Central de Atividades v7.2.5: altera somente o quadro de mesas.
+// O player YouTube e o WebRTC não são desmontados ao criar/entrar em mesas.
+let activityState=null;
+let activityTimer=null;
+let activityBusy=false;
+const ACTIVITY_GAMES=Object.freeze({
+  chess:{name:'Xadrez',icon:'♟',capacity:2},
+  pool:{name:'Sinuca',icon:'🎱',capacity:2},
+  truco:{name:'Truco',icon:'🃏',capacity:4}
+});
+
+const MUSIC_SYNC_POLL_MS=2500;
+const MUSIC_DRIFT_SEEK_SECONDS=2.75;
+const MUSIC_DRIFT_EMERGENCY_SECONDS=7;
+const MUSIC_SEEK_COOLDOWN_MS=8500;
+const MUSIC_LOAD_GUARD_MS=6500;
+
+function musicNow(){
+  try{return Number(window.TDBOnline?.serverNow?.()||Date.now())}catch{return Date.now()}
+}
 
 function isHttpEnvironment(){
   return location.protocol==='http:' || location.protocol==='https:';
@@ -74,9 +99,11 @@ function makeDefaultState(){
     currentIndex:-1,
     status:'paused',
     position:0,
-    changedAt:Date.now(),
-    updatedAt:Date.now(),
+    changedAt:musicNow(),
+    updatedAt:musicNow(),
     updatedBy:state.user.id,
+    revision:0,
+    playbackRevision:0,
     controlsLocked:false,
     skipVotes:[],
     history:[],
@@ -98,6 +125,13 @@ function readMusicState(){
 
 
 function isOnlineMusic(){return window.TDBCore?.mode==='online'&&window.TDBOnline?.connected}
+function onlineMusicDisconnected(){return window.TDBCore?.mode==='online'&&!window.TDBOnline?.connected}
+function requireMusicConnection(){
+  if(!onlineMusicDisconnected())return true;
+  updatePersistentSyncBadge('offline','Reconectando ao servidor');
+  toast('A conexão com a sala está sendo restabelecida. Tente novamente em alguns segundos.');
+  return false;
+}
 async function sendOnlineMusic(action){
   const next=await window.TDBOnline.musicAction(room.code,action);
   if(!next) return false;
@@ -108,6 +142,10 @@ async function sendOnlineMusic(action){
 }
 
 function saveMusicState(next){
+  if(window.TDBCore?.mode==='online'&&!window.TDBOnline?.connected){
+    requireMusicConnection();
+    return false;
+  }
   musicState={...next,updatedAt:Date.now(),updatedBy:state.user.id};
 
   if(window.TDBCore?.mode==='online' && window.TDBCore.sharedState){
@@ -130,6 +168,8 @@ function musicStateFingerprint(value){
   return [
     value.updatedAt||0,
     value.changedAt||0,
+    value.revision||0,
+    value.playbackRevision||0,
     value.currentIndex??-1,
     value.status||'',
     (value.queue||[]).map(x=>x.id||x.videoId).join(','),
@@ -193,37 +233,69 @@ async function getMeta(videoId){
 }
 
 async function addYoutubeLink(){
+  if(!requireMusicConnection())return false;
   const input=document.getElementById('musicLinkInput');
-  const videoId=extractYouTubeId(input?.value);
-  if(!videoId) return toast('Cole um link válido do YouTube.');
-
-  const meta=await getMeta(videoId);
-  if(isOnlineMusic()){
-    const ok=await sendOnlineMusic({type:'ADD_TRACK',track:meta});
-    if(ok&&input) input.value='';
-    return;
+  const button=document.getElementById('musicAddLinkBtn');
+  const hint=document.getElementById('musicLinkHint');
+  const raw=input?.value?.trim()||'';
+  const videoId=extractYouTubeId(raw);
+  if(!videoId){
+    if(hint){hint.textContent='Cole um link válido do YouTube.';hint.classList.add('error')}
+    input?.focus();
+    return toast('Cole um link válido do YouTube.');
   }
-  const next=structuredClone(musicState);
 
-  next.queue.push({
-    id:`Q-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
-    ...meta,
-    addedBy:state.user.username,
-    addedById:state.user.id,
-    addedAt:Date.now()
+  if(button){button.disabled=true;button.textContent='Adicionando…'}
+  if(hint){hint.textContent='Buscando informações do vídeo…';hint.classList.remove('error')}
+  try{
+    const meta=await getMeta(videoId);
+    if(isOnlineMusic()){
+      const ok=await sendOnlineMusic({type:'ADD_TRACK',track:meta});
+      if(ok&&input) input.value='';
+      if(ok&&hint) hint.textContent='Música adicionada à fila.';
+      return;
+    }
+    const next=structuredClone(musicState);
+    next.queue.push({
+      id:`Q-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+      ...meta,
+      addedBy:state.user.username,
+      addedById:state.user.id,
+      addedAt:Date.now()
+    });
+    if(next.currentIndex<0){
+      next.currentIndex=0;
+      next.position=0;
+      next.status='paused';
+      next.changedAt=Date.now();
+    }
+    saveMusicState(next);
+    if(input) input.value='';
+    if(hint) hint.textContent='Música adicionada à fila.';
+    window.TDBSound?.play?.('musicAdd',{channel:'music-action'});
+    toast('Adicionado à fila.');
+  }finally{
+    if(button){button.disabled=false;button.textContent='+ Adicionar à fila'}
+  }
+}
+
+function bindMusicComposer(){
+  const input=document.getElementById('musicLinkInput');
+  if(!input)return;
+  input.addEventListener('keydown',event=>{
+    if(event.key==='Enter'){
+      event.preventDefault();
+      addYoutubeLink();
+    }
   });
-
-  if(next.currentIndex<0){
-    next.currentIndex=0;
-    next.position=0;
-    next.status='paused';
-    next.changedAt=Date.now();
-  }
-
-  saveMusicState(next);
-  if(input) input.value='';
-  window.TDBSound?.play?.('musicAdd',{channel:'music-action'});
-  toast('Adicionado à fila.');
+  input.addEventListener('paste',()=>setTimeout(()=>{
+    const hint=document.getElementById('musicLinkHint');
+    const ok=!!extractYouTubeId(input.value);
+    if(hint){
+      hint.textContent=ok?'Link reconhecido. Pressione Enter ou clique em Adicionar.':'Cole um link do YouTube (youtube.com ou youtu.be).';
+      hint.classList.toggle('error',!ok&&!!input.value.trim());
+    }
+  },0));
 }
 
 function saveApiKey(){
@@ -295,6 +367,7 @@ function decodeEntities(text){
 }
 
 async function addSearchResult(index){
+  if(!requireMusicConnection())return false;
   const item=window.__TDB_MUSIC_RESULTS__?.[index];
   if(!item) return;
   if(isOnlineMusic()){
@@ -334,7 +407,8 @@ async function addSearchResult(index){
 function expectedPosition(){
   const base=Number(musicState?.position||0);
   if(musicState?.status!=='playing') return base;
-  return base + Math.max(0,(Date.now()-Number(musicState.changedAt||Date.now()))/1000);
+  const anchor=Number(musicState.changedAt||musicNow());
+  return base + Math.max(0,(musicNow()-anchor)/1000);
 }
 
 function currentPlayerPosition(){
@@ -352,6 +426,7 @@ function toggleMusicPlayback(){
 }
 
 async function playMusic(){
+  if(!requireMusicConnection())return false;
   if(isOnlineMusic()) return sendOnlineMusic({type:'PLAY',position:currentPlayerPosition()});
   if(!canControl()) return toast('Somente o host pode controlar o player.');
   if(!currentTrack()) return toast('Adicione uma música primeiro.');
@@ -371,6 +446,7 @@ async function playMusic(){
 }
 
 async function pauseMusic(){
+  if(!requireMusicConnection())return false;
   if(isOnlineMusic()){
     try{if(playerReady&&player?.pauseVideo)player.pauseVideo()}catch{}
     return sendOnlineMusic({type:'PAUSE',position:currentPlayerPosition()});
@@ -393,6 +469,7 @@ async function pauseMusic(){
 }
 
 async function nextMusic(){
+  if(!requireMusicConnection())return false;
   if(isOnlineMusic()) return sendOnlineMusic({type:'NEXT',position:currentPlayerPosition(),trackId:currentTrack()?.id||null});
   if(!canSkip()) return toast('Somente o host pode pular nesta sala.');
   if(!musicState.queue.length) return;
@@ -412,6 +489,7 @@ async function nextMusic(){
 }
 
 async function previousMusic(){
+  if(!requireMusicConnection())return false;
   if(isOnlineMusic()) return sendOnlineMusic({type:'PREVIOUS',position:currentPlayerPosition()});
   if(!canSkip()) return toast('Somente o host pode voltar nesta sala.');
   const next=structuredClone(musicState);
@@ -429,6 +507,7 @@ async function previousMusic(){
 }
 
 async function jumpToMusic(index){
+  if(!requireMusicConnection())return false;
   if(isOnlineMusic()) return sendOnlineMusic({type:'JUMP',index});
   if(!canControl()) return toast('Somente o host pode escolher uma faixa diretamente.');
   if(index<0 || index>=musicState.queue.length) return;
@@ -441,6 +520,7 @@ async function jumpToMusic(index){
 }
 
 async function removeMusic(index){
+  if(!requireMusicConnection())return false;
   const item=musicState.queue[index];
   if(!item) return;
   if(isOnlineMusic()) return sendOnlineMusic({type:'REMOVE',itemId:item.id});
@@ -470,6 +550,7 @@ async function removeMusic(index){
 
 
 async function moveMusic(index,direction){
+  if(!requireMusicConnection())return false;
   const item=musicState.queue[index];
   if(!item) return;
   if(isOnlineMusic()) return sendOnlineMusic({type:'MOVE',itemId:item.id,direction});
@@ -481,6 +562,7 @@ async function moveMusic(index,direction){
   saveMusicState(next);
 }
 async function toggleMusicLock(){
+  if(!requireMusicConnection())return false;
   if(room.ownerId!==state.user.id) return toast('Somente o host pode bloquear os controles.');
   if(isOnlineMusic()) return sendOnlineMusic({type:'TOGGLE_LOCK'});
   const next=structuredClone(musicState);
@@ -539,7 +621,15 @@ async function createPlayer(){
       },
       onStateChange(event){
         if(applyingRemote) return;
-        if(event.data===YT.PlayerState.ENDED && canSkip()) nextMusic();
+        if(event.data===YT.PlayerState.ENDED){
+          if(isOnlineMusic()){
+            if(room?.ownerId===state.user.id){
+              sendOnlineMusic({type:'ENDED',trackId:currentTrack()?.id||null});
+            }
+          }else if(canSkip()){
+            nextMusic();
+          }
+        }
       },
       onError(event){
         console.error('[TDB Lobby] YouTube Player error:',event.data);
@@ -599,45 +689,126 @@ function musicVoteInfo(){
   return {votes,needed,percent:Math.max(0,Math.min(100,votes/needed*100))};
 }
 
-function syncPlayer(force=false){
+function updatePersistentSyncBadge(mode='ok',detail=''){
+  const badge=document.getElementById('musicSyncHealth');
+  if(!badge)return;
+  const labels={ok:'Sincronizado',adjust:'Ajustando',loading:'Carregando',offline:'Reconectando'};
+  badge.dataset.state=mode;
+  badge.textContent=detail||labels[mode]||'Sincronizado';
+}
+
+function syncPlayer(force=false,reason='state'){
   if(!playerReady || !player) return;
   const track=currentTrack();
-  if(!track) return;
+  if(!track){
+    requestedVideoId='';
+    updatePersistentSyncBadge('ok','Aguardando música');
+    return;
+  }
 
+  const now=Date.now();
   const expected=Math.max(0,expectedPosition());
-
+  const playbackRevision=Number(musicState?.playbackRevision||0);
+  const revisionChanged=playbackRevision!==lastPlaybackRevision;
+  lastPlaybackRevision=playbackRevision;
   applyingRemote=true;
+
   try{
     const loaded=player.getVideoData?.().video_id||'';
+    if(loaded===track.videoId)requestedVideoId=track.videoId;
 
-    if(force || loaded!==track.videoId){
+    const targetChanged=requestedVideoId!==track.videoId && loaded!==track.videoId;
+    const loadGuardExpired=now-lastVideoLoadAt>MUSIC_LOAD_GUARD_MS;
+    const shouldLoad=targetChanged;
+
+    if(shouldLoad){
       hidePlayerError();
+      requestedVideoId=track.videoId;
+      lastVideoLoadAt=now;
+      lastRemoteSeekAt=now;
+      updatePersistentSyncBadge('loading','Carregando música');
       showMusicSyncState('Carregando faixa…',1200);
-      if(musicState.status==='playing'){
-        player.loadVideoById({videoId:track.videoId,startSeconds:expected});
+      if(musicState.status==='playing')player.loadVideoById({videoId:track.videoId,startSeconds:expected});
+      else player.cueVideoById({videoId:track.videoId,startSeconds:expected});
+      return;
+    }
+
+    // Enquanto o iframe ainda informa video_id vazio, não carregamos de novo.
+    // Repetir loadVideoById durante BUFFERING era uma das causas de a música
+    // voltar ao começo em alguns computadores.
+    if(!loaded && requestedVideoId===track.videoId && now-lastVideoLoadAt<MUSIC_LOAD_GUARD_MS){
+      updatePersistentSyncBadge('loading','Carregando música');
+      return;
+    }
+
+    if(loaded && loaded!==track.videoId){
+      if(loadGuardExpired){
+        requestedVideoId='';
+        syncPlayer(true,'track-mismatch');
+      }
+      return;
+    }
+
+    const actual=Number(player.getCurrentTime?.()||0);
+    const stateCode=player.getPlayerState?.();
+    const drift=Number.isFinite(actual)?actual-expected:0;
+    const absDrift=Math.abs(drift);
+
+    if(musicState.status==='playing'){
+      if(stateCode!==YT.PlayerState.PLAYING && stateCode!==YT.PlayerState.BUFFERING){
+        player.playVideo();
+      }
+
+      const recentCommand=Math.max(0,musicNow()-Number(musicState.changedAt||musicNow()))<5500;
+      const seekAllowed=now-lastRemoteSeekAt>MUSIC_SEEK_COOLDOWN_MS;
+      const meaningfulDrift=absDrift>MUSIC_DRIFT_SEEK_SECONDS;
+      const emergencyDrift=absDrift>MUSIC_DRIFT_EMERGENCY_SECONDS;
+      // Nunca fazemos um salto brusco de volta para ~0 por causa de um relógio
+      // local atrasado. Uma volta real ao início vem de PREVIOUS/JUMP e chega
+      // como revisão nova do servidor.
+      const suspiciousRestart=expected<2.2 && actual>5 && !recentCommand && !revisionChanged;
+
+      if(seekAllowed && meaningfulDrift && !suspiciousRestart && (revisionChanged || emergencyDrift || now-lastSyncCheckAt>9000)){
+        showMusicSyncState('Sincronizando…',1000);
+        updatePersistentSyncBadge('adjust',`Ajustando ${absDrift.toFixed(1)}s`);
+        player.seekTo(expected,true);
+        lastRemoteSeekAt=now;
       }else{
-        player.cueVideoById({videoId:track.videoId,startSeconds:expected});
+        updatePersistentSyncBadge('ok',absDrift<1.2?'Sincronizado':`Sincronizado • ${absDrift.toFixed(1)}s`);
       }
     }else{
-      const actual=Number(player.getCurrentTime?.()||0);
-      if(Math.abs(actual-expected)>3.5 && Date.now()-lastRemoteSeekAt>7000){
-        showMusicSyncState('Sincronizando…',1000);
+      if(stateCode===YT.PlayerState.PLAYING || stateCode===YT.PlayerState.BUFFERING)player.pauseVideo();
+      if((revisionChanged||force) && absDrift>1.25 && now-lastRemoteSeekAt>1200){
         player.seekTo(expected,true);
-        lastRemoteSeekAt=Date.now();
+        lastRemoteSeekAt=now;
       }
-
-      const stateCode=player.getPlayerState?.();
-      if(musicState.status==='playing'){
-        if(stateCode!==YT.PlayerState.PLAYING && stateCode!==YT.PlayerState.BUFFERING) player.playVideo();
-      }else if(stateCode===YT.PlayerState.PLAYING || stateCode===YT.PlayerState.BUFFERING){
-        player.pauseVideo();
-      }
+      updatePersistentSyncBadge('ok','Pausado e sincronizado');
     }
+    lastSyncCheckAt=now;
   }catch(err){
     console.warn('[TDB Lobby] sync',err);
+    updatePersistentSyncBadge('offline','Reconectando');
   }finally{
-    setTimeout(()=>{ applyingRemote=false; },80);
+    setTimeout(()=>{ applyingRemote=false; },120);
   }
+}
+
+function forceMusicResync(){
+  if(!playerReady||!currentTrack())return toast('O player ainda não está pronto.');
+  try{
+    const loaded=player.getVideoData?.().video_id||'';
+    const expected=Math.max(0,expectedPosition());
+    if(loaded!==currentTrack().videoId){
+      requestedVideoId='';
+      syncPlayer(true,'manual');
+    }else{
+      player.seekTo(expected,true);
+      if(musicState.status==='playing')player.playVideo();else player.pauseVideo();
+      lastRemoteSeekAt=Date.now();
+      updatePersistentSyncBadge('ok','Sincronizado agora');
+      showMusicSyncState('Sincronizado agora',1200);
+    }
+  }catch(err){console.warn(err)}
 }
 
 function refreshRoomMembers(){
@@ -650,12 +821,12 @@ function refreshRoomMembers(){
   const box=document.getElementById('musicMembers');
   if(!box) return;
 
-  const key=musicSignature((room.players||[]).map(p=>[p.id,p.username,p.avatar,p.connection,room.ownerId===p.id]));
+  const key=musicSignature((room.players||[]).map(p=>[p.id,p.username,p.avatar,p.avatarImage,p.connection,room.ownerId===p.id]));
   if(musicRenderCache.members===key)return;
   musicRenderCache.members=key;
   box.innerHTML=(room.players||[]).map(p=>`
     <div class="music-member">
-      <div class="avatar">${escapeHtml(p.avatar||initials(p.username))}</div>
+      ${typeof avatarHtml==='function'?avatarHtml(p,'avatar'):`<div class="avatar">${escapeHtml(p.avatar||initials(p.username))}</div>`}
       <span><strong>${escapeHtml(p.username)}</strong><small>${p.id===room.ownerId?'HOST':'OUVINTE'}</small></span>
     </div>`).join('');
 }
@@ -859,6 +1030,7 @@ async function toggleCurrentFavorite(){
   return toggleFavoriteTrack(t.videoId);
 }
 async function addFavoriteToQueue(videoId){
+  if(!requireMusicConnection())return false;
   const t=musicProfileData.favorites?.find(x=>x.videoId===videoId);if(!t)return;
   const track={...t,url:canonicalMusicUrl(t)};
   if(isOnlineMusic())return sendOnlineMusic({type:'ADD_TRACK',track});
@@ -869,6 +1041,7 @@ async function addFavoriteToQueue(videoId){
 }
 
 async function addTrackFromHistory(videoId){
+  if(!requireMusicConnection())return false;
   const t=(musicState?.history||[]).find(x=>x.videoId===videoId);
   if(!t)return toast('Música não encontrada no histórico.');
   const track={...t,url:canonicalMusicUrl(t)};
@@ -914,7 +1087,7 @@ function renderDynamic(){
 
   if(title) title.textContent=track?.title||'Nenhuma música na fila';
   if(meta) meta.textContent=track?`${track.channel||'YouTube'} • adicionado por ${track.addedBy}`:'Cole um link ou use a pesquisa.';
-  if(playButton) playButton.textContent=musicState.status==='playing'?'Pausar':'Tocar';
+  if(playButton) playButton.textContent=musicState.status==='playing'?'⏸ Pausar':'▶ Tocar';
 
   const art=document.getElementById('musicNowArt');
   if(art){
@@ -942,7 +1115,7 @@ function renderDynamic(){
   const actionBox=document.getElementById('musicLastAction');
   if(actionBox){
     const a=musicState.lastAction;
-    const labels={play:'tocou',pause:'pausou',next:'pulou',previous:'voltou',add:'adicionou música',remove:'removeu música',reorder:'reorganizou a fila',lock:'bloqueou controles',unlock:'liberou controles','skip-vote':'votou para pular',jump:'escolheu uma música'};
+    const labels={play:'tocou',pause:'pausou',next:'pulou',previous:'voltou',add:'adicionou música',remove:'removeu música',reorder:'reorganizou a fila',lock:'bloqueou controles',unlock:'liberou controles','skip-vote':'votou para pular',jump:'escolheu uma música',ended:'deixou a próxima música tocar'};
     actionBox.textContent=a?`${a.by||'Alguém'} • ${labels[a.type]||a.type}${a.type==='skip-vote'&&a.needed?` (${a.votes}/${a.needed})`:''}`:'';
   }
   if(empty) empty.style.display=track?'none':'grid';
@@ -958,6 +1131,138 @@ function renderDynamic(){
   renderMusicExtras();
 }
 
+
+function setMusicToolView(view='add'){
+  musicToolView=['screen','playlists'].includes(view)?view:'add';
+  ['add','screen','playlists'].forEach(name=>{
+    document.getElementById(`musicTool${name[0].toUpperCase()+name.slice(1)}`)?.classList.toggle('active',musicToolView===name);
+    document.getElementById(`musicToolTab${name[0].toUpperCase()+name.slice(1)}`)?.classList.toggle('active',musicToolView===name);
+  });
+}
+
+
+function activityStoreKey(){return `tdb_activities_${room.code}`}
+function emptyActivities(){return {roomCode:room.code,tables:[],revision:0,updatedAt:Date.now()}}
+function isActivityOnline(){return window.TDBCore?.mode==='online'}
+function readLocalActivities(){
+  try{return JSON.parse(localStorage.getItem(activityStoreKey()))||emptyActivities()}
+  catch{return emptyActivities()}
+}
+function writeLocalActivities(next){
+  localStorage.setItem(activityStoreKey(),JSON.stringify(next));
+  channel?.postMessage({type:'activities',roomCode:room.code,activities:next});
+}
+function activityParticipants(entries){
+  return (entries||[]).map(p=>`<span class="activity-person">${escapeHtml(p.username||'Jogador')}</span>`).join('')||'<span class="activity-nobody">Ninguém ainda</span>';
+}
+function activityButton(label,action,variant='btn-dark'){
+  return `<button class="btn ${variant} btn-sm" onclick="${action}" ${activityBusy?'disabled':''}>${label}</button>`;
+}
+function renderActivityHub(){
+  const root=document.getElementById('loungeActivityHub');
+  if(!root||!room)return;
+  const activities=activityState||emptyActivities();
+  const table=activities.tables?.[0]||null;
+  const me=state.user?.id;
+  const ownTable=!!table&&(table.hostId===me||room.ownerId===me);
+  const asPlayer=!!table?.players?.some(p=>p.id===me);
+  const asSpectator=!!table?.spectators?.some(p=>p.id===me);
+  const connectionMissing=isActivityOnline()&&!window.TDBOnline?.connected;
+  const game=table?ACTIVITY_GAMES[table.game]:null;
+  let body='';
+  if(connectionMissing){
+    body='<div class="activity-empty">Reconectando à sala… A criação e entrada nas mesas ficam indisponíveis até a conexão voltar.</div>';
+  }else if(!table){
+    body=`<div class="activity-game-choices">${Object.entries(ACTIVITY_GAMES).map(([key,info])=>`
+      <div class="activity-choice">
+        <span class="activity-choice-icon" aria-hidden="true">${info.icon}</span>
+        <span class="activity-choice-name">${info.name}</span>
+        <span class="activity-choice-meta">${info.capacity} jogadores</span>
+        ${activityButton('Criar mesa',`createActivityTable('${key}')`,'btn-secondary')}
+      </div>`).join('')}</div>`;
+  }else{
+    body=`<div class="activity-table">
+      <div class="activity-table-title"><span class="activity-table-icon">${game?.icon||'🎮'}</span><div><strong>Mesa de ${escapeHtml(game?.name||table.game)}</strong><small>Organizada por ${escapeHtml(table.hostName||'Participante')} · aguardando integração do jogo</small></div><span class="activity-status">Organizando</span></div>
+      <div class="activity-table-people"><div><b>Jogadores (${(table.players||[]).length}/${game?.capacity||table.capacity})</b><div class="activity-person-list">${activityParticipants(table.players)}</div></div><div><b>Espectadores (${(table.spectators||[]).length})</b><div class="activity-person-list">${activityParticipants(table.spectators)}</div></div></div>
+      <div class="activity-table-actions">
+        ${asPlayer||asSpectator?activityButton('Sair da mesa',`activityAction('LEAVE')`):`<span class="activity-join-actions">${activityButton('Entrar como jogador',`activityAction('JOIN')`,'btn-primary')}${activityButton('Assistir',`activityAction('WATCH')`)}</span>`}
+        ${ownTable?activityButton('Encerrar mesa',`activityAction('CLOSE')`,'btn-danger'):''}
+      </div>
+    </div>`;
+  }
+  root.innerHTML=`<div class="activity-head"><div><span class="eyebrow">NOVIDADE • v7.2.5</span><h2>Central de Atividades</h2><p>Organize uma mesa com seus amigos sem sair da sala e sem interromper a música.</p></div><span class="activity-room-pill">Sala: ${escapeHtml(room.code)}</span></div>
+    ${body}
+    <p class="activity-stage-note">Etapa 1: mesas para organizar jogadores e espectadores. <strong>Os jogos ainda não abrem dentro desta sala.</strong> A integração real vem nas próximas versões.</p>`;
+}
+async function refreshActivities(){
+  if(!room||!document.getElementById('loungeActivityHub')||activityBusy)return;
+  const code=room.code;
+  if(isActivityOnline()){
+    if(!window.TDBOnline?.connected){renderActivityHub();return}
+    try{
+      const next=await window.TDBOnline.getActivities(code);
+      if(room?.code!==code)return;
+      if(!activityState||Number(next.revision)>=Number(activityState.revision)&&next.revision!==activityState.revision){activityState=next;renderActivityHub()}
+    }catch(err){console.warn('[TDB Atividades] Atualização de mesas:',err.message)}
+  }else{
+    const next=readLocalActivities();
+    if(!activityState||Number(next.revision)>=Number(activityState.revision)&&next.revision!==activityState.revision){activityState=next;renderActivityHub()}
+  }
+}
+async function createActivityTable(game){
+  if(!ACTIVITY_GAMES[game])return toast('Jogo indisponível.');
+  return updateActivity({type:'CREATE',game});
+}
+async function activityAction(type){
+  const table=activityState?.tables?.[0];
+  if(!table)return toast('Nenhuma mesa está aberta.');
+  if(type==='CLOSE'&&!confirm('Encerrar esta mesa? A sala e a música continuarão abertas.'))return;
+  return updateActivity({type,tableId:table.id});
+}
+async function updateActivity(action){
+  if(activityBusy||!room)return;
+  if(isActivityOnline()&&!window.TDBOnline?.connected)return toast('Reconectando ao servidor. Tente novamente.');
+  const code=room.code;
+  activityBusy=true;renderActivityHub();
+  try{
+    let next;
+    if(isActivityOnline()){
+      next=await window.TDBOnline.activityAction(code,action);
+    }else{
+      next=readLocalActivities();
+      const table=next.tables?.[0];
+      const self={id:state.user.id,username:state.user.username};
+      if(action.type==='CREATE'){
+        if(table)throw new Error('Já existe uma mesa.');
+        next.tables=[{id:`ACT-${Date.now()}`,game:action.game,capacity:ACTIVITY_GAMES[action.game].capacity,hostId:self.id,hostName:self.username,players:[self],spectators:[],status:'organizing',createdAt:Date.now()}];
+      }else{
+        if(!table||table.id!==action.tableId)throw new Error('Mesa não encontrada.');
+        if(action.type==='CLOSE'){
+          if(table.hostId!==self.id&&room.ownerId!==self.id)throw new Error('Somente o organizador ou host pode encerrar.');
+          next.tables=[];
+        }else{
+          table.players=table.players.filter(p=>p.id!==self.id);
+          table.spectators=table.spectators.filter(p=>p.id!==self.id);
+          if(action.type==='JOIN'){
+            if(table.players.length>=table.capacity)throw new Error('Mesa cheia.');
+            table.players.push(self);
+          }else if(action.type==='WATCH')table.spectators.push(self);
+        }
+      }
+      next.revision=(next.revision||0)+1;
+      next.updatedAt=Date.now();
+      writeLocalActivities(next);
+    }
+    if(room?.code===code){activityState=next;toast(action.type==='CREATE'?'Mesa criada. Convide os amigos!':action.type==='CLOSE'?'Mesa encerrada.':'Participação atualizada.');}
+  }catch(err){toast(err.message||'Não foi possível atualizar a mesa.')}
+  finally{activityBusy=false;if(room?.code===code)renderActivityHub()}
+}
+window.createActivityTable=createActivityTable;
+window.activityAction=activityAction;
+window.addEventListener('tdb-activities-update',event=>{
+  if(room?.code===event.detail?.roomCode)refreshActivities();
+});
+
 async function leaveMusicRoom(){
   await window.TDBScreenShare?.leaveRoom?.({silent:true});
   musicRenderCache={queue:'',history:'',favorites:'',presets:'',members:''};
@@ -966,41 +1271,53 @@ async function leaveMusicRoom(){
   clearInterval(syncTimer);
   clearInterval(roomTimer);
   clearInterval(progressTimer);
+  clearInterval(activityTimer);activityTimer=null;activityState=null;activityBusy=false;
   channel?.close();
   channel=null;
   try{player?.destroy?.()}catch{}
   player=null;
   playerReady=false;
+  requestedVideoId='';
+  lastVideoLoadAt=0;
+  lastPlaybackRevision=-1;
   leaveRoom();
 }
 
 function renderMusic(){
   window.TDBPlatformUI?.hideLoading?.();
   app.innerHTML=`${topbar()}
-  <section id="musicScreen" class="music-screen fade-in">
+  <section id="musicScreen" class="music-screen music-v724 fade-in">
     <aside class="music-sidebar">
-      <div class="music-brand">${logoTag()}<div><strong>TDB LOBBY</strong><span>MÚSICA • CHAT • TELA</span></div></div>
+      <div class="music-brand">${logoTag()}<div><strong>TDB LOBBY</strong><span>OUÇA JUNTO • EM TEMPO REAL</span></div></div>
       <div class="music-room-info">
+        <span class="eyebrow">SALA ATUAL</span>
         <h2>${escapeHtml(room.name)}</h2>
-        <p>Código <strong>${escapeHtml(room.code)}</strong></p>
-        <button class="btn btn-secondary full" onclick="copyCode('${room.code}')">Copiar código</button>
+        <div class="music-room-code"><span>${escapeHtml(room.code)}</span><button onclick="copyCode('${room.code}')">Copiar</button></div>
       </div>
-
-      <h3>Pessoas na sala</h3>
+      <div class="music-sidebar-title"><span>Pessoas na sala</span><b>${(room.players||[]).length}</b></div>
       <div class="music-members" id="musicMembers"></div>
-
-      <div class="music-permissions">
-        <span>Controle</span><strong>${musicState.controlsLocked?'Bloqueado pelo host':room.musicControl==='host'?'Host':'Todos'}</strong>
-        <span>Pular</span><strong>${room.musicSkipMode==='host'?'Host':room.musicSkipMode==='vote'?'Votação':'Todos'}</strong>
-        <span>Fila/pessoa</span><strong>${Number(room.musicQueueLimit||5)===0?'∞':Number(room.musicQueueLimit||5)}</strong>
-        ${room.ownerId===state.user.id?`<button class="btn btn-dark full" onclick="toggleMusicLock()">${musicState.controlsLocked?'🔒 Liberar controles':'🔓 Bloquear controles'}</button>`:''}
+      <div class="music-permissions music-permissions-v724">
+        <span>Quem controla</span><strong>${musicState.controlsLocked?'Somente host':room.musicControl==='host'?'Host':'Todos'}</strong>
+        <span>Pular música</span><strong>${room.musicSkipMode==='host'?'Host':room.musicSkipMode==='vote'?'Votação':'Todos'}</strong>
+        <span>Fila</span><strong>∞ Sem limite</strong>
       </div>
-
-      <button class="btn btn-dark full" onclick="leaveMusicRoom()">Sair da sala</button>
+      ${room.ownerId===state.user.id?`<button class="btn btn-dark full" onclick="toggleMusicLock()">${musicState.controlsLocked?'Liberar controles':'Bloquear controles'}</button>`:''}
+      <button class="btn btn-dark full music-leave-room" onclick="leaveMusicRoom()">Sair da sala</button>
     </aside>
 
     <main class="music-main">
+      <section id="loungeActivityHub" class="lounge-activity-hub" aria-label="Central de Atividades"></section>
       <section id="loungeScreenStage" class="lounge-screen-stage"></section>
+
+      <section class="music-quick-add">
+        <div class="music-quick-add-copy"><span>ADICIONAR MÚSICA</span><strong>Cole o link do YouTube aqui</strong><small>youtube.com, youtu.be, Shorts ou embed</small></div>
+        <div class="music-quick-add-form">
+          <div class="music-link-shell"><span>🔗</span><input id="musicLinkInput" autocomplete="off" inputmode="url" placeholder="Cole o link da música…"></div>
+          <button id="musicAddLinkBtn" class="btn btn-primary" onclick="addYoutubeLink()">+ Adicionar à fila</button>
+        </div>
+        <small id="musicLinkHint" class="music-link-hint">Dica: cole o link e pressione Enter.</small>
+      </section>
+
       <section class="music-player-card">
         <div class="music-now-header">
           <img id="musicNowArt" class="music-now-art" alt="">
@@ -1011,109 +1328,75 @@ function renderMusic(){
             <div class="music-now-badges">
               <span id="musicHostBadge"></span>
               <span id="musicControlBadge"></span>
+              <span id="musicSyncHealth" class="music-sync-health" data-state="ok">Sincronizado</span>
               <span id="musicSyncBadge" class="music-sync-badge"></span>
             </div>
             <small id="musicLastAction" class="music-last-action"></small>
           </div>
         </div>
 
-        <div id="musicEnvironmentWarning" class="music-env-warning">
-          Você abriu o projeto como arquivo local. O YouTube pode retornar erro 153.
-          Use <strong>INICIAR-TDB-JOGOS.bat</strong> e abra pelo endereço <strong>http://localhost:8080</strong>.
-        </div>
-
+        <div id="musicEnvironmentWarning" class="music-env-warning">Você abriu o projeto como arquivo local. Use o servidor local para o YouTube funcionar corretamente.</div>
         <div class="music-player-wrap">
           <div id="musicYoutubePlayer"></div>
-
-          <div class="music-player-error" id="musicPlayerError">
-            <strong>Não foi possível carregar este vídeo</strong>
-            <span data-error-text></span>
-            <small>Se aparecer erro 153, abra o projeto pelo servidor local incluído.</small>
-          </div>
-
-          <div class="music-empty-player" id="musicEmptyPlayer">
-            <span>🎵</span><strong>Fila vazia</strong><small>Adicione um link do YouTube para começar.</small>
-          </div>
+          <div class="music-player-error" id="musicPlayerError"><strong>Não foi possível carregar este vídeo</strong><span data-error-text></span><small>Alguns vídeos não permitem reprodução incorporada.</small></div>
+          <div class="music-empty-player" id="musicEmptyPlayer"><span>♫</span><strong>Escolha a primeira música</strong><small>Cole o link no campo destacado acima.</small></div>
         </div>
 
-        <div class="music-progress">
-          <span id="musicProgressCurrent">00:00</span>
-          <div class="music-progress-track"><i id="musicProgressFill"></i></div>
-          <span id="musicProgressDuration">--:--</span>
-        </div>
-
-        <div class="music-vote-progress" id="musicVoteProgress">
-          <span>VOTOS PARA PULAR</span><strong>0 / 2 votos</strong>
-          <div><i></i></div>
-        </div>
-
-        <div class="music-controls">
-          <button class="btn btn-dark" onclick="previousMusic()">Anterior</button>
-          <button class="btn btn-primary" id="musicPlayBtn" onclick="toggleMusicPlayback()">Tocar</button>
-          <button class="btn btn-dark" onclick="nextMusic()">Próxima</button>
-          <button class="btn btn-secondary" id="musicFavoriteBtn" onclick="toggleCurrentFavorite()">Favoritar</button>
+        <div class="music-progress"><span id="musicProgressCurrent">00:00</span><div class="music-progress-track"><i id="musicProgressFill"></i></div><span id="musicProgressDuration">--:--</span></div>
+        <div class="music-vote-progress" id="musicVoteProgress"><span>VOTOS PARA PULAR</span><strong>0 / 2 votos</strong><div><i></i></div></div>
+        <div class="music-controls music-controls-v724">
+          <button class="music-round-btn" onclick="previousMusic()" title="Anterior">⏮</button>
+          <button class="music-play-main" id="musicPlayBtn" onclick="toggleMusicPlayback()">▶ Tocar</button>
+          <button class="music-round-btn" onclick="nextMusic()" title="Próxima">⏭</button>
+          <button class="music-action-pill" id="musicFavoriteBtn" onclick="toggleCurrentFavorite()">☆ Favoritar</button>
+          <button class="music-action-pill" onclick="forceMusicResync()">↻ Sincronizar</button>
         </div>
       </section>
 
       <section class="music-queue-card music-library-card">
-        <div class="music-library-head">
-          <div>
-            <h2>Biblioteca da sala</h2>
-            <p>Fila atual e últimas músicas tocadas.</p>
-          </div>
-          <div class="music-library-tabs">
-            <button id="musicQueueTab" class="active" onclick="setMusicListView('queue')">Fila <b id="musicQueueCount">0</b></button>
-            <button id="musicHistoryTab" onclick="setMusicListView('history')">Histórico <b id="musicHistoryCount">0</b></button>
-            <button id="musicFavoritesTab" onclick="setMusicListView('favorites')">Favoritas <b id="musicFavoritesCount">0</b></button>
-          </div>
-        </div>
+        <div class="music-library-head"><div><span class="eyebrow">SALA</span><h2>Fila compartilhada</h2><p>Todo mundo vê a mesma ordem e a mesma música.</p></div><div class="music-library-tabs"><button id="musicQueueTab" class="active" onclick="setMusicListView('queue')">Fila <b id="musicQueueCount">0</b></button><button id="musicHistoryTab" onclick="setMusicListView('history')">Histórico <b id="musicHistoryCount">0</b></button><button id="musicFavoritesTab" onclick="setMusicListView('favorites')">Favoritas <b id="musicFavoritesCount">0</b></button></div></div>
         <div id="musicQueuePanel" class="music-library-panel active"><div class="music-queue" id="musicQueue"></div></div>
         <div id="musicHistoryPanel" class="music-library-panel"><div class="music-mini-list" id="musicHistory"></div></div>
         <div id="musicFavoritesPanel" class="music-library-panel"><div class="music-mini-list" id="musicFavorites"></div></div>
       </section>
     </main>
 
-    <aside class="music-add-panel">
-      <section class="music-block lounge-screen-share-block">
-        <div class="section-title"><div><span class="eyebrow">COMPARTILHAMENTO</span><h2>Tela ao vivo</h2><p>Compartilhe monitor, janela ou uma aba. Quem não quiser assistir não recebe o vídeo.</p></div></div>
+    <aside class="music-add-panel music-tools-panel">
+      <div class="music-tools-head"><span class="eyebrow">FERRAMENTAS</span><h2>O que você quer fazer?</h2></div>
+      <div class="music-tool-tabs">
+        <button id="musicToolTabAdd" class="active" onclick="setMusicToolView('add')">Música</button>
+        <button id="musicToolTabScreen" onclick="setMusicToolView('screen')">Tela</button>
+        <button id="musicToolTabPlaylists" onclick="setMusicToolView('playlists')">Playlists</button>
+      </div>
+
+      <section id="musicToolAdd" class="music-tool-page active">
+        <div class="music-tool-callout"><strong>Adicionar música</strong><p>O jeito mais fácil é colar o link no campo dourado acima do player.</p><button class="btn btn-primary full" onclick="document.getElementById('musicLinkInput')?.focus()">Colar link agora</button></div>
+        <div class="music-tool-divider"><span>OU PESQUISE</span></div>
+        <div class="music-search-row"><input id="musicSearchInput" placeholder="Ex.: Linkin Park Numb"><button class="btn btn-secondary" onclick="searchYoutube()">Buscar</button></div>
+        <div class="music-search-results" id="musicSearchResults"></div>
+        <details class="music-api"><summary>Configurar busca do YouTube</summary><p>A pesquisa exige uma YouTube Data API key. Adicionar por link não exige chave.</p><div class="field"><label>YouTube Data API key</label><input id="musicApiKey" type="password" placeholder="AIza..."></div><button class="btn btn-dark full" onclick="saveMusicApiKey()">Salvar neste navegador</button></details>
+      </section>
+
+      <section id="musicToolScreen" class="music-tool-page">
+        <div class="music-tool-callout"><strong>Compartilhar tela</strong><p>Transmita monitor, janela ou aba para quem estiver na sala.</p></div>
         <div id="loungeScreenSharePanel" class="lounge-screen-share-panel"></div>
       </section>
 
-      <section class="music-block">
-        <span class="eyebrow">SEM CHAVE DE API</span>
-        <h2>Adicionar por link</h2>
-        <p>Funciona com link normal, youtu.be, Shorts e embed.</p>
-        <div class="field"><label>Link do YouTube</label><input id="musicLinkInput" placeholder="https://youtube.com/watch?v=..."></div>
-        <button class="btn btn-primary full" onclick="addYoutubeLink()">+ Adicionar à fila</button>
-      </section>
-
-      <section class="music-block">
-        <span class="eyebrow">PESQUISA OPCIONAL</span>
-        <h2>Pesquisar</h2>
-        <p>Use sua própria chave da YouTube Data API. Se não configurar, o método por link continua funcionando normalmente.</p>
-
-        <details class="music-api">
-          <summary>Configurar API key</summary>
-          <div class="field"><label>YouTube Data API key</label><input id="musicApiKey" type="password" placeholder="AIza..."></div>
-          <button class="btn btn-dark full" onclick="saveMusicApiKey()">Salvar neste navegador</button>
-          <small>Em produção, restrinja a chave ao seu domínio ou mova a pesquisa para o backend.</small>
-        </details>
-
-        <div class="music-search-row">
-          <input id="musicSearchInput" placeholder="Ex.: Linkin Park Numb">
-          <button class="btn btn-secondary" onclick="searchYoutube()">Pesquisar</button>
-        </div>
-        <div class="music-search-results" id="musicSearchResults"></div>
-      </section>
-      <section class="music-block">
-        <div class="section-title"><div><h2>Playlists salvas</h2><p>O host pode salvar e carregar a fila como preset.</p></div>${room.ownerId===state.user.id?'<button class="btn btn-secondary btn-sm" onclick="saveRoomPlaylist()">Salvar fila</button>':''}</div>
+      <section id="musicToolPlaylists" class="music-tool-page">
+        <div class="section-title"><div><h2>Playlists salvas</h2><p>Salve a fila atual e reutilize depois.</p></div>${room.ownerId===state.user.id?'<button class="btn btn-secondary btn-sm" onclick="saveRoomPlaylist()">Salvar fila</button>':''}</div>
         <div class="music-mini-list" id="musicPresets"></div>
       </section>
     </aside>
   </section>`;
 
   renderDynamic();
+  renderActivityHub();
+  refreshActivities();
+  clearInterval(activityTimer);
+  activityTimer=setInterval(refreshActivities,4000);
   setMusicListView(musicListView);
+  setMusicToolView(musicToolView);
+  bindMusicComposer();
   showPlayerEnvironmentWarning();
   createPlayer();
   loadMusicProfile();
@@ -1122,22 +1405,29 @@ function renderMusic(){
   clearInterval(syncTimer);
   syncTimer=setInterval(async()=>{
     if(window.TDBCore?.mode==='online'){
+      const before=musicStateFingerprint(musicState);
       const latest=await window.TDBOnline?.refreshShared?.(sharedMusicKey());
-      applyRemoteMusicState(latest,{sync:false});
-      if(musicState.status==='playing') syncPlayer();
+      if(!latest){
+        updatePersistentSyncBadge('offline','Reconectando ao servidor');
+        return;
+      }
+      const changed=applyRemoteMusicState(latest,{sync:false});
+      // Estado novo: sincroniza imediatamente. Estado igual: apenas uma
+      // checagem suave de drift, sem recarregar o iframe.
+      if(changed || before!==musicStateFingerprint(musicState)) syncPlayer(false,'remote-state');
+      else if(musicState?.status==='playing' && Date.now()-lastSyncCheckAt>5000) syncPlayer(false,'health');
       return;
     }
 
     const latest=readMusicState();
-
     if(latest.updatedAt!==musicState.updatedAt){
       musicState=latest;
       renderDynamic();
-      syncPlayer();
-    }else if(musicState.status==='playing'){
-      syncPlayer();
+      syncPlayer(false,'local-state');
+    }else if(musicState.status==='playing' && Date.now()-lastSyncCheckAt>5000){
+      syncPlayer(false,'local-health');
     }
-  },1500);
+  },MUSIC_SYNC_POLL_MS);
 
   clearInterval(roomTimer);
   roomTimer=setInterval(refreshRoomMembers,1500);
@@ -1148,8 +1438,15 @@ function renderMusic(){
 }
 
 function startMusicRoom(activeRoom){
+  clearInterval(activityTimer);activityTimer=null;activityState=null;activityBusy=false;
   musicRenderCache={queue:'',history:'',favorites:'',presets:'',members:''};
   musicListView='queue';
+  musicToolView='add';
+  requestedVideoId='';
+  lastVideoLoadAt=0;
+  lastPlaybackRevision=-1;
+  lastRemoteSeekAt=0;
+  lastSyncCheckAt=0;
   room=structuredClone(activeRoom);
   musicState=readMusicState();
 
@@ -1170,6 +1467,9 @@ function startMusicRoom(activeRoom){
       const data=event.data;
       if(data?.type==='state' && data.roomCode===room.code){
         applyRemoteMusicState(data.state,{sync:true});
+      }
+      if(data?.type==='activities' && data.roomCode===room.code){
+        if(!activityState||Number(data.activities?.revision||0)>=Number(activityState.revision||0)){activityState=data.activities;renderActivityHub();}
       }
     };
   }
@@ -1200,4 +1500,6 @@ window.setMusicListView=setMusicListView;
 window.saveRoomPlaylist=saveRoomPlaylist;
 window.applyRoomPlaylist=applyRoomPlaylist;
 window.deleteRoomPlaylist=deleteRoomPlaylist;
+window.setMusicToolView=setMusicToolView;
+window.forceMusicResync=forceMusicResync;
 })();

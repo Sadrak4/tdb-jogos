@@ -8,7 +8,7 @@ export default async function handler(req,res){
   res.status(200).json({
     ok:true,
     app:'TDB',
-    version:'7.1.6',
+    version:'7.2.5',
     realtime:'supabase-realtime+http-fallback',
     supabase:status.supabase,
     configured:status.configured,
@@ -17,6 +17,7 @@ export default async function handler(req,res){
     readyForMultiplayer,
     production:status.production,
     maintenance,
+    serverTime:Date.now(),
     error:maintenance.enabled&&!adminBypass?null:(readyForMultiplayer?null:status.error)
   });
 }

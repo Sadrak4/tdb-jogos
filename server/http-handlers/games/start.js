@@ -1,4 +1,4 @@
-import { getRoomPrivate,setRoomPrivate,backendStatus } from '../../realtime-store.js';
+import { getRoomPrivate,backendStatus } from '../../realtime-store.js';
 import * as Games from '../../game-service.js';
 import { requireApiUser,sendApiError } from '../../api-auth.js';
 function publicRoom(room){const copy=structuredClone(room);copy.hasPassword=!!copy.password;delete copy.password;return copy}
@@ -20,13 +20,20 @@ export default async function handler(req,res){
       throw new Error('Já existe uma partida em andamento nesta sala.');
     }
 
-    const required=room.game==='truco'?Number(room.trucoSeats||4):room.game==='chess'?2:1;
+    const withPoolBot=room.game==='pool'&&req.body?.withBot===true;
+    if(withPoolBot){
+      const humans=(room.players||[]).filter(p=>!p.bot&&!String(p.id||'').startsWith('BOT-'));
+      if(humans.length!==1||humans[0].id!==user.id) throw new Error('O BOT só pode ser iniciado quando o host estiver sozinho na sala.');
+      room.players=[humans[0],{id:`BOT-POOL-${room.code}`,username:'Bot TDB',avatar:'BOT',avatarImage:null,bot:true,connection:'online'}];
+      room.poolBotEnabled=true;
+    }
+
+    const required=room.game==='truco'?Number(room.trucoSeats||4):['chess','pool'].includes(room.game)?2:1;
     if((room.players||[]).length<required) throw new Error(`A sala precisa de ${required} jogador(es).`);
-    if((room.players||[]).some(p=>p.connection==='reconnecting')) throw new Error('Aguarde todos os jogadores reconectarem antes de iniciar.');
+    if((room.players||[]).some(p=>!p.bot&&p.connection==='reconnecting')) throw new Error('Aguarde todos os jogadores reconectarem antes de iniciar.');
 
-    room.status='playing';
-    await setRoomPrivate(room);
-
+    // Games.startGame só marca a sala como playing depois que o estado oficial
+    // foi gravado. Assim uma falha não prende a sala em uma partida inexistente.
     const state=await Games.startGame(room);
     res.json({
       ok:true,

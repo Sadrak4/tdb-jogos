@@ -9,7 +9,8 @@ export default async function handler(req,res){
       user.id,
       req.body?.username,
       req.body?.avatar||null,
-      req.body?.banner||null
+      req.body?.banner||null,
+      req.body?.avatarImage||null
     );
     res.json({ok:true,user:updated});
   }catch(err){sendApiError(res,err)}

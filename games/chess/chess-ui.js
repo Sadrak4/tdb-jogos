@@ -12,6 +12,8 @@ let lastClockTick=0;
 let pendingOnlineMove=null;
 let lastAnimatedMoveKey=null;
 let chessDragSource=null;
+let botThinkSequence=0;
+const BOT_VISUAL_THINK_MS=1800;
 
 function byColor(color){ return chess.players[color]; }
 function localColor(){
@@ -24,6 +26,13 @@ function localColor(){
 function botColor(){
   const lc=localColor();
   return E.other(lc);
+}
+function botDifficulty(){
+  const value=String(chess?.room?.chessBotDifficulty||'easy').toLowerCase();
+  return ['easy','medium','hard'].includes(value)?value:'easy';
+}
+function botDifficultyLabel(value=botDifficulty()){
+  return ({easy:'Fácil',medium:'Médio',hard:'Difícil'})[value]||'Fácil';
 }
 function chessMoveSound(kind='move'){
   try{
@@ -65,13 +74,16 @@ function startChessWithBot(){
       username:state.user.username,
       id:state.user.id,
       avatar:state.user.avatar || initials(state.user.username),
+      avatarImage:state.user.avatarImage||null,
       bot:false
     };
+    const selectedDifficulty=String(active.chessBotDifficulty||'easy').toLowerCase();
     const bot={
       username:'Bot Xadrez',
       id:'BOT-CHESS',
       avatar:'♞',
-      bot:true
+      bot:true,
+      botDifficulty:['easy','medium','hard'].includes(selectedDifficulty)?selectedDifficulty:'easy'
     };
 
     const room={
@@ -162,6 +174,7 @@ function startChessGame(room,localBot=false){
   clearInterval(chessClockTimer);
   pendingOnlineMove=null;
   lastAnimatedMoveKey=null;
+  botThinkSequence++;
   state.view=localBot?'bot-chess':'playing-chess';
   const players=room.players.slice(0,2);
   const colors=chooseColors(room,players);
@@ -205,6 +218,22 @@ function startClock(){
   },250);
 }
 
+function settleLocalClockBeforeMove(){
+  if(!chess || chess.onlineMode || !chess.clockEnabled || chess.status!=='playing') return true;
+  const now=performance.now();
+  const delta=Math.max(0,(now-lastClockTick)/1000);
+  lastClockTick=now;
+  chess.clocks[chess.turn]=Math.max(0,chess.clocks[chess.turn]-delta);
+  if(chess.clocks[chess.turn]<=0){
+    chess.status='timeout';
+    chess.winner=E.other(chess.turn);
+    clearInterval(chessClockTimer);
+    renderChessScreen(false);
+    return false;
+  }
+  return true;
+}
+
 function updateClockDisplays(){
   for(const color of ['white','black']){
     const el=document.getElementById(`chessClock-${color}`);
@@ -224,10 +253,10 @@ function playerBar(color,position){
   const p=byColor(color);
   const turn=chess.turn===color && chess.status==='playing';
   return `<div class="chess-player-bar ${position} ${turn?'thinking':''}">
-    <div class="chess-player-avatar">${escapeHtml(p.avatar||initials(p.username))}</div>
+    ${typeof avatarHtml==='function'?avatarHtml(p,'chess-player-avatar'):`<div class="chess-player-avatar">${escapeHtml(p.avatar||initials(p.username))}</div>`}
     <div class="chess-player-info">
       <strong>${escapeHtml(p.username)}</strong>
-      <small>${color==='white'?'Brancas':'Pretas'} ${p.bot?'• BOT':''}</small>
+      <small>${color==='white'?'Brancas':'Pretas'} ${p.bot?`• BOT • ${botDifficultyLabel(p.botDifficulty||botDifficulty())}`:''}</small>
     </div>
     <div class="chess-mini-captured">${capturedFor(color)}</div>
     <div class="chess-clock ${turn?'active':''}" id="chessClock-${color}">${chess.clockEnabled?formatClock(chess.clocks[color]):'SEM RELÓGIO'}</div>
@@ -249,6 +278,7 @@ function renderChessScreen(first=false){
         <div class="chess-panel-brand">${logoTag()}<div><strong>TDB</strong><span>XADREZ TRADICIONAL</span></div></div>
         <div class="chess-info-line"><span>Modo</span><strong>1x1 Tradicional</strong></div>
         <div class="chess-info-line"><span>Tempo</span><strong>${chess.clockEnabled?Math.floor(chess.room.chessClock/60)+' min':'Sem relógio'}</strong></div>
+        ${chess.localBot?`<div class="chess-info-line"><span>BOT</span><strong>${botDifficultyLabel()}</strong></div>`:''}
         <div class="chess-info-line"><span>Sala</span><strong>${escapeHtml(chess.room.code)}</strong></div>
         <div class="chess-info-line"><span>Status</span><strong id="chessStatusLabel">Em andamento</strong></div>
         <div class="chess-brand-watermark">${logoTag()}</div>
@@ -544,8 +574,10 @@ function makeChessMove(move,promotion='queen'){
   }
 
   const movingColor=chess.turn; const hadOpponentOffer=chess.drawOffer && chess.drawOffer!==movingColor;
+  if(!settleLocalClockBeforeMove()) return false;
   const wasCapture=!!chess.board?.[valid.to.r]?.[valid.to.c] || !!valid.enPassant;
   chess=E.applyMove(chess,valid,promotion);
+  lastClockTick=performance.now();
   if(hadOpponentOffer) chess.drawOffer=null;
   window.__TDB_CHESS_STATE__=chess;
   chessMoveSound(wasCapture?'capture':'move');
@@ -566,9 +598,13 @@ function maybeBotMove(){
   const bot=byColor(color);
   if(!bot?.bot) return;
 
+  const sequence=++botThinkSequence;
+  const started=performance.now();
+
+  // Dá tempo para a interface pintar "BOT pensando" antes de iniciar a análise.
   setTimeout(()=>{
     try{
-      if(!chess || chess.status!=='playing' || chess.turn!==color) return;
+      if(sequence!==botThinkSequence || !chess || chess.status!=='playing' || chess.turn!==color) return;
 
       const legalMoves=E.allLegalMoves(chess,color);
       if(!legalMoves.length){
@@ -576,9 +612,7 @@ function maybeBotMove(){
         return;
       }
 
-      // Anti-loop de final: evita o BOT ficar alternando o rei/peças entre
-      // duas ou três casas quando existem outras jogadas legais. Não inventa
-      // derrota automática: o usuário ainda precisa aplicar xeque-mate.
+      // Anti-loop: evita ciclos visuais bobos quando existem alternativas razoáveis.
       const ownRecent=(chess.moveHistory||[]).filter(m=>m.color===color).slice(-8);
       const moveKey=m=>`${E.squareName(m.from.r,m.from.c)}-${E.squareName(m.to.r,m.to.c)}`;
       const discouraged=new Set();
@@ -593,38 +627,40 @@ function maybeBotMove(){
         const to=E.squareName(m.to.r,m.to.c);
         return (recentDestinations.get(to)||0)<2;
       });
-      const botMoves=nonRepeatedDestination.length?nonRepeatedDestination:(nonReverse.length?nonReverse:legalMoves);
+      const loopSafeMoves=nonRepeatedDestination.length?nonRepeatedDestination:(nonReverse.length?nonReverse:legalMoves);
 
+      const difficulty=botDifficulty();
+      // Médio/Difícil não descartam uma tática forte só por ela repetir uma casa.
+      // O filtro anti-loop fica mais agressivo apenas no Fácil.
+      const candidateMoves=difficulty==='easy'?loopSafeMoves:legalMoves;
       let chosen=null;
-
-      if(typeof E.bestLegalMoves==='function'){
-        try{
-          const ranked=E.bestLegalMoves(chess,color)?.filter(x=>botMoves.some(m=>moveKey(m)===moveKey(x.move))) || [];
-          if(ranked?.length){
-            const bestScore=ranked[0].score;
-            const candidates=ranked.filter(x=>x.score>=bestScore-120).slice(0,5);
-            chosen=(candidates[Math.floor(Math.random()*candidates.length)] || ranked[0])?.move || null;
-          }
-        }catch(err){
-          console.warn('[TDB Xadrez] Avaliação do bot falhou; usando jogadas legais simples.',err);
-        }
+      if(typeof E.chooseBotMove==='function'){
+        chosen=E.chooseBotMove(chess,color,difficulty,{
+          candidateMoves,
+          timeBudgetMs:difficulty==='hard'?780:difficulty==='medium'?320:80
+        });
       }
 
       if(!chosen){
-        const captures=botMoves.filter(m=>chess.board[m.to.r][m.to.c] || m.enPassant);
-        const pool=captures.length ? captures : botMoves;
+        const captures=candidateMoves.filter(m=>chess.board[m.to.r][m.to.c] || m.enPassant);
+        const pool=captures.length?captures:candidateMoves;
         chosen=pool[Math.floor(Math.random()*pool.length)];
       }
 
-      if(!makeChessMove(chosen,'queen')){
-        for(const fallback of legalMoves){
-          if(makeChessMove(fallback,'queen')) break;
+      const elapsed=performance.now()-started;
+      const remaining=Math.max(0,BOT_VISUAL_THINK_MS-elapsed);
+      setTimeout(()=>{
+        if(sequence!==botThinkSequence || !chess || chess.status!=='playing' || chess.turn!==color) return;
+        if(!makeChessMove(chosen,'queen')){
+          for(const fallback of legalMoves){
+            if(makeChessMove(fallback,'queen')) break;
+          }
         }
-      }
+      },remaining);
     }catch(err){
       console.error('[TDB Xadrez] Erro no turno do bot:',err);
     }
-  },450+Math.random()*250);
+  },60);
 }
 
 function renderHistory(){
@@ -694,12 +730,19 @@ function offerChessDraw(){
     const offeredBy=mine;
     setTimeout(()=>{
       if(!chess || chess.status!=='playing' || chess.drawOffer!==offeredBy) return;
-      if(Math.random()<.35){
+      const difficulty=botDifficulty();
+      const evaluation=typeof E.evaluatePosition==='function'?E.evaluatePosition(chess,botColor()):0;
+      const acceptChance=difficulty==='hard'
+        ? (evaluation<-500?.72:.04)
+        : difficulty==='medium'
+          ? (evaluation<-350?.62:.16)
+          : .35;
+      if(Math.random()<acceptChance){
         chess.status='draw';chess.drawReason='acordo entre jogadores';chess.drawOffer=null;renderChessScreen(false);
       }else{
-        chess.drawOffer=null;toast('O Bot Xadrez recusou o empate.');renderChessScreen(false);
+        chess.drawOffer=null;toast(`O Bot Xadrez (${botDifficultyLabel(difficulty)}) recusou o empate.`);renderChessScreen(false);
       }
-    },650);
+    },900);
   }
 }
 function acceptChessDraw(){
@@ -719,6 +762,7 @@ function resignChess(){
 async function restartChess(){
   clearInterval(chessClockTimer);
   pendingOnlineMove=null;
+  botThinkSequence++;
 
   if(chess?.onlineMode && !chess?.room?.simulation){
     const code=chess.room?.code||state.activeRoom?.code;
@@ -754,6 +798,7 @@ async function restartChess(){
 async function returnFromChess(){
   clearInterval(chessClockTimer);
   pendingOnlineMove=null;
+  botThinkSequence++;
 
   if(chess?.onlineMode && !chess?.room?.simulation){
     const code=chess.room?.code||state.activeRoom?.code;

@@ -50,7 +50,7 @@ async function endMaintenance(){
     window.toast?.('Modo manutenção encerrado. TDB liberado para os usuários.');
   }catch(err){window.toast?.(err.message||'Não foi possível encerrar a manutenção.');openAdmin()}
 }
-function isGameScreen(){return !!document.querySelector('.blackjack-page,.chess-page,.truco-game,.truco-table,.music-page,.spectator-placeholder')}
+function isGameScreen(){return !!document.querySelector('.blackjack-page,.chess-page,.truco-game,.truco-table,.pool-page,.music-page,.spectator-placeholder')}
 function refreshDock(){ensureLayer();const r=room(),dock=$('#tdbGameDock');if(!r||!isGameScreen()){dock.classList.remove('show');return}const spectators=(r.spectators||[]).length;dock.innerHTML=`<button onclick="TDBPlatformUI.toggleFullscreen()" title="Tela cheia">⛶</button><button onclick="TDBPlatformUI.openSocial()" title="Chat e reações">💬</button><span>👁 ${spectators}</span>`;dock.classList.add('show')}
 function toggleFullscreen(){if(!document.fullscreenElement){document.body.classList.add('tdb-game-focus');document.documentElement.requestFullscreen?.();}else{document.body.classList.remove('tdb-game-focus');document.exitFullscreen?.();}}
 async function refreshFeed(){const r=room();if(!r||!window.TDBOnline?.connected)return;try{const feed=await window.TDBOnline.getRoomFeed(r.code);renderFeed(feed)}catch{}}
@@ -70,7 +70,7 @@ window.addEventListener('storage',applyGraphics);document.addEventListener('full
 new MutationObserver(()=>setTimeout(()=>{
   refreshDock();
   // A playable screen already rendered: never leave the initial sync veil over it.
-  if(document.querySelector('.truco-screen,.chess-screen,.blackjack-page,.music-screen')) hideLoading();
+  if(document.querySelector('.truco-screen,.chess-screen,.pool-page,.blackjack-page,.music-screen')) hideLoading();
 },10)).observe(document.getElementById('app'),{childList:true,subtree:false});
 setInterval(tick,1000);reconnectTimer=setInterval(refreshReconnect,1000);
 ensureLayer();applyGraphics();setMaintenance(window.TDBOnline?.maintenance||{enabled:false});

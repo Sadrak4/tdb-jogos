@@ -23,6 +23,10 @@
       "destination": "/api/router?route=profile/history"
     },
     {
+      "source": "/api/profile/public",
+      "destination": "/api/router?route=profile/public"
+    },
+    {
       "source": "/api/auth/register",
       "destination": "/api/router?route=auth/register"
     },
@@ -185,6 +189,10 @@
     {
       "source": "/api/admin/reports",
       "destination": "/api/router?route=admin/reports"
+    },
+    {
+      "source": "/api/platform/activities",
+      "destination": "/api/router?route=platform/activities"
     },
     {
       "source": "/api/platform/room-feed",

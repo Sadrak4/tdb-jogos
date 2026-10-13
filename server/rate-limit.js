@@ -1,4 +1,4 @@
-import { initSupabase,isSupabaseReady,getSupabaseClient } from './realtime-store.js';
+import { initSupabase,isSupabaseReady,getSupabaseClient,runSupabaseQuery } from './realtime-store.js';
 const RULES={
   'auth/register':{limit:6,windowMs:10*60*1000},'auth/login':{limit:30,windowMs:5*60*1000},
   'rooms/upsert':{limit:20,windowMs:60*1000},'rooms/join':{limit:40,windowMs:60*1000},
@@ -12,4 +12,21 @@ const RULES={
   'admin/logs':{limit:120,windowMs:60*1000},'admin/reports':{limit:120,windowMs:60*1000}
 };
 function identity(req){const ip=String(req.headers?.['x-forwarded-for']||req.socket?.remoteAddress||'unknown').split(',')[0].trim();const token=String(req.headers?.authorization||'').replace(/^Bearer\s+/i,'');return token?`t:${token.slice(0,16)}`:`ip:${ip}`}
-export async function enforceRateLimit(req,route){const rule=RULES[route];if(!rule)return{ok:true};await initSupabase();if(!isSupabaseReady())return{ok:true};const db=getSupabaseClient(),key=`${route}:${identity(req)}`,now=Date.now();const {data,error}=await db.from('tdb_rate_limits').select('*').eq('key',key).maybeSingle();if(error)return{ok:true};const started=data?new Date(data.window_started_at).getTime():0,reset=!data||now-started>=rule.windowMs,count=reset?1:Number(data.count||0)+1,windowStartedAt=new Date(reset?now:started).toISOString();await db.from('tdb_rate_limits').upsert({key,window_started_at:windowStartedAt,count,updated_at:new Date(now).toISOString()},{onConflict:'key'});if(count>rule.limit)return{ok:false,retryAfterMs:Math.max(1000,rule.windowMs-(now-(reset?now:started)))};return{ok:true}}
+export async function enforceRateLimit(req,route){
+  const rule=RULES[route];if(!rule)return{ok:true};
+  try{
+    await initSupabase();if(!isSupabaseReady())return{ok:true};
+    const db=getSupabaseClient(),key=`${route}:${identity(req)}`,now=Date.now();
+    const {data,error}=await runSupabaseQuery(db.from('tdb_rate_limits').select('*').eq('key',key).maybeSingle(),'Rate limit',2500);
+    if(error)return{ok:true};
+    const started=data?new Date(data.window_started_at).getTime():0,reset=!data||now-started>=rule.windowMs,count=reset?1:Number(data.count||0)+1,windowStartedAt=new Date(reset?now:started).toISOString();
+    await runSupabaseQuery(db.from('tdb_rate_limits').upsert({key,window_started_at:windowStartedAt,count,updated_at:new Date(now).toISOString()},{onConflict:'key'}),'Rate limit',2500);
+    if(count>rule.limit)return{ok:false,retryAfterMs:Math.max(1000,rule.windowMs-(now-(reset?now:started)))};
+    return{ok:true};
+  }catch(err){
+    // Rate limit é proteção auxiliar. Se o banco estiver lento, não deve travar
+    // login, entrada em sala nem ações da partida.
+    console.warn('[TDB rate limit]',err?.message||err);
+    return{ok:true};
+  }
+}

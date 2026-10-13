@@ -136,7 +136,7 @@ export async function musicProfileAction(user,action={}){
     if(!preset)throw new Error('Playlist não encontrada.');
     const state=clone(await getSharedValue(musicStateKey(code),{roomCode:code,queue:[],currentIndex:-1,status:'paused',position:0,changedAt:now(),history:[],skipVotes:[]}));
     state.queue=(preset.tracks||[]).map((t,i)=>({...t,id:`Q-${now()}-${i}-${Math.random().toString(36).slice(2,5)}`,addedBy:user.username,addedById:user.id,addedAt:now()+i}));
-    state.currentIndex=state.queue.length?0:-1;state.status='paused';state.position=0;state.changedAt=now();state.skipVotes=[];state.updatedAt=now();state.updatedBy=user.id;state.lastAction={type:'preset',by:user.username,byId:user.id,at:now(),name:preset.name};
+    state.currentIndex=state.queue.length?0:-1;state.status='paused';state.position=0;state.changedAt=now();state.skipVotes=[];state.updatedAt=now();state.updatedBy=user.id;state.revision=Number(state.revision||0)+1;state.playbackRevision=Number(state.playbackRevision||0)+1;state.lastAction={type:'preset',by:user.username,byId:user.id,at:now(),name:preset.name};
     await setSharedValue(musicStateKey(code),state);
     await emitEvent('music',code,'preset');
     return{state,presets};

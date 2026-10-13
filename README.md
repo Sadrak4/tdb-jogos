@@ -1,12 +1,44 @@
-# TDB v7.1.6 — Lobby, Ao Vivo e UX
+# TDB v7.2.5 — Central de Atividades
 
-Versão baseada na **v7.1.5** e pronta para substituir diretamente a versão atualmente publicada.
+O TDB é uma plataforma de jogos e salas online com música compartilhada, compartilhamento de tela e recursos sociais. A **v7.2.5** adiciona uma **Central de Atividades** ao TDB Lobby.
 
-Principais pontos: exclusão imediata de sala pelo host, botão voltar na sala de espera, correção/visibilidade do modo espectador, resposta de Truco mais legível, Xadrez com drag-and-drop e tabuleiro maior, TDB Lobby/Música responsivo com troca da origem compartilhada, Blackjack temporariamente em manutenção e barra lateral recolhível.
+## O que já funciona nesta versão
 
-O **Modo Manutenção com acesso administrativo da v7.1.5 continua incluído**.
+- Criar **uma mesa de organização** para Xadrez, Sinuca ou Truco dentro de uma sala TDB Lobby;
+- Entrar/sair da mesa como jogador ou espectador, com controle de permissões;
+- Atualizar a lista de participantes sem recriar a interface da música ou encerrar a transmissão;
+- Manter os jogos convencionais e os demais recursos da v7.2.4.
 
-Leia `ATUALIZACAO-v7.1.6.md` para a lista completa.
+**Limitação:** ainda **não é possível abrir e jogar** Xadrez/Sinuca/Truco dentro do Lobby. Nesta etapa, as mesas apenas organizam participantes. A integração dos jogos será feita em futuras versões.
+
+## Arquivos e pastas
+
+- `index.html`, `app.js`, `style.css`: interface principal;
+- `games/`: módulos de música, transmissão e jogos;
+- `server/`, `api/`: backend e endpoints;
+- `core/`, `ui/`, `assets/`: recursos compartilhados e interface;
+- `tests/`: testes (incluindo alguns de versões anteriores);
+- `database/`: **scripts SQL de referência** do Supabase (não reaplicar automaticamente);
+- `docs/historico/`: relatórios e instruções **antigos**, mantidos para consulta;
+- `CHANGELOG.md`: histórico resumido das versões;
+- `ATUALIZACAO-v7.2.5.md`: novidades e instruções da versão atual;
+- `DEPLOY-VERCEL.md`: publicação via GitHub Desktop + Vercel.
+
+## Instalação e execução
+
+Consulte `ATUALIZACAO-v7.2.5.md` e `DEPLOY-VERCEL.md`. Para ambiente Node.js:
+
+```sh
+npm install
+npm run dev
+```
+
+As credenciais do Supabase devem ser configuradas em variáveis de ambiente; veja `.env.example`. **Não envie `.env` para o GitHub.**
 
 ## Supabase
-Nenhum SQL novo para a v7.1.6. Se a coluna `banner` da v7.1.0 já existe em `public.tdb_users`, não altere o banco.
+
+Se o banco já estava configurado para a v7.2.4, **não há SQL novo na v7.2.5**. Os arquivos da pasta `database/` são históricos/de referência, não uma instrução para executá-los novamente.
+
+## Sobre esta reorganização
+
+Os módulos de jogos, APIs, rotas e estilos foram preservados. A mudança reorganiza documentação/SQL, corrige caminhos de consulta em alguns testes e atualiza referências textuais ao local do SQL. **Não acrescenta uma nova funcionalidade de jogo nem modifica o banco.**

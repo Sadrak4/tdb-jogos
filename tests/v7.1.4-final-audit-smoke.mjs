@@ -13,7 +13,7 @@ const router=read('server/http-router.js');
 const health=read('server/http-handlers/health.js');
 const online=read('core/online-client.js');
 const presence=read('core/presence-manager.js');
-const migration=read('SUPABASE-MIGRATION-v7.1.0.sql');
+const migration=read('database/SUPABASE-MIGRATION-v7.1.0.sql');
 
 ok('package v7.1.4',pkg.version==='7.1.4');
 ok('health v7.1.4',health.includes("version:'7.1.4'"));
@@ -47,5 +47,5 @@ ok('blackjack visual effects',bj.includes('animateChipFlight')&&bj.includes('pen
 
 ok('admin overview metrics',admin.includes('Usuários online')&&admin.includes('Salas abertas')&&admin.includes('Partidas em andamento'));
 ok('admin moderation',admin.includes('Banir')&&admin.includes('Encerrar sessões'));
-ok('final review document',fs.existsSync(new URL('../REVISAO-FINAL-v7.1.4.md',import.meta.url)));
+ok('final review document',fs.existsSync(new URL('../docs/historico/REVISAO-FINAL-v7.1.4.md',import.meta.url)));
 console.log('ALL V7.1.4 FINAL AUDIT TESTS PASSED');

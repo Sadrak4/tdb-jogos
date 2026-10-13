@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b1511"/><stop offset="1" stop-color="#03110c"/></linearGradient>
+  <linearGradient id="wood" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#6a4028"/><stop offset=".5" stop-color="#28160f"/><stop offset="1" stop-color="#7f5130"/></linearGradient>
+  <radialGradient id="felt"><stop stop-color="#19815b"/><stop offset="1" stop-color="#07402e"/></radialGradient>
+  <filter id="shadow"><feDropShadow dx="0" dy="24" stdDeviation="24" flood-opacity=".55"/></filter>
+</defs>
+<rect width="1200" height="720" fill="url(#bg)"/>
+<g transform="translate(115 155) rotate(-5 485 205)" filter="url(#shadow)">
+  <rect x="0" y="0" width="970" height="410" rx="38" fill="url(#wood)"/>
+  <rect x="48" y="48" width="874" height="314" rx="14" fill="url(#felt)"/>
+  <g fill="#020403">
+    <circle cx="48" cy="48" r="28"/><circle cx="485" cy="48" r="28"/><circle cx="922" cy="48" r="28"/>
+    <circle cx="48" cy="362" r="28"/><circle cx="485" cy="362" r="28"/><circle cx="922" cy="362" r="28"/>
+  </g>
+  <g stroke="#fff" stroke-opacity=".12" fill="none"><path d="M265 58v294" stroke-dasharray="8 12"/><circle cx="485" cy="205" r="54"/></g>
+  <g transform="translate(315 205)"><circle r="26" fill="#f2eee4"/><circle cx="-8" cy="-9" r="7" fill="#fff" fill-opacity=".6"/></g>
+  <g transform="translate(700 205)">
+    <circle cx="0" cy="0" r="25" fill="#f5c51a"/><circle cx="45" cy="-27" r="25" fill="#2458d3"/><circle cx="45" cy="27" r="25" fill="#d93b32"/>
+    <circle cx="90" cy="-54" r="25" fill="#6d42bd"/><circle cx="90" cy="0" r="25" fill="#111"/><circle cx="90" cy="54" r="25" fill="#ee7c20"/>
+    <circle cx="135" cy="-81" r="25" fill="#f4efe8" stroke="#18865e" stroke-width="15"/><circle cx="135" cy="-27" r="25" fill="#f4efe8" stroke="#d93b32" stroke-width="15"/><circle cx="135" cy="27" r="25" fill="#f4efe8" stroke="#2458d3" stroke-width="15"/><circle cx="135" cy="81" r="25" fill="#792430"/>
+  </g>
+  <path d="M105 305L394 224" stroke="#d5a468" stroke-width="11" stroke-linecap="round"/><path d="M370 231L405 221" stroke="#f1eadc" stroke-width="7" stroke-linecap="round"/>
+</g>
+<text x="100" y="105" fill="#fff" fill-opacity=".92" font-family="Arial,sans-serif" font-size="56" font-weight="800">SINUCA</text>
+<text x="103" y="137" fill="#8fcdb5" font-family="Arial,sans-serif" font-size="20" font-weight="600" letter-spacing="4">TDB 8-BALL</text>
+</svg>
