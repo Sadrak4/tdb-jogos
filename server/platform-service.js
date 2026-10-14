@@ -9,6 +9,7 @@ const ROOM_CHAT_MAX=50;
 const ROOM_REACTION_MAX=24;
 const MUSIC_FAVORITES_MAX=100;
 const MUSIC_PRESETS_MAX=10;
+const MUSIC_HISTORY_MAX=120;
 const ALLOWED_REACTIONS=new Set(['😂','🔥','👏','😮','❤️','👍']);
 
 function clone(v){return structuredClone(v)}
@@ -18,6 +19,7 @@ function roomChatKey(code){return `roomchat:${String(code||'').toUpperCase()}`}
 function roomReactionKey(code){return `roomreactions:${String(code||'').toUpperCase()}`}
 function musicFavoritesKey(userId){return `music-favorites:${userId}`}
 function musicPresetsKey(userId){return `music-presets:${userId}`}
+function musicHistoryKey(userId){return `music-history:${userId}`}
 function musicStateKey(code){return `music:${String(code||'').toUpperCase()}`}
 function safeUser(u){return u?{id:u.id,username:u.username,avatar:u.avatar||null}:null}
 
@@ -87,13 +89,15 @@ export async function sendRoomReaction(code,user,emoji){
 }
 
 export async function musicProfile(user){
-  const [favorites,presets]=await Promise.all([
+  const [favorites,presets,history]=await Promise.all([
     getSharedValue(musicFavoritesKey(user.id),[]),
-    getSharedValue(musicPresetsKey(user.id),[])
+    getSharedValue(musicPresetsKey(user.id),[]),
+    getSharedValue(musicHistoryKey(user.id),[])
   ]);
   return{
     favorites:Array.isArray(favorites)?favorites:[],
-    presets:Array.isArray(presets)?presets:[]
+    presets:Array.isArray(presets)?presets:[],
+    history:Array.isArray(history)?history:[]
   };
 }
 
@@ -112,6 +116,55 @@ export async function musicProfileAction(user,action={}){
     list=list.slice(0,MUSIC_FAVORITES_MAX);
     await setSharedValue(musicFavoritesKey(user.id),list);
     return{favorites:list,favorited:!exists};
+  }
+  if(type==='RECORD_PLAY'){
+    // A música só entra no histórico quando o cliente confirma reprodução;
+    // a faixa é verificada no servidor para impedir inserções arbitrárias.
+    const roomCode=String(action.roomCode||'').trim().toUpperCase();
+    const current=await Hub.musicCurrentForUser(roomCode,user);
+    const videoId=String(action.videoId||'');
+    if(!current?.playing||current.videoId!==videoId)throw new Error('Esta faixa não está tocando na sala.');
+    const saved=await getSharedValue(musicHistoryKey(user.id),[]);
+    const list=Array.isArray(saved)?saved:[];
+    const recent=list[0];
+    if(recent&&recent.videoId===videoId&&recent.roomCode===roomCode&&now()-Number(recent.playedAt)<120000)return {history:list,recorded:false};
+    const entry={videoId,title:cleanText(current.title,180)||`YouTube • ${videoId}`,roomCode,playedAt:now(),url:`https://www.youtube.com/watch?v=${videoId}`};
+    const history=[entry,...list].slice(0,MUSIC_HISTORY_MAX);
+    await setSharedValue(musicHistoryKey(user.id),history);
+    return {history,recorded:true};
+  }
+  if(type==='RENAME_PRESET'){
+    const newName=cleanText(action.name,30);
+    if(!newName)throw new Error('Digite um nome para a playlist.');
+    const presets=await getSharedValue(musicPresetsKey(user.id),[]);
+    const list=Array.isArray(presets)?presets:[];
+    const match=list.find(x=>x.id===String(action.presetId||''));
+    if(!match)throw new Error('Playlist não encontrada.');
+    match.name=newName;
+    await setSharedValue(musicPresetsKey(user.id),list);
+    return {presets:list};
+  }
+  if(type==='MOVE_PRESET_TRACK'){
+    const presets=await getSharedValue(musicPresetsKey(user.id),[]);
+    const list=Array.isArray(presets)?presets:[];
+    const match=list.find(x=>x.id===String(action.presetId||''));
+    if(!match)throw new Error('Playlist não encontrada.');
+    const from=Number(action.from),to=Number(action.to),tracks=match.tracks||[];
+    if(!Number.isInteger(from)||!Number.isInteger(to)||from<0||to<0||from>=tracks.length||to>=tracks.length)throw new Error('Posição de música inválida.');
+    const [moved]=tracks.splice(from,1);tracks.splice(to,0,moved);
+    await setSharedValue(musicPresetsKey(user.id),list);
+    return {presets:list};
+  }
+  if(type==='REMOVE_PRESET_TRACK'){
+    const presets=await getSharedValue(musicPresetsKey(user.id),[]);
+    const list=Array.isArray(presets)?presets:[];
+    const match=list.find(x=>x.id===String(action.presetId||''));
+    if(!match)throw new Error('Playlist não encontrada.');
+    const at=Number(action.index);
+    if(!Number.isInteger(at)||at<0||at>=(match.tracks||[]).length)throw new Error('Música não encontrada.');
+    match.tracks.splice(at,1);
+    await setSharedValue(musicPresetsKey(user.id),list);
+    return {presets:list};
   }
   if(type==='SAVE_PRESET'){
     const code=String(action.roomCode||'').toUpperCase();

@@ -7,6 +7,10 @@
   },
   "rewrites": [
     {
+      "source": "/api/discover",
+      "destination": "/api/router?route=discover"
+    },
+    {
       "source": "/api/hub-cleanup",
       "destination": "/api/router?route=hub-cleanup"
     },

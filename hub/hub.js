@@ -1,4 +1,5 @@
 import {renderClassicChess,renderClassicTruco,chessMoveOptions,chessPgn} from './classic-games.js';
+import {initDiscover} from './discover.js';
 // TDB 8.0 Beta • Sala social única, mídia persistente, mesas independentes.
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -6,6 +7,8 @@ const short=x=>String(x||'').slice(0,60);
 const gameNames={chess:'Xadrez',truco:'Truco'};
 const symbols={chess:'♟',truco:'♠'};
 const S={token:localStorage.getItem('tdb_session_token')||'',user:null,room:null,snapshot:null,rooms:[],tab:'tables',selectedTable:null,selectedSq:null,gameVersion:'',queueRevision:-1,trackKey:'',youtubeReady:false,yt:null,audioArmed:false,desiredPlay:false,stream:null,peers:new Map(),watchPc:null,watchStream:null,watchSession:'',signalCursor:0,signalBusy:false,refreshBusy:false,refreshPending:false,messagesCursor:0,updateTimer:null,signalTimer:null,heartbeatTimer:null,clockOffset:0,authMode:'login',modalResolve:null,poolAngle:0,poolPower:.62,roomEpoch:0};
+S.favoriteIds=new Set();S.libraryProfile=null;S.lastMusicLog='';
+S.musicIntent='';S.musicNeedsInitialAlign=false;S.musicTrackChangedAt=0;S.musicLastSeekAt=0;S.musicDriftSince=0;S.musicLastIntentAt=0;
 S.gameWindowMode='normal';S.trucoHideNext=false;S.gameWindowTableId=null;S.dragGame=null;
 S.shareRoom=null;S.shareSession=null;S.shareRoomName='';S.shareTimer=null;S.viewerPcs=new Map();S.shareCursors={};S.shareSignature='';
 const actionIn=(code,type,extra={})=>hubPost('action',{code,action:{type,...extra}});
@@ -29,8 +32,8 @@ const hubGet=(op,params={})=>request(`/api/hub?${new URLSearchParams({op,...para
 const hubPost=(op,params={})=>request('/api/hub',{op,...params});
 const action=(type,extra={})=>hubPost('action',{code:S.room,action:{type,...extra}});
 function setView(view){show('#home',view==='home');show('#room-view',view==='room');$$('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));$('#where').textContent=view==='home'?'Explorar salas':S.snapshot?.room?.name||'Sala social';window.scrollTo({top:0,behavior:'instant'})}
-function loggedIn(user){S.user=user;show('#auth',false);show('#shell',true);$('#user-name').textContent=user.username;$('#user-avatar').textContent=shortName(user.username);$('#status').textContent='Conectado';setView('home');refreshRooms();}
-function loggedOut(){closeGameWindow(true);S.user=null;S.token='';localStorage.removeItem('tdb_session_token');show('#auth');show('#shell',false);$('#auth-user').focus()}
+function loggedIn(user){S.user=user;show('#auth',false);show('#shell',true);$('#user-name').textContent=user.username;$('#user-avatar').textContent=shortName(user.username);$('#status').textContent='Conectado';setView('home');refreshRooms();initDiscover();request('/api/platform/music-profile').then(d=>{if(S.user?.id!==user.id)return;S.favoriteIds=new Set((d.profile?.favorites||[]).map(t=>t.videoId));S.queueRevision=-1;if(S.snapshot?.room?.music)syncMusic(S.snapshot.room.music)}).catch(()=>{});}
+function loggedOut(){S.favoriteIds.clear();S.libraryProfile=null;closeGameWindow(true);S.user=null;S.token='';localStorage.removeItem('tdb_session_token');show('#auth');show('#shell',false);$('#auth-user').focus()}
 async function login(){if(!S.token){loggedOut();return}try{const data=await request('/api/auth/session');loggedIn(data.user);if(localStorage.getItem('tdb_hub_last_room'))await enter(localStorage.getItem('tdb_hub_last_room'),true)}catch{loggedOut()}}
 $('#auth-toggle').addEventListener('click',()=>{S.authMode=S.authMode==='login'?'register':'login';$('#auth-title').textContent=S.authMode==='login'?'Entre no seu mundo.':'Faça parte da galera.';$('#auth-submit').innerHTML=S.authMode==='login'?'Entrar no TDB <span>→</span>':'Criar minha conta <span>→</span>';$('#auth-toggle').innerHTML=S.authMode==='login'?'Ainda não tem conta? <b>Criar conta</b>':'Já tem conta? <b>Entrar</b>'});
 $('#auth-form').addEventListener('submit',async e=>{e.preventDefault();const btn=$('#auth-submit');btn.disabled=true;try{const d=await request(`/api/auth/${S.authMode}`,{username:$('#auth-user').value.trim(),password:$('#auth-pass').value});S.token=d.token;localStorage.setItem('tdb_session_token',d.token);loggedIn(d.user);toast(`Bem-vindo ao TDB, ${d.user.username}!`)}catch(err){toast(err.message)}finally{btn.disabled=false}});
@@ -77,6 +80,19 @@ $('#top-training')?.addEventListener('click',async()=>{
 $('#refresh-rooms').addEventListener('click',refreshRooms);$('#home-refresh').addEventListener('click',refreshRooms);
 $('#nav-home').addEventListener('click',()=>setView('home'));
 $('#nav-room').addEventListener('click',()=>S.room?setView('room'):toast('Entre em uma sala primeiro.'));
+// Non-destructive per-device layout preferences; games and audio stay mounted.
+const roomLayoutPrefs={music:localStorage.getItem('tdb_hide_music_panel')==='yes',social:localStorage.getItem('tdb_hide_social_panel')==='yes'};
+function applyRoomLayout(){
+  const root=$('#room-view');if(!root)return;
+  root.classList.toggle('tdb-hide-music',roomLayoutPrefs.music);
+  root.classList.toggle('tdb-hide-social',roomLayoutPrefs.social);
+  const music=$('#room-toggle-music'),social=$('#room-toggle-social');
+  if(music){music.setAttribute('aria-pressed',String(roomLayoutPrefs.music));music.textContent=roomLayoutPrefs.music?'♫ Mostrar música':'♫ Ocultar painel de música'}
+  if(social){social.setAttribute('aria-pressed',String(roomLayoutPrefs.social));social.textContent=roomLayoutPrefs.social?'◉ Mostrar chat e pessoas':'◉ Ocultar painel social'}
+}
+$('#room-toggle-music')?.addEventListener('click',()=>{if(!roomLayoutPrefs.music&&S.snapshot?.room?.music?.playing){toast('Para manter o player do YouTube visível, pause a música antes de ocultar o painel.');return}roomLayoutPrefs.music=!roomLayoutPrefs.music;localStorage.setItem('tdb_hide_music_panel',roomLayoutPrefs.music?'yes':'no');applyRoomLayout()});
+$('#room-toggle-social')?.addEventListener('click',()=>{roomLayoutPrefs.social=!roomLayoutPrefs.social;localStorage.setItem('tdb_hide_social_panel',roomLayoutPrefs.social?'yes':'no');applyRoomLayout()});
+applyRoomLayout();
 // Premium Gold + Social: quick actions call the existing, already-tested controls.
 $('#home-join')?.addEventListener('click',()=>$('#top-join')?.click());
 $('#home-training')?.addEventListener('click',()=>$('#top-training')?.click());
@@ -266,12 +282,16 @@ $('#tables-list').addEventListener('click',async e=>{
 });
 function openGameTable(id){
   if(S.selectedTable!==id){S.selectedSq=null;S.trucoHideNext=false;}
-  S.selectedTable=id;S.gameWindowTableId=id;S.gameVersion='';S.gameWindowMode='normal';
+  S.selectedTable=id;S.gameWindowTableId=id;S.gameVersion='';S.favoriteIds=new Set();S.libraryProfile=null;S.lastMusicLog='';
+S.musicIntent='';S.musicNeedsInitialAlign=false;S.musicTrackChangedAt=0;S.musicLastSeekAt=0;S.musicDriftSince=0;S.musicLastIntentAt=0;
+S.gameWindowMode='normal';
   // Reset position only when the user opens a new table.
   const win=$('#game-window');win?.style.removeProperty('left');win?.style.removeProperty('top');win?.style.removeProperty('transform');
 }
 function closeGameWindow(clearSelection=false){
-  show('#game-window',false);show('#game-restore',false);S.gameWindowMode='normal';
+  show('#game-window',false);show('#game-restore',false);S.favoriteIds=new Set();S.libraryProfile=null;S.lastMusicLog='';
+S.musicIntent='';S.musicNeedsInitialAlign=false;S.musicTrackChangedAt=0;S.musicLastSeekAt=0;S.musicDriftSince=0;S.musicLastIntentAt=0;
+S.gameWindowMode='normal';
   if(clearSelection){S.gameWindowTableId=null;S.trucoHideNext=false;S.selectedSq=null;}
 }
 function renderSelectedGame(){
@@ -351,7 +371,9 @@ $('#game-window').addEventListener('drop',async e=>{
 });
 $('#game-window').addEventListener('dragend',()=>S.chessDragFrom=null);
 $('#game-window').addEventListener('click',gameWindowClick);
-$('#game-restore').addEventListener('click',()=>{if(!S.selectedTable)return;S.gameWindowMode='normal';show('#game-window',true);show('#game-restore',false)});
+$('#game-restore').addEventListener('click',()=>{if(!S.selectedTable)return;S.favoriteIds=new Set();S.libraryProfile=null;S.lastMusicLog='';
+S.musicIntent='';S.musicNeedsInitialAlign=false;S.musicTrackChangedAt=0;S.musicLastSeekAt=0;S.musicDriftSince=0;S.musicLastIntentAt=0;
+S.gameWindowMode='normal';show('#game-window',true);show('#game-restore',false)});
 // Janela arrastável no desktop. Arrastar não interfere na partida.
 $('#game-window-handle').addEventListener('pointerdown',e=>{
   if(e.button!==0||e.target.closest('button')||S.gameWindowMode==='maximized'||matchMedia('(max-width:720px)').matches)return;
@@ -406,25 +428,92 @@ async function chessMove(value){
 const suits={diamonds:'♦',spades:'♠',hearts:'♥',clubs:'♣'};
 function playingCard(card,click){if(!card)return `<div class="playing-card">🂠</div>`;return `<button class="playing-card ${card.suit}" ${click||'disabled'}><b>${esc(card.rank)}</b><span>${suits[card.suit]||''}</span></button>`}
 function trucoHTML(g){const me=g.players?.find(p=>p.id===S.user.id),active=me&&g.current===me.seat&&g.phase==='playing',hand=g.hands?.[g.localSeat]||[],turn=g.players?.find(p=>p.seat===g.current)?.username||'Jogador';let controls='';if(g.phase==='raise-response'&&me&&me.team===g.pendingRaise?.targetTeam)controls=`<button class="btn btn-primary" data-truco="RESPOND_RAISE|accept">Aceitar</button><button class="btn btn-soft" data-truco="RESPOND_RAISE|raise">Aumentar</button><button class="btn btn-outline" data-truco="RESPOND_RAISE|run">Correr</button>`;else if(g.phase==='eleven'&&me&&me.team===g.eleven?.team)controls=`<button class="btn btn-primary" data-truco="ELEVEN_DECISION|yes">Jogar mão de 11</button><button class="btn btn-outline" data-truco="ELEVEN_DECISION|no">Correr</button>`;else if(active)controls='<button class="btn btn-soft" data-truco="REQUEST_RAISE">Pedir Truco!</button>';return `<div class="game-status">${g.phase==='finished'?'Partida encerrada':`Vez: ${esc(turn)} • Rodada ${g.round+1}`} · Pontuação ${g.scores?.join(' × ')||'0 × 0'}</div><div class="truco-table"><p>Vira: <b>${esc(g.vira?.rank||'?')}${suits[g.vira?.suit]||''}</b> · Manilha: <b>${esc(g.manilhaRank||'?')}</b> · Valendo ${g.handValue} ponto(s)</p><div class="table-trick">${(g.trickCards||[]).map(t=>playingCard(t.card,'')).join('')||'<span class="subtle">Aguardando cartas na mesa</span>'}</div><div class="cards-hand">${hand.map((c,i)=>playingCard(c,c&&active?`data-truco="PLAY_CARD|${i}"`:'disabled')).join('')||'<span class="subtle">Aguardando cartas…</span>'}</div><div class="game-controls">${controls}</div></div><p class="game-description">Truco 1 contra 1 com regras processadas pelo servidor. Suas cartas ficam ocultas dos espectadores.</p>`}
-function syncMusic(m){if(!m)return;$('#queue-count').textContent=String(m.queue.length);$('#music-label').textContent=m.playing?'● Tocando':'Pausada';$('#music-play').textContent=m.playing?'Ⅱ':'▶';const track=m.queue[m.index];$('#track-name').textContent=track?.title||'Nenhuma música tocando';
-  // Persistent music dock. Playback permissions remain handled by the original controls.
-  $('#dock-now').textContent=track?.title||'Nenhuma música tocando';
-  $('#dock-play').textContent=m.playing?'Ⅱ':'▶';
-  $('#dock-play').setAttribute('aria-label',m.playing?'Pausar música':'Reproduzir música');show('#yt-placeholder',!track);if(m.revision!==S.queueRevision){S.queueRevision=m.revision;$('#queue').innerHTML=m.queue.map((t,i)=>`<div class="queue-item ${i===m.index?'active':''}"><span class="queue-index">${i===m.index?'♫':i+1}</span><span class="queue-track" title="${esc(t.title)}">${esc(t.title)}</span><button data-music="select" data-index="${i}" title="Tocar esta faixa">▶</button><button data-music="favorite" data-video="${esc(t.videoId)}" data-title="${esc(t.title)}" class="favorite-track" title="Favoritar">♡</button><button data-music="remove" data-id="${esc(t.id)}" title="Remover">×</button></div>`).join('')||'<small class="subtle">Sua playlist está vazia.</small>'}
-  if(track?.videoId!==S.trackKey){S.trackKey=track?.videoId||'';if(S.yt){try{if(S.trackKey)S.yt.cueVideoById(S.trackKey);else S.yt.stopVideo()}catch{}}}
-  const time=m.playing?m.position+(Date.now()+S.clockOffset-Number(m.startedAt||Date.now()))/1000:m.position;
-  if(S.yt&&track&&S.audioArmed){try{const p=S.yt.getCurrentTime?.()||0;if(Math.abs(p-time)>4&&Number.isFinite(time))S.yt.seekTo(Math.max(0,time),true);const ytState=S.yt.getPlayerState?.();if(m.playing&&ytState!==1&&ytState!==3){S.yt.playVideo()}else if(!m.playing&&ytState===1)S.yt.pauseVideo()}catch{}}
+function musicSyncStatus(text,status='waiting'){
+  const el=$('#music-sync-state');if(!el)return;
+  if(el.textContent!==text)el.textContent=text;
+  el.dataset.status=status;
 }
-function readyYouTube(){if(!window.YT?.Player)return;S.yt=new window.YT.Player('yt-player',{height:'200',width:'320',videoId:'',playerVars:{playsinline:1,rel:0,origin:location.origin},events:{onReady:()=>{S.youtubeReady=true;const m=S.snapshot?.room?.music;if(m){S.trackKey='';syncMusic(m)}},onError:e=>{toast(`O YouTube não permitiu tocar este vídeo (${e.data}).`)},onStateChange:e=>{if(e.data===0&&S.snapshot?.room?.music?.playing){const m=S.snapshot.room.music;const track=m.queue[m.index];if(track&&S.user?.id===S.snapshot.room.ownerId)musicAction('next')}}}})}
+function expectedMusicTime(m){
+  const start=Number(m.startedAt);
+  const base=Math.max(0,Number(m.position)||0);
+  return m.playing&&Number.isFinite(start)&&start>0
+    ?Math.max(0,base+(Date.now()+S.clockOffset-start)/1000):base;
+}
+function logAudibleMusic(){
+  const m=S.snapshot?.room?.music,track=m?.queue?.[m.index];
+  if(!S.room||!m?.playing||!track||!S.audioArmed||!/^[A-Za-z0-9_-]{11}$/.test(track.videoId))return;
+  const key=`${S.user?.id}:${S.room}:${track.videoId}:${m.index}`;
+  if(S.lastMusicLog===key)return;
+  S.lastMusicLog=key;
+  request('/api/platform/music-profile',{action:{type:'RECORD_PLAY',roomCode:S.room,videoId:track.videoId}}).catch(()=>{S.lastMusicLog=''});
+}
+function syncMusic(m){
+  if(!m)return;
+  // O player incorporado deve permanecer visível quando há reprodução ativa.
+  if(m.playing&&roomLayoutPrefs.music){roomLayoutPrefs.music=false;localStorage.setItem('tdb_hide_music_panel','no');applyRoomLayout()}
+  $('#queue-count').textContent=String(m.queue.length);$('#music-label').textContent=m.playing?'● Tocando':'Pausada';$('#music-play').textContent=m.playing?'Ⅱ':'▶';
+  const track=m.queue[m.index];$('#track-name').textContent=track?.title||'Nenhuma música tocando';
+  $('#dock-now').textContent=track?.title||'Nenhuma música tocando';$('#dock-play').textContent=m.playing?'Ⅱ':'▶';
+  $('#dock-play').setAttribute('aria-label',m.playing?'Pausar música':'Reproduzir música');show('#yt-placeholder',!track);
+  if(m.revision!==S.queueRevision){
+    S.queueRevision=m.revision;
+    $('#queue').innerHTML=m.queue.map((t,i)=>`<div class="queue-item ${i===m.index?'active':''}"><span class="queue-index">${i===m.index?'♫':i+1}</span><span class="queue-track" title="${esc(t.title)}">${esc(t.title)}</span><button data-music="select" data-index="${i}" title="Tocar esta faixa">▶</button><button data-music="favorite" data-video="${esc(t.videoId)}" data-title="${esc(t.title)}" class="favorite-track" aria-pressed="${S.favoriteIds.has(t.videoId)}" title="Favoritar">${S.favoriteIds.has(t.videoId)?'♥':'♡'}</button><button data-music="remove" data-id="${esc(t.id)}" title="Remover">×</button></div>`).join('')||'<small class="subtle">Sua fila está vazia.</small>';
+  }
+  const changed=track?.videoId!==(S.trackKey||'');
+  if(changed){
+    S.trackKey=track?.videoId||'';S.musicIntent='';S.musicNeedsInitialAlign=!!track;S.musicDriftSince=0;S.musicTrackChangedAt=Date.now();S.musicLastSeekAt=Date.now();S.lastMusicLog='';
+    if(S.yt)try{if(track)S.yt.cueVideoById(track.videoId);else S.yt.stopVideo()}catch{}
+  }
+  if(!track){musicSyncStatus('● Sem música na fila');return}
+  if(!S.audioArmed||!S.youtubeReady){musicSyncStatus('◷ Ative o áudio neste navegador');return}
+  if(!S.yt){musicSyncStatus('◷ Aguardando player do YouTube');return}
+  try{
+    const state=S.yt.getPlayerState?.();const now=Date.now();const targetIntent=`${track.videoId}:${m.playing?'play':'pause'}`;
+    if(S.musicIntent!==targetIntent){
+      S.musicIntent=targetIntent;S.musicLastIntentAt=now;S.musicDriftSince=0;
+      if(m.playing){S.yt.playVideo?.()}else if(state===1){S.yt.pauseVideo?.()}
+    }else if(m.playing&&state===2&&now-S.musicLastIntentAt>12000){
+      // Recover a stalled/paused player at most once every 12 seconds.
+      S.musicLastIntentAt=now;S.yt.playVideo?.();
+    }
+    if(!m.playing){musicSyncStatus('Ⅱ Música pausada');return}
+    if(state===3||state===-1||state===5){musicSyncStatus('◷ YouTube carregando','waiting');S.musicDriftSince=0;return}
+    if(state!==1){musicSyncStatus('◷ Aguardando reprodução','waiting');return}
+    logAudibleMusic();
+    const current=Number(S.yt.getCurrentTime?.()||0),expected=expectedMusicTime(m),drift=Math.abs(current-expected);
+    if(!Number.isFinite(current)||!Number.isFinite(expected))return;
+    // A primeira entrada tardia na sala pode precisar de UM ajuste imediato.
+    // Isso não faz parte da rotina periódica de correção (que usa cooldown).
+    if(S.musicNeedsInitialAlign&&now-S.musicTrackChangedAt>1100){
+      S.musicNeedsInitialAlign=false;
+      if(drift>4){S.yt.seekTo?.(expected,true);S.musicLastSeekAt=now;S.musicDriftSince=0;musicSyncStatus('● Alinhamento inicial concluído','ok');return}
+    }
+    if(drift<2.5){S.musicDriftSince=0;musicSyncStatus('● Sincronizado','ok');return}
+    if(drift<=7){S.musicDriftSince=0;musicSyncStatus('● Reproduzindo · pequena diferença tolerada','ok');return}
+    if(!S.musicDriftSince)S.musicDriftSince=now;
+    musicSyncStatus('◷ Verificando sincronização','waiting');
+    // 10 seconds of sustained large drift and 30 seconds cooldown avoid play/seek loops.
+    if(now-S.musicDriftSince>10000&&now-S.musicLastSeekAt>30000&&now-S.musicTrackChangedAt>7000){
+      S.yt.seekTo?.(expected,true);S.musicLastSeekAt=now;S.musicDriftSince=0;
+      musicSyncStatus('↻ Correção pontual de sincronização','waiting');
+    }
+  }catch{musicSyncStatus('◷ Player não disponível','waiting')}
+}
+function readyYouTube(){if(!window.YT?.Player)return;S.yt=new window.YT.Player('yt-player',{height:'200',width:'320',videoId:'',playerVars:{playsinline:1,rel:0,origin:location.origin},events:{onReady:()=>{S.youtubeReady=true;const m=S.snapshot?.room?.music;if(m){S.trackKey='';syncMusic(m)}},onError:e=>{toast(`O YouTube não permitiu tocar este vídeo (${e.data}).`)},onStateChange:e=>{if(e.data===1){logAudibleMusic();if(S.musicNeedsInitialAlign)setTimeout(()=>{if(S.snapshot?.room?.music?.playing)syncMusic(S.snapshot.room.music)},1300)}if(e.data===0&&S.snapshot?.room?.music?.playing){const m=S.snapshot.room.music;const track=m.queue[m.index];if(track&&S.user?.id===S.snapshot.room.ownerId)musicAction('next')}}}})}
 const ytWait=setInterval(()=>{if(window.YT?.Player){clearInterval(ytWait);readyYouTube()}},300);
 async function musicAction(type,params={}){if(!S.room)return;return doAction('music',{action:{type,...params}})}
 $('#music-form').addEventListener('submit',async e=>{e.preventDefault();const link=$('#music-link').value.trim();if(!link)return;const res=await musicAction('add',{url:link});if(res){$('#music-link').value='';toast('Música adicionada à playlist.')}});
 $('#music-play').addEventListener('click',()=>musicAction(S.snapshot?.room?.music?.playing?'pause':'play'));
 $('#music-prev').addEventListener('click',()=>musicAction('seek',{position:0}));$('#music-next').addEventListener('click',()=>musicAction('next'));
 $('#music-vote').addEventListener('click',()=>musicAction('vote'));
-$('#music-unlock').addEventListener('click',()=>{S.audioArmed=true;try{S.yt?.unMute?.();S.yt?.setVolume?.(Number($("#music-volume").value)||0);if(S.snapshot?.room?.music?.playing)S.yt?.playVideo?.()}catch{}$('#music-unlock').textContent='Áudio ativo';toast('Áudio habilitado neste navegador.');});
+$('#music-unlock').addEventListener('click',()=>{S.audioArmed=true;S.musicIntent='';try{S.yt?.unMute?.();S.yt?.setVolume?.(Number($("#music-volume").value)||0);if(S.snapshot?.room?.music?.playing)S.yt?.playVideo?.()}catch{}$('#music-unlock').textContent='Áudio ativo';toast('Áudio habilitado neste navegador.');});
 $('#queue').addEventListener('click',async e=>{const b=e.target.closest('[data-music]');if(!b)return;
-  if(b.dataset.music==='favorite'){try{await request('/api/platform/music-profile',{action:{type:'TOGGLE_FAVORITE',track:{videoId:b.dataset.video,title:b.dataset.title}}});toast('Favoritos atualizados.')}catch(e){toast(e.message)}return}
+  if(b.dataset.music==='favorite'){
+    b.disabled=true;try{const d=await request('/api/platform/music-profile',{action:{type:'TOGGLE_FAVORITE',track:{videoId:b.dataset.video,title:b.dataset.title}}});
+      S.favoriteIds=new Set((d.favorites||[]).map(t=>t.videoId));
+      b.setAttribute('aria-pressed',String(S.favoriteIds.has(b.dataset.video)));b.textContent=S.favoriteIds.has(b.dataset.video)?'♥':'♡';toast('Favoritos atualizados.');
+    }catch(err){toast(err.message)}finally{b.disabled=false}return;
+  }
   await musicAction(b.dataset.music,b.dataset.music==='select'?{index:Number(b.dataset.index)}:{id:b.dataset.id});
 });
 $('#music-volume').addEventListener('input',e=>{try{S.yt?.setVolume?.(Number(e.target.value))}catch{}localStorage.setItem('tdb_music_volume',e.target.value)});
@@ -432,16 +521,63 @@ $('#music-save').addEventListener('click',async()=>{if(!S.room)return;
   const f=await dialog({title:'Salvar playlist pessoal',description:'Copia as músicas da fila para sua biblioteca pessoal.',fields:[{name:'name',label:'Nome da playlist',required:true,max:30}]});if(!f)return;
   try{await request('/api/platform/music-profile',{action:{type:'SAVE_PRESET',roomCode:S.room,name:f.name}});toast('Playlist salva na sua conta.')}catch(e){toast(e.message)}
 });
-async function openLibrary(){try{const {profile}=await request('/api/platform/music-profile');const fav=profile.favorites||[],presets=profile.presets||[];
-  $('#library-data').innerHTML=`<div class="library-section"><h3>Playlists (${presets.length})</h3>${presets.map(p=>`<div class="library-row"><div><b>${esc(p.name)}</b><small>${p.tracks?.length||0} músicas</small></div><button class="btn btn-soft" data-preset="${esc(p.id)}">Carregar</button><button class="btn btn-outline" data-deletepreset="${esc(p.id)}">Excluir</button></div>`).join('')||'<p class="subtle">Você ainda não salvou playlists.</p>'}</div><div class="library-section"><h3>Favoritos (${fav.length})</h3>${fav.map(f=>`<div class="library-row"><div><b>${esc(f.title)}</b></div><button class="btn btn-soft" data-favoriteadd="${esc(f.videoId)}">+ Fila</button></div>`).join('')||'<p class="subtle">Favorite músicas da fila usando ♡.</p>'}</div>`;
-  $('#library-dialog').showModal();}catch(e){toast(e.message)}
+function libraryRows(profile,q=''){
+  const fav=profile.favorites||[],presets=profile.presets||[],history=profile.history||[],needle=q.toLocaleLowerCase('pt-BR').trim();
+  const match=t=>String(t||'').toLocaleLowerCase('pt-BR').includes(needle);
+  const playlistHtml=presets.filter(p=>match(p.name)||(p.tracks||[]).some(t=>match(t.title))).map(p=>{
+    const tracks=p.tracks||[];
+    const rows=tracks.map((t,i)=>({t,i})).filter(({t})=>!needle||match(t.title)||match(p.name)).map(({t,i})=>`<div class="library-track"><span class="library-song">${esc(t.title||'YouTube')}</span><button data-library="add" data-video="${esc(t.videoId)}" title="Adicionar à fila">+ Fila</button><button data-library="move" data-id="${esc(p.id)}" data-from="${i}" data-to="${i-1}" title="Mover acima" ${i===0?'disabled':''}>↑</button><button data-library="move" data-id="${esc(p.id)}" data-from="${i}" data-to="${i+1}" title="Mover abaixo" ${i===tracks.length-1?'disabled':''}>↓</button><button data-library="remove" data-id="${esc(p.id)}" data-index="${i}" title="Remover da playlist">×</button></div>`).join('');
+    return `<div class="library-row"><div><b>${esc(p.name)}</b><small>${tracks.length} músicas</small></div><div class="library-actions"><button class="btn btn-soft" data-library="load" data-id="${esc(p.id)}">+ Fila</button><button class="btn btn-outline" data-library="rename" data-id="${esc(p.id)}">Renomear</button><button class="btn btn-outline" data-library="delete" data-id="${esc(p.id)}">Excluir</button></div></div><div class="library-tracks">${rows}</div>`;
+  }).join('')||'<p class="subtle">Nenhuma playlist encontrada.</p>';
+  const favorites=fav.filter(f=>match(f.title)).map(f=>`<div class="library-track"><span class="library-song">♥ ${esc(f.title||'YouTube')}</span><button data-library="add" data-video="${esc(f.videoId)}">+ Fila</button></div>`).join('')||'<p class="subtle">Nenhum favorito encontrado.</p>';
+  const recent=history.filter(h=>match(h.title)).slice(0,70).map(h=>`<div class="library-track"><span class="library-song">${esc(h.title||'YouTube')}<small> · ${new Date(h.playedAt).toLocaleString('pt-BR')}</small></span><button data-library="add" data-video="${esc(h.videoId)}" title="Reproduzir novamente">↻ Repetir</button></div>`).join('')||'<p class="subtle">Seu histórico aparecerá quando você ouvir músicas no TDB.</p>';
+  return `<div class="library-section"><h3>Playlists pessoais (${presets.length})</h3>${playlistHtml}</div><div class="library-section"><h3>Favoritos (${fav.length})</h3>${favorites}</div><div class="library-section"><h3>Histórico de reprodução (${history.length})</h3>${recent}</div>`;
 }
+function renderLibrary(q=''){
+  const data=$('#library-data');if(!data||!S.libraryProfile)return;
+  data.innerHTML=`<div class="library-tools"><label for="library-search">Buscar músicas e playlists</label><input id="library-search" type="search" value="${esc(q)}" placeholder="Buscar na minha biblioteca" autocomplete="off"></div><div id="library-results">${libraryRows(S.libraryProfile,q)}</div>`;
+}
+async function openLibrary(){try{
+  const {profile}=await request('/api/platform/music-profile');S.libraryProfile=profile;
+  S.favoriteIds=new Set((profile.favorites||[]).map(t=>t.videoId));S.queueRevision=-1;if(S.snapshot?.room?.music)syncMusic(S.snapshot.room.music);
+  renderLibrary();if(!$('#library-dialog').open)$('#library-dialog').showModal();
+}catch(err){toast(err.message)}}
 $('#music-library').addEventListener('click',openLibrary);
 $('#library-close').addEventListener('click',()=>$('#library-dialog').close());
-$('#library-data').addEventListener('click',async e=>{const b=e.target.closest('button');if(!b)return;
-  if(b.dataset.preset){try{await request('/api/platform/music-profile',{action:{type:'APPLY_PRESET',roomCode:S.room,presetId:b.dataset.preset}});toast('Playlist adicionada à fila.');await refresh()}catch(err){toast(err.message)}}
-  if(b.dataset.deletepreset){if(!confirm('Excluir sua playlist pessoal?'))return;try{await request('/api/platform/music-profile',{action:{type:'DELETE_PRESET',presetId:b.dataset.deletepreset}});await openLibrary()}catch(err){toast(err.message)}}
-  if(b.dataset.favoriteadd){await musicAction('add',{url:`https://www.youtube.com/watch?v=${b.dataset.favoriteadd}`});}
+$('#library-data').addEventListener('input',e=>{
+  if(e.target.id!=='library-search'||!S.libraryProfile)return;
+  $('#library-results').innerHTML=libraryRows(S.libraryProfile,e.target.value);
+});
+$('#library-data').addEventListener('click',async e=>{
+  const b=e.target.closest('[data-library]');if(!b)return;
+  const type=b.dataset.library;
+  if(type==='add'){
+    if(!S.room){toast('Entre em uma sala para adicionar músicas à fila.');return}
+    await musicAction('add',{url:`https://www.youtube.com/watch?v=${b.dataset.video}`});return;
+  }
+  if(type==='load'){
+    if(!S.room){toast('Entre em uma sala para carregar playlists.');return}
+    try{await request('/api/platform/music-profile',{action:{type:'APPLY_PRESET',roomCode:S.room,presetId:b.dataset.id}});toast('Playlist adicionada à fila.');await refresh()}catch(err){toast(err.message)}return;
+  }
+  if(type==='delete'&&!confirm('Excluir sua playlist pessoal?'))return;
+  if(type==='remove'&&!confirm('Remover música desta playlist?'))return;
+  let action=null;
+  if(type==='rename'){
+    const current=S.libraryProfile?.presets?.find(x=>x.id===b.dataset.id);
+    const fields=[{name:'name',label:'Nome da playlist',value:current?.name||'',max:30,required:true}];
+    const form=await dialog({title:'Renomear playlist',description:'Essa alteração afeta somente sua biblioteca pessoal.',icon:'♫',submit:'Salvar nome',fields});
+    if(!form)return;action={type:'RENAME_PRESET',presetId:b.dataset.id,name:form.name};
+  }else if(type==='delete')action={type:'DELETE_PRESET',presetId:b.dataset.id};
+  else if(type==='move')action={type:'MOVE_PRESET_TRACK',presetId:b.dataset.id,from:Number(b.dataset.from),to:Number(b.dataset.to)};
+  else if(type==='remove')action={type:'REMOVE_PRESET_TRACK',presetId:b.dataset.id,index:Number(b.dataset.index)};
+  if(!action)return;
+  b.disabled=true;
+  try{
+    const query=$('#library-search')?.value||'';
+    const d=await request('/api/platform/music-profile',{action});
+    if(d.presets)S.libraryProfile.presets=d.presets;
+    renderLibrary(query);toast('Biblioteca pessoal atualizada.');
+  }catch(err){toast(err.message);b.disabled=false}
 });
 $('#nav-history').addEventListener('click',async()=>{try{const d=await request('/api/profile/history');const items=d.recent||[];
   $('#history-data').innerHTML=items.length?items.map(x=>{const won=(x.winner_ids||[]).includes(S.user.id),lost=(x.loser_ids||[]).includes(S.user.id);const result=x.result_type==='canceled'?'Cancelada':won?'Vitória':lost?'Derrota':'Empate';return `<div class="history-row"><div><b>${esc(gameNames[x.game]||x.game)}</b> · ${esc(result)}<small>${new Date(x.finished_at).toLocaleString('pt-BR')} · ${esc(x.mode||'')} · ${(x.participants||[]).some(p=>String(p.id).startsWith('BOT-'))?'Contra BOT':'Multiplayer'}</small></div></div>`}).join(''):'<p class="subtle">Você ainda não tem partidas registradas.</p>';
@@ -450,8 +586,8 @@ $('#history-close').addEventListener('click',()=>$('#history-dialog').close());
 
 // WebRTC: up to three independent broadcasters per room. Each spectator opens
 // only the streams they choose, with independently controlled audio.
-// P2P mesh requires a TURN/SFU evaluation before production with large audiences.
-const stun=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}];
+// No paid TURN/SFU dependency. Pure peer-to-peer: restrictive NATs may not connect.
+const stun=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]; // STUN público sem garantia de disponibilidade; sem TURN/SFU contratado.
 async function iceComplete(pc){if(pc.iceGatheringState==='complete')return;await new Promise(resolve=>{const done=()=>{clearTimeout(timeout);pc.removeEventListener('icegatheringstatechange',watch);resolve()};const watch=()=>{if(pc.iceGatheringState==='complete')done()};const timeout=setTimeout(done,9000);pc.addEventListener('icegatheringstatechange',watch)})}
 function showBroadcastBar(){show('#broadcast-bar',!!S.stream);$('#broadcast-room').textContent=S.shareRoomName||S.shareRoom||'sala de origem';}
 async function stopLocalShare(silent=false){
@@ -471,7 +607,7 @@ $('#share-start').addEventListener('click',async()=>{
   if(!navigator.mediaDevices?.getDisplayMedia){toast('Compartilhar tela exige navegador moderno e HTTPS.');return}
   let stream=null;
   try{
-    stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:24},audio:true});
+    stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:20,max:24},width:{ideal:1280,max:1920},height:{ideal:720,max:1080}},audio:true});
     const origin=S.room,originName=S.snapshot?.room?.name||origin;
     const d=await actionIn(origin,'screen:start');
     S.stream=stream;S.shareRoom=origin;S.shareSession=d.sessionId;S.shareRoomName=originName;
@@ -484,7 +620,14 @@ $('#share-start').addEventListener('click',async()=>{
 $('#share-stop').addEventListener('click',()=>stopLocalShare());
 async function watchScreen(session){
   if(S.viewerPcs.has(session.sessionId))return;
-  const pc=new RTCPeerConnection({iceServers:stun});S.viewerPcs.set(session.sessionId,pc);
+  const pc=new RTCPeerConnection({iceServers:stun,iceCandidatePoolSize:1});S.viewerPcs.set(session.sessionId,pc);
+  pc.onconnectionstatechange=()=>{
+    if(pc.connectionState==='connected')toast('Transmissão conectada.');
+    if(pc.connectionState==='failed'){
+      toast('Não foi possível conectar diretamente. Esta versão gratuita não usa servidor TURN; tente outra rede ou conexão.');
+      pc.close();S.viewerPcs.delete(session.sessionId);
+    }
+  };
   pc.addTransceiver('video',{direction:'recvonly'});pc.addTransceiver('audio',{direction:'recvonly'});
   pc.ontrack=e=>{const video=document.querySelector(`[data-screen-video="${session.sessionId}"]`);if(!video)return;
     video.srcObject=e.streams[0];video.muted=false;
@@ -543,8 +686,14 @@ async function pollSignals(){
         S.shareCursors[origin]=Math.max(S.shareCursors[origin]||0,Number(sig.id)||0);
         if(sig.kind==='offer'&&S.stream&&origin===S.shareRoom&&S.shareSession===sig.session_id){
           const key=sig.session_id+':'+sig.sender;
-          S.peers.get(key)?.close();const pc=new RTCPeerConnection({iceServers:stun});S.peers.set(key,pc);
-          for(const track of S.stream.getTracks())pc.addTrack(track,S.stream);
+          S.peers.get(key)?.close();const pc=new RTCPeerConnection({iceServers:stun,iceCandidatePoolSize:1});S.peers.set(key,pc);
+          pc.onconnectionstatechange=()=>{if(pc.connectionState==='failed'){pc.close();S.peers.delete(key);console.warn('[TDB P2P] espectador sem conexão direta; TURN não contratado.')}};
+          for(const track of S.stream.getTracks()){
+            const sender=pc.addTrack(track,S.stream);
+            if(track.kind==='video'&&typeof sender.getParameters==='function'){
+              try{const params=sender.getParameters();if(params.encodings?.length){params.encodings[0].maxBitrate=1800000;sender.setParameters(params).catch(()=>{})}}catch{}
+            }
+          }
           await pc.setRemoteDescription(sig.payload.sdp);await pc.setLocalDescription(await pc.createAnswer());await iceComplete(pc);
           await actionIn(origin,'signal:send',{to:sig.sender,kind:'answer',sessionId:sig.session_id,payload:{sdp:pc.localDescription}});
         }else if(sig.kind==='answer'&&S.viewerPcs.has(sig.session_id)){

@@ -142,6 +142,12 @@ export async function startTraining(user,input={}){
   await startTable(room.code,user,table.id);
   return {code:room.code,tableId:table.id};
 }
+export async function musicCurrentForUser(codeValue,user){
+  const room=await load(codeValue,user);
+  const m=room.data.music||{};
+  const track=(m.queue||[])[m.index];
+  return track?{videoId:track.videoId,title:track.title,playing:!!m.playing}:null;
+}
 export async function musicQueueForUser(codeValue,user){
   const room=await load(codeValue,user);
   return (room.data.music?.queue||[]).slice(0,50).map(t=>({videoId:t.videoId,title:t.title,channel:t.channel||'',thumbnail:t.thumbnail||'',url:`https://www.youtube.com/watch?v=${t.videoId}`}));

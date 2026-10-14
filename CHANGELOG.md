@@ -1,3 +1,7 @@
+# TDB v8.2.0 RC1 — sem serviços adicionais pagos
+
+Ver `ATUALIZACAO-v8.2.0.md` e `LEIA-PRIMEIRO-8.2.0.md`.
+
 ## v8.1.4 RC1 — Desempenho e integridade
 
 - Consulte `ATUALIZACAO-v8.1.4.md` e `LEIA-PRIMEIRO-8.1.4.md`.

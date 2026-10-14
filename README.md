@@ -1,3 +1,5 @@
+# TDB 8.2.0 RC1 — Primeira leitura: `LEIA-PRIMEIRO-8.2.0.md`
+
 > **Versão candidata 8.1.4 RC1:** veja `LEIA-PRIMEIRO-8.1.4.md` antes de instalar. A migração SQL em `database/SUPABASE-PERFORMANCE-v8.1.4.sql` é obrigatória para partidas com controle transacional.
 
 # TDB 8.1.3 RC1 — Premium Gold + Social (Xadrez e Truco)

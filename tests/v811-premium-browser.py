@@ -49,7 +49,8 @@ def run(width,height,home_shot=None,room_shot=None):
   page.evaluate('() => {'+MOCK+'}')
   page.add_script_tag(content=(ROOT/'games/chess/chess-engine.js').read_text())
   datauri='data:text/javascript;base64,'+base64.b64encode((ROOT/'hub/classic-games.js').read_bytes()).decode('ascii')
-  hub=(ROOT/'hub/hub.js').read_text().replace("'./classic-games.js'",repr(datauri))
+  discoveruri='data:text/javascript;base64,'+base64.b64encode((ROOT/'hub/discover.js').read_bytes()).decode('ascii')
+  hub=(ROOT/'hub/hub.js').read_text().replace("'./classic-games.js'",repr(datauri)).replace("'./discover.js'",repr(discoveruri))
   page.add_script_tag(content=hub,type='module')
   
   page.wait_for_timeout(220)

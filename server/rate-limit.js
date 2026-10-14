@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { initSupabase,isSupabaseReady,getSupabaseClient,runSupabaseQuery } from './realtime-store.js';
 const RULES={
+  'discover':{limit:90,windowMs:60*1000},
   'hub':{limit:210,windowMs:60*1000},
   'auth/register':{limit:6,windowMs:10*60*1000},'auth/login':{limit:30,windowMs:5*60*1000},
   'rooms/upsert':{limit:20,windowMs:60*1000},'rooms/join':{limit:40,windowMs:60*1000},
@@ -29,6 +30,7 @@ export async function enforceRateLimit(req,route){
   const action=req.body?.action?.type||'';
   // Polling (read-only GET, signaling pull, heartbeat) gets a local short-lived
   // limiter. Never write a tdb_rate_limits row on each 2-second snapshot.
+  if(route==='discover'&&type==='GET')return localCheck(`${route}:${identity(req)}`,rule.limit,rule.windowMs);
   if(route==='hub'&&(type==='GET'||(type==='POST'&&req.body?.op==='action'&&['signal:pull','heartbeat','screen:heartbeat'].includes(action)))){
     return localCheck(`${route}:${identity(req)}`,240,60000);
   }

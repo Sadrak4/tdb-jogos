@@ -1,1 +1,1 @@
-TDB v8.1.4 RC1 — performance geral, integridade de partidas, atualização incremental e manutenção dos clássicos.
+TDB 8.2.0 RC1 — Gaming Hub gratuito + Biblioteca Musical + Sincronização + Social P2P

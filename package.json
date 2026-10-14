@@ -1,6 +1,6 @@
 {
   "name": "tdb-unificado",
-  "version": "8.1.4-rc.1",
+  "version": "8.2.0-rc.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -14,7 +14,8 @@
     "test:visual": "python tests/v812-classics-browser.py && python tests/v811-premium-browser.py && python tests/v81-rc3-browser.py",
     "test:classics": "node tests/v812-engine-regression.mjs && python tests/v812-classics-browser.py",
     "test:performance": "node tests/v813-performance.mjs",
-    "test:legacy-pool": "node tests/v8-pool-engine.mjs"
+    "test:legacy-pool": "node tests/v8-pool-engine.mjs",
+    "test:free": "node tests/v820-free-features.mjs && python tests/v820-free-browser.py"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
