@@ -4,5 +4,5 @@ export default async function handler(req,res){
   // Shared CDN cache instead of per-user external requests. Never store secrets here.
   res.setHeader('Cache-Control','public, s-maxage=1800, stale-while-revalidate=1800');
   try{return res.json({ok:true,...await discoverFeed()})}
-  catch{return res.json({ok:true,steam:[],epic:[],news:[],links:[],unavailable:true})}
+  catch{return res.json({ok:true,steam:[],epic:[],news:[],nuuvem:[],links:[],unavailable:true})}
 }

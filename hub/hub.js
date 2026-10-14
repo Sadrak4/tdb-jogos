@@ -31,7 +31,7 @@ async function request(path,body=null){
 const hubGet=(op,params={})=>request(`/api/hub?${new URLSearchParams({op,...params})}`);
 const hubPost=(op,params={})=>request('/api/hub',{op,...params});
 const action=(type,extra={})=>hubPost('action',{code:S.room,action:{type,...extra}});
-function setView(view){show('#home',view==='home');show('#room-view',view==='room');for(const id of ['profile','friends','admin'])show('#'+id+'-view',view===id);$$('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));$('#where').textContent=({home:'Notícias',profile:'Meu perfil',friends:'Amigos',admin:'Administração'})[view]||S.snapshot?.room?.name||'Sala social';document.dispatchEvent(new CustomEvent('tdb:view',{detail:{view}}));window.scrollTo({top:0,behavior:'instant'})}
+function setView(view){show('#home',view==='home');show('#room-view',view==='room');for(const id of ['rooms','profile','friends'])show('#'+id+'-view',view===id);$$('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view||(view==='room'&&x.dataset.nav==='rooms')));$('#where').textContent=({home:'Notícias',rooms:'Salas',profile:'Meu perfil',friends:'Amigos'})[view]||S.snapshot?.room?.name||'Sala social';document.dispatchEvent(new CustomEvent('tdb:view',{detail:{view}}));window.scrollTo({top:0,behavior:'instant'})}
 function loggedIn(user){S.user=user;document.dispatchEvent(new CustomEvent('tdb:auth',{detail:{user}}));show('#auth',false);show('#shell',true);$('#user-name').textContent=user.username;$('#user-avatar').textContent=shortName(user.username);$('#status').textContent='Conectado';setView('home');refreshRooms();initDiscover();request('/api/platform/music-profile').then(d=>{if(S.user?.id!==user.id)return;S.favoriteIds=new Set((d.profile?.favorites||[]).map(t=>t.videoId));S.queueRevision=-1;if(S.snapshot?.room?.music)syncMusic(S.snapshot.room.music)}).catch(()=>{});}
 function loggedOut(){document.dispatchEvent(new CustomEvent('tdb:auth',{detail:{user:null}}));S.favoriteIds.clear();S.libraryProfile=null;closeGameWindow(true);S.user=null;S.token='';localStorage.removeItem('tdb_session_token');show('#auth');show('#shell',false);$('#auth-user').focus()}
 async function login(){if(!S.token){loggedOut();return}try{const data=await request('/api/auth/session');loggedIn(data.user);/* 8.3: notícias primeiro após autenticar; reentrada na última sala fica por escolha do usuário. */}catch{loggedOut()}}
@@ -79,9 +79,10 @@ $('#top-training')?.addEventListener('click',async()=>{
 
 $('#refresh-rooms').addEventListener('click',refreshRooms);$('#home-refresh').addEventListener('click',refreshRooms);
 $('#nav-home').addEventListener('click',()=>setView('home'));
-$('#nav-room').addEventListener('click',()=>S.room?setView('room'):toast('Entre em uma sala primeiro.'));
+$('#nav-room').addEventListener('click',()=>{setView('rooms');void refreshRooms();});
+document.addEventListener('tdb:rooms-open',e=>{setView('rooms');document.dispatchEvent(new CustomEvent('tdb:rooms-tab',{detail:{tab:e.detail?.tab||'mine'}}));void refreshRooms()});
 document.addEventListener('tdb:profile-updated',event=>{if(S.user&&event.detail?.user?.id===S.user.id)S.user={...S.user,...event.detail.user}});
-document.addEventListener('tdb:navigate',event=>{const view=event.detail?.view;if(['home','room','profile','friends','admin'].includes(view))setView(view)});
+document.addEventListener('tdb:navigate',event=>{const view=event.detail?.view;if(['home','room','rooms','profile','friends'].includes(view))setView(view)});
 document.addEventListener('tdb:resume-room',()=>{const code=localStorage.getItem('tdb_hub_last_room');if(code)void enter(code);});
 // Non-destructive per-device layout preferences; games and audio stay mounted.
 const roomLayoutPrefs={music:localStorage.getItem('tdb_hide_music_panel')==='yes',social:localStorage.getItem('tdb_hide_social_panel')==='yes'};
@@ -100,7 +101,6 @@ applyRoomLayout();
 $('#home-join')?.addEventListener('click',()=>$('#top-join')?.click());
 $('#home-training')?.addEventListener('click',()=>$('#top-training')?.click());
 $('#home-library')?.addEventListener('click',()=>$('#music-library')?.click());
-$('#home-history')?.addEventListener('click',()=>$('#nav-history')?.click());
 $('#social-members-open')?.addEventListener('click',()=>{selectTab('members');$('#members-panel')?.scrollIntoView({block:'nearest',behavior:'smooth'})});
 $('#universe-members-access')?.addEventListener('click',()=>{selectTab('members');$('#members-panel')?.scrollIntoView({block:'nearest',behavior:'smooth'})});
 $('#social-chat-open')?.addEventListener('click',()=>{selectTab('chat');$('#chat-panel')?.scrollIntoView({block:'nearest',behavior:'smooth'})});
@@ -115,8 +115,8 @@ function formatCount(n){return n===1?'1 pessoa':`${n} pessoas`}
 function roomCard(r){const publicRoom=r.visibility!=='private';return `<article class="room-card" data-enter="${esc(r.code)}"><div class="room-card-top"><span class="room-card-icon">⌂</span><span class="pill ${publicRoom?'':'private'}">${publicRoom?'Pública':'Privada'}</span></div><h3>${esc(r.name)}</h3><div class="room-code-mini">${esc(r.code)}</div><div class="card-foot"><span>◦ ${formatCount(r.members||0)}</span><span>Entrar →</span></div></article>`}
 async function refreshRooms(){if(!S.user)return;try{const r=await hubGet('list');S.rooms=r.rooms||[];$('#home-rooms').innerHTML=S.rooms.length?S.rooms.map(roomCard).join(''):'<div class="empty-state"><span>⌂</span><h3>Sem salas abertas</h3>Seja o primeiro a criar uma!</div>';$('#home-room-count').textContent=String(S.rooms.length).padStart(2,'0');
   $('#home-people-count').textContent=String(S.rooms.reduce((total,room)=>total+Number(room.members||0),0)).padStart(2,'0');
-  $('#room-list').innerHTML=S.rooms.slice(0,35).map(r=>`<button class="room-side-item" data-enter="${esc(r.code)}"><span class="room-dot">⌂</span><span class="room-side-copy"><b>${esc(r.name)}</b><small>${r.visibility==='private'?'Privada':'Pública'} • ${formatCount(r.members||0)}</small></span></button>`).join('')||'<span class="muted">Nenhuma sala</span>'}catch(e){toast(e.message)}}
-$('#home-rooms').addEventListener('click',e=>{const id=e.target.closest('[data-enter]')?.dataset.enter;if(id)enter(id)});$('#room-list').addEventListener('click',e=>{const id=e.target.closest('[data-enter]')?.dataset.enter;if(id)enter(id)});
+  document.dispatchEvent(new CustomEvent('tdb:rooms',{detail:{rooms:S.rooms}}));$('#room-list').innerHTML=S.rooms.slice(0,35).map(r=>`<button class="room-side-item" data-enter="${esc(r.code)}"><span class="room-dot">⌂</span><span class="room-side-copy"><b>${esc(r.name)}</b><small>${r.visibility==='private'?'Privada':'Pública'} • ${formatCount(r.members||0)}</small></span></button>`).join('')||'<span class="muted">Nenhuma sala</span>'}catch(e){toast(e.message)}}
+$('#rooms-explore-grid')?.addEventListener('click',e=>{const id=e.target.closest('[data-enter]')?.dataset.enter;if(id)void enter(id)});$('#home-rooms').addEventListener('click',e=>{const id=e.target.closest('[data-enter]')?.dataset.enter;if(id)enter(id)});$('#room-list').addEventListener('click',e=>{const id=e.target.closest('[data-enter]')?.dataset.enter;if(id)enter(id)});
 async function enter(rawCode,silent=false){const code=String(rawCode||'').trim().toUpperCase();if(!code)return;if(S.room===code){try{await hubPost('join',{code});await refresh()}catch(e){toast(e.message)}setView('room');return}try{await hubPost('join',{code});stopTimers();closeViewer();if(S.yt?.pauseVideo)S.yt.pauseVideo();S.room=code;S.roomEpoch++;S.snapshot=null;S.messagesCursor=0;S.selectedTable=null;closeGameWindow(true);S.gameVersion='';S.queueRevision=-1;S.trackKey='';S.signalCursor=0;localStorage.setItem('tdb_hub_last_room',code);S.tab='tables';selectTab('tables');setView('room');await refresh();startTimers();if(!silent)toast('Você entrou na sala!')}catch(err){if(silent){localStorage.removeItem('tdb_hub_last_room')}else toast(err.message)}}
 function stopTimers(){clearInterval(S.updateTimer);clearInterval(S.signalTimer);clearInterval(S.heartbeatTimer);S.updateTimer=S.signalTimer=S.heartbeatTimer=null}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&S.room)void refresh(true)});
@@ -583,11 +583,6 @@ $('#library-data').addEventListener('click',async e=>{
     renderLibrary(query);toast('Biblioteca pessoal atualizada.');
   }catch(err){toast(err.message);b.disabled=false}
 });
-$('#nav-history').addEventListener('click',async()=>{try{const d=await request('/api/profile/history');const items=d.recent||[];
-  $('#history-data').innerHTML=items.length?items.map(x=>{const won=(x.winner_ids||[]).includes(S.user.id),lost=(x.loser_ids||[]).includes(S.user.id);const result=x.result_type==='canceled'?'Cancelada':won?'Vitória':lost?'Derrota':'Empate';return `<div class="history-row"><div><b>${esc(gameNames[x.game]||x.game)}</b> · ${esc(result)}<small>${new Date(x.finished_at).toLocaleString('pt-BR')} · ${esc(x.mode||'')} · ${(x.participants||[]).some(p=>String(p.id).startsWith('BOT-'))?'Contra BOT':'Multiplayer'}</small></div></div>`}).join(''):'<p class="subtle">Você ainda não tem partidas registradas.</p>';
-  $('#history-dialog').showModal();}catch(err){toast(err.message)}});
-$('#history-close').addEventListener('click',()=>$('#history-dialog').close());
-
 // WebRTC: up to three independent broadcasters per room. Each spectator opens
 // only the streams they choose, with independently controlled audio.
 // No paid TURN/SFU dependency. Pure peer-to-peer: restrictive NATs may not connect.

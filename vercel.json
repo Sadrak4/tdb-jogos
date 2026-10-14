@@ -7,6 +7,10 @@
   },
   "rewrites": [
     {
+      "source": "/adm",
+      "destination": "/adm/index.html"
+    },
+    {
       "source": "/api/discover",
       "destination": "/api/router?route=discover"
     },

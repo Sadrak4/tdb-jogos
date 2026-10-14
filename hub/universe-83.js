@@ -19,16 +19,15 @@ updateResume();
 $('#universe-resume-room')?.addEventListener('click',()=>document.dispatchEvent(new CustomEvent('tdb:resume-room')));
 $('#universe-room-preview')?.addEventListener('click',e=>{const b=e.target.closest('[data-universe-enter]');if(!b)return;const id=b.dataset.universeEnter;const btn=$$('#home-rooms [data-enter]').find(x=>x.dataset.enter===id);btn?.click()});
 const actionIds={
-  'nav-explore':()=>scrollToSection('universe-home-rooms-anchor'),
+  'nav-explore':()=>document.dispatchEvent(new CustomEvent('tdb:rooms-open',{detail:{tab:'explore'}})),
   'nav-games':()=>click('top-training'),
   'nav-music':()=>click('home-library'),
-  'universe-home-rooms':()=>scrollToSection('universe-home-rooms-anchor'),
-  'universe-see-rooms':()=>scrollToSection('universe-home-rooms-anchor'),
+  'universe-home-rooms':()=>document.dispatchEvent(new CustomEvent('tdb:rooms-open',{detail:{tab:'explore'}})),
+  'universe-see-rooms':()=>document.dispatchEvent(new CustomEvent('tdb:rooms-open',{detail:{tab:'explore'}})),
   'universe-create-room':()=>click('top-create'),
   'universe-join-room':()=>click('top-join'),
   'universe-quick-chess':()=>click('top-training'),
   'universe-quick-library':()=>click('home-library'),
-  'universe-quick-history':()=>click('nav-history'),
   'universe-room-tables':()=>clickTab('tables'),
   'universe-room-streams':()=>$('#room-view .share-card')?.scrollIntoView({block:'nearest',behavior:'smooth'}),
   'universe-room-chat':()=>clickTab('chat'),
@@ -48,7 +47,7 @@ updateRoomGuide();
 $('#universe-guide-create')?.addEventListener('click',()=>click('new-table'));
 $('#universe-guide-bot')?.addEventListener('click',()=>click('new-bot-table'));
 // Keep selected sidebar state consistent with the existing home/room nav.
-const shell=$('#shell');const setNav=()=>{const home=!$('#home')?.classList.contains('hidden');const room=!$('#room-view')?.classList.contains('hidden');$('#nav-home')?.classList.toggle('active',home);$('#nav-room')?.classList.toggle('active',room);updateResume()};
+const shell=$('#shell');const setNav=()=>{const home=!$('#home')?.classList.contains('hidden');const rooms=!$('#rooms-view')?.classList.contains('hidden')||!$('#room-view')?.classList.contains('hidden');$('#nav-home')?.classList.toggle('active',home);$('#nav-room')?.classList.toggle('active',rooms);updateResume()};
 window.addEventListener('storage',e=>{if(e.key==='tdb_hub_last_room')updateResume()});
 if(shell)new MutationObserver(setNav).observe($('#home'),{attributes:true,attributeFilter:['class']});setNav();
 // Global palette/search with keyboard navigation; no new backend or private data.
@@ -58,14 +57,15 @@ const shortcuts=[
   {title:'Ofertas Steam',desc:'Ver promoções disponíveis',fn:()=>showNews('steam')},
   {title:'Jogos grátis Epic',desc:'Conferir ofertas gratuitas',fn:()=>showNews('epic')},
   {title:'Nuuvem',desc:'Loja brasileira de jogos e ofertas',fn:()=>showNews('nuuvem')},
-  {title:'Explorar salas',desc:'Ver salas abertas',fn:()=>scrollToSection('universe-home-rooms-anchor')},
+  {title:'Salas',desc:'Minha sala, criar sala e explorar',fn:()=>document.dispatchEvent(new CustomEvent('tdb:rooms-open',{detail:{tab:'mine'}}))},
+  {title:'Explorar salas',desc:'Ver salas abertas',fn:()=>document.dispatchEvent(new CustomEvent('tdb:rooms-open',{detail:{tab:'explore'}}))},
   {title:'Criar sala',desc:'Abrir criação de sala',fn:()=>click('top-create')},
   {title:'Entrar com código',desc:'Acessar sala privada',fn:()=>click('top-join')},
   {title:'Jogos',desc:'Xadrez ou Truco com BOT',fn:()=>click('top-training')},
   {title:'Meu perfil',desc:'Minha conta e minhas estatísticas',fn:()=>click('nav-profile')},
   {title:'Amigos e convites',desc:'Adicionar amigos e convidar para salas',fn:()=>click('nav-friends')},
   {title:'Biblioteca musical',desc:'Favoritos, playlists e histórico',fn:()=>click('home-library')},
-  {title:'Histórico de partidas',desc:'Consultar resultados anteriores',fn:()=>click('nav-history')}
+  {title:'Atividade recente',desc:'Resultados recentes no meu perfil',fn:()=>click('nav-profile')}
 ];
 let shown=[],highlighted=0;
 function getNews(){return $$('#discover-list .discover-card[href^="https://"]').map(a=>({title:a.querySelector('strong')?.textContent?.trim()||'',desc:a.querySelector('.discover-source')?.textContent?.trim()||'Notícia',fn:()=>a.click()})).filter(x=>x.title)}
@@ -84,7 +84,7 @@ $('#universe-notifications')?.addEventListener('click',()=>click('nav-friends'))
 const account=$('#universe-account-dialog');
 $('#universe-profile')?.addEventListener('click',()=>{click('nav-profile')});
 $('#universe-account-close')?.addEventListener('click',()=>account.close());
-$('#universe-account-history')?.addEventListener('click',()=>{account.close();click('nav-history')});
+$('#universe-account-profile')?.addEventListener('click',()=>{account.close();click('nav-profile')});
 // Featured news is linked only to a verified public item returned by /api/discover.
 function setFeatured(entry){
   const title=$('#universe-feature-title'),source=$('#universe-feature-source'),link=$('#universe-feature-link'),desc=$('#universe-feature-desc');
@@ -97,3 +97,5 @@ function setFeatured(entry){
 }
 document.addEventListener('tdb:discover',event=>setFeatured(event.detail?.featured));
 if(window.__tdbDiscoverFeatured)setFeatured(window.__tdbDiscoverFeatured);
+
+$('#top-signout')?.addEventListener('click',()=>{if(confirm('Sair da sua conta TDB?'))click('logout')});

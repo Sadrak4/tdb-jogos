@@ -44,7 +44,7 @@ with sync_playwright() as p:
   page.add_script_tag(content=hub,type='module')
   page.add_script_tag(content=(ROOT/'hub/universe-83.js').read_text(),type='module')
   page.wait_for_timeout(200)
-  page.locator('[data-enter="SALA-RC3BOT01"]').first.click();page.wait_for_timeout(150)
+  page.locator('#home-rooms [data-enter="SALA-RC3BOT01"]').first.click();page.wait_for_timeout(150)
   assert page.locator('#new-bot-table').is_visible(),'BOT button not visible inside room'
   # Mesmo snapshots legados não devem renderizar mesas antigas de Sinuca.
   page.evaluate("window.__room.tables.push({id:'LEGACY-POOL',game:'pool',settings:{},players:[],watchers:[],requests:[],status:'finished',ownerId:'TEST-OWNER'})")

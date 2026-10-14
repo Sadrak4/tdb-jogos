@@ -1,3 +1,12 @@
+## 8.3.2 RC1 — Navegação, `/adm` e ofertas Nuuvem
+
+- Sidebar reduzida a Notícias, Salas, Jogos, Música, Amigos e Meu perfil, sem nome/status duplicado.
+- Salas ganhou Minha sala / Criar sala / Explorar salas em abas.
+- ADM passou para `/adm` independente, com login separado; tokens verificados no servidor.
+- Remoção da tela independente de histórico sem eliminar dados; histórico recente continua no Perfil.
+- Promoções verificáveis do catálogo público Nuuvem com fallback oficial e cache.
+- Xadrez, Truco, BOTs, playlists e WebRTC preservados; sem SQL novo ou serviço pago.
+
 # TDB 8.3.0 RC1 — Gaming Universe (redesign aprovado)
 
 - Notícias passam a ser a primeira tela após autenticação, com destaque vinculado ao feed público real e fallback para links oficiais.

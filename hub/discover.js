@@ -1,13 +1,16 @@
 // Public gaming feeds are noncritical: the TDB must work even when all sources fail.
 const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeUrl=(raw)=>{try{const u=new URL(raw);return u.protocol==='https:'?u.href:null}catch{return null}};
-const links={steam:'https://store.steampowered.com/specials/',epic:'https://store.epicgames.com/pt-BR/free-games',news:'https://news.xbox.com/pt-br/',nuuvem:'https://www.nuuvem.com/br-pt'};
+const links={steam:'https://store.steampowered.com/specials/',epic:'https://store.epicgames.com/pt-BR/free-games',news:'https://news.xbox.com/pt-br/',nuuvem:'https://www.nuuvem.com/br-pt/catalog/price/promo/sort/discount/sort-mode/desc'};
 let result=null,pending=null,active='all';
 const fallback=()=>Object.entries(links).map(([type,url])=>({title:({steam:'Confira as promoções Steam',epic:'Confira os jogos gratuitos da Epic',news:'Leia as notícias do Xbox Wire',nuuvem:'Ofertas na loja Nuuvem'})[type],url,source:({steam:'Steam',epic:'Epic Games',news:'Xbox Wire',nuuvem:'Nuuvem'})[type],type:'link'}));
 function render(){
   const root=document.querySelector('#discover-list'),meta=document.querySelector('#discover-meta');if(!root)return;
-  const d=result||{};let entries=[...(d.epic||[]).map(i=>({...i,group:'epic'})),...(d.steam||[]).map(i=>({...i,group:'steam'})),...(d.news||[]).map(i=>({...i,group:'news'}))];
-  entries=entries.filter(i=>active==='all'||i.group===active);
+  const d=result||{};const byGroup={epic:(d.epic||[]),steam:(d.steam||[]),nuuvem:(d.nuuvem||[]),news:(d.news||[])};
+  // Alterna as lojas para não deixar a Nuuvem escondida atrás de oito ofertas Steam/Epic.
+  const sequence=['epic','steam','nuuvem','news'];let entries=[];
+  if(active==='all'){for(let i=0;i<8;i++)for(const group of sequence)if(byGroup[group][i])entries.push({...byGroup[group][i],group})}
+  else entries=(byGroup[active]||[]).map(item=>({...item,group:active}));
   const linksFiltered=fallback().map((item,i)=>({...item,group:['steam','epic','news','nuuvem'][i]})).filter(item=>active==='all'||item.group===active);
   const present=new Set(entries.map(item=>item.group));
   const fillers=linksFiltered.filter(item=>!present.has(item.group));
@@ -20,7 +23,7 @@ function render(){
     const label=item.type==='link'?'Fonte oficial':source;
     return `<a class="discover-card" href="${safe(url)}" target="_blank" rel="noopener noreferrer"><span class="discover-source">${safe(label)}</span><strong>${title}</strong><div class="discover-card-foot">${free}${discount}${price}<span class="discover-arrow">↗</span></div></a>`;
   }).join('');
-  const featured=[...(d.news||[]),...(d.epic||[]),...(d.steam||[])].find(x=>x?.url&&x?.title);
+  const featured=[...(d.news||[]),...(d.epic||[]),...(d.steam||[]),...(d.nuuvem||[])].find(x=>x?.url&&x?.title);
   window.__tdbDiscoverFeatured=featured||null;
   document.dispatchEvent(new CustomEvent('tdb:discover',{detail:{featured:featured||null}}));
   if(meta)meta.textContent=entries.length?`Destaques públicos · Verifique valores e prazos na loja oficial${d.stale?' · últimas informações disponíveis':''}`:'Links oficiais disponíveis · As ofertas serão exibidas quando as fontes responderem';
@@ -34,7 +37,7 @@ export async function loadDiscover(force=false){
       const response=await fetch('/api/discover',{cache:'default',signal:AbortSignal.timeout(10000)});
       if(!response.ok)throw new Error('Dados temporariamente indisponíveis');
       const data=await response.json();result=data.ok?data:null;
-    }catch{result={steam:[],epic:[],news:[]}}
+    }catch{result={steam:[],epic:[],news:[],nuuvem:[]}}
     finally{pending=null;render()}
   })();return pending;
 }

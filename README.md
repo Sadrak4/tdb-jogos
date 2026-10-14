@@ -1,3 +1,9 @@
+# TDB 8.3.2 — Navegação, ADM separado e Nuuvem
+
+**Leia primeiro:** [`LEIA-PRIMEIRO-8.3.2.md`](LEIA-PRIMEIRO-8.3.2.md).
+
+Acesso administrativo independente: `/adm`, com credenciais de servidor. O menu normal apresenta Notícias, Salas, Jogos, Música, Amigos e Meu perfil. A atualização mantém os recursos da 8.3.1 sem novas migrações.
+
 # TDB 8.3.0 RC1 — Gaming Universe
 
 **Primeiro leia [`LEIA-PRIMEIRO-8.3.0.md`](LEIA-PRIMEIRO-8.3.0.md).** Esta é uma versão candidata para testes, não para substituir produção sem homologação.

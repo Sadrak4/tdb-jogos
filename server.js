@@ -28,6 +28,8 @@ async function start(port,attempt=0){
     await handleHttpApi(req,res);
   });
 
+  app.get('/adm', (req,res)=>res.sendFile(path.join(__dirname,'adm','index.html')));
+
   app.use(express.static(__dirname,{
     etag:false,
     lastModified:false,

@@ -84,7 +84,7 @@ try:
   page.add_script_tag(content=(ROOT/'hub/universe-83.js').read_text(),type='module')
   page.wait_for_timeout(450)
   assert page.locator('#home').is_visible(),errors
-  page.locator('[data-enter="SALA-ORIGINAL"]').first.click()
+  page.locator('#home-rooms [data-enter="SALA-ORIGINAL"]').first.click()
   page.wait_for_timeout(150)
   assert page.locator('#room-view').is_visible(),errors
   assert page.locator('#room-delete').is_visible(),errors
