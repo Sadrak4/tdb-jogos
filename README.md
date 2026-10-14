@@ -19,3 +19,8 @@ Para testes visuais, use Python Playwright com Chromium instalado. Os testes de 
 ## Registro de versões
 
 Veja `CHANGELOG.md` e os arquivos `ATUALIZACAO-*`. Alguns documentos anteriores descrevem recursos que mudaram depois; **este guia 8.3 prevalece para a RC atual**.
+
+
+## Atualização 8.3.1
+
+Leia **LEIA-PRIMEIRO-8.3.1.md** antes de colocar em Preview. O painel ADM requer variáveis de ambiente.

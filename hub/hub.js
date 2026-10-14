@@ -31,9 +31,9 @@ async function request(path,body=null){
 const hubGet=(op,params={})=>request(`/api/hub?${new URLSearchParams({op,...params})}`);
 const hubPost=(op,params={})=>request('/api/hub',{op,...params});
 const action=(type,extra={})=>hubPost('action',{code:S.room,action:{type,...extra}});
-function setView(view){show('#home',view==='home');show('#room-view',view==='room');$$('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));$('#where').textContent=view==='home'?'Notícias':S.snapshot?.room?.name||'Sala social';window.scrollTo({top:0,behavior:'instant'})}
-function loggedIn(user){S.user=user;show('#auth',false);show('#shell',true);$('#user-name').textContent=user.username;$('#user-avatar').textContent=shortName(user.username);$('#status').textContent='Conectado';setView('home');refreshRooms();initDiscover();request('/api/platform/music-profile').then(d=>{if(S.user?.id!==user.id)return;S.favoriteIds=new Set((d.profile?.favorites||[]).map(t=>t.videoId));S.queueRevision=-1;if(S.snapshot?.room?.music)syncMusic(S.snapshot.room.music)}).catch(()=>{});}
-function loggedOut(){S.favoriteIds.clear();S.libraryProfile=null;closeGameWindow(true);S.user=null;S.token='';localStorage.removeItem('tdb_session_token');show('#auth');show('#shell',false);$('#auth-user').focus()}
+function setView(view){show('#home',view==='home');show('#room-view',view==='room');for(const id of ['profile','friends','admin'])show('#'+id+'-view',view===id);$$('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));$('#where').textContent=({home:'Notícias',profile:'Meu perfil',friends:'Amigos',admin:'Administração'})[view]||S.snapshot?.room?.name||'Sala social';document.dispatchEvent(new CustomEvent('tdb:view',{detail:{view}}));window.scrollTo({top:0,behavior:'instant'})}
+function loggedIn(user){S.user=user;document.dispatchEvent(new CustomEvent('tdb:auth',{detail:{user}}));show('#auth',false);show('#shell',true);$('#user-name').textContent=user.username;$('#user-avatar').textContent=shortName(user.username);$('#status').textContent='Conectado';setView('home');refreshRooms();initDiscover();request('/api/platform/music-profile').then(d=>{if(S.user?.id!==user.id)return;S.favoriteIds=new Set((d.profile?.favorites||[]).map(t=>t.videoId));S.queueRevision=-1;if(S.snapshot?.room?.music)syncMusic(S.snapshot.room.music)}).catch(()=>{});}
+function loggedOut(){document.dispatchEvent(new CustomEvent('tdb:auth',{detail:{user:null}}));S.favoriteIds.clear();S.libraryProfile=null;closeGameWindow(true);S.user=null;S.token='';localStorage.removeItem('tdb_session_token');show('#auth');show('#shell',false);$('#auth-user').focus()}
 async function login(){if(!S.token){loggedOut();return}try{const data=await request('/api/auth/session');loggedIn(data.user);/* 8.3: notícias primeiro após autenticar; reentrada na última sala fica por escolha do usuário. */}catch{loggedOut()}}
 $('#auth-toggle').addEventListener('click',()=>{S.authMode=S.authMode==='login'?'register':'login';$('#auth-title').textContent=S.authMode==='login'?'Entre no seu mundo.':'Faça parte da galera.';$('#auth-submit').innerHTML=S.authMode==='login'?'Entrar no TDB <span>→</span>':'Criar minha conta <span>→</span>';$('#auth-toggle').innerHTML=S.authMode==='login'?'Ainda não tem conta? <b>Criar conta</b>':'Já tem conta? <b>Entrar</b>'});
 $('#auth-form').addEventListener('submit',async e=>{e.preventDefault();const btn=$('#auth-submit');btn.disabled=true;try{const d=await request(`/api/auth/${S.authMode}`,{username:$('#auth-user').value.trim(),password:$('#auth-pass').value});S.token=d.token;localStorage.setItem('tdb_session_token',d.token);loggedIn(d.user);toast(`Bem-vindo ao TDB, ${d.user.username}!`)}catch(err){toast(err.message)}finally{btn.disabled=false}});
@@ -80,6 +80,8 @@ $('#top-training')?.addEventListener('click',async()=>{
 $('#refresh-rooms').addEventListener('click',refreshRooms);$('#home-refresh').addEventListener('click',refreshRooms);
 $('#nav-home').addEventListener('click',()=>setView('home'));
 $('#nav-room').addEventListener('click',()=>S.room?setView('room'):toast('Entre em uma sala primeiro.'));
+document.addEventListener('tdb:profile-updated',event=>{if(S.user&&event.detail?.user?.id===S.user.id)S.user={...S.user,...event.detail.user}});
+document.addEventListener('tdb:navigate',event=>{const view=event.detail?.view;if(['home','room','profile','friends','admin'].includes(view))setView(view)});
 document.addEventListener('tdb:resume-room',()=>{const code=localStorage.getItem('tdb_hub_last_room');if(code)void enter(code);});
 // Non-destructive per-device layout preferences; games and audio stay mounted.
 const roomLayoutPrefs={music:localStorage.getItem('tdb_hide_music_panel')==='yes',social:localStorage.getItem('tdb_hide_social_panel')==='yes'};
@@ -100,6 +102,7 @@ $('#home-training')?.addEventListener('click',()=>$('#top-training')?.click());
 $('#home-library')?.addEventListener('click',()=>$('#music-library')?.click());
 $('#home-history')?.addEventListener('click',()=>$('#nav-history')?.click());
 $('#social-members-open')?.addEventListener('click',()=>{selectTab('members');$('#members-panel')?.scrollIntoView({block:'nearest',behavior:'smooth'})});
+$('#universe-members-access')?.addEventListener('click',()=>{selectTab('members');$('#members-panel')?.scrollIntoView({block:'nearest',behavior:'smooth'})});
 $('#social-chat-open')?.addEventListener('click',()=>{selectTab('chat');$('#chat-panel')?.scrollIntoView({block:'nearest',behavior:'smooth'})});
 $('#social-chat-form')?.addEventListener('submit',e=>{
   e.preventDefault();const input=$('#social-chat-input'),val=input?.value.trim();if(!val||!S.room)return;

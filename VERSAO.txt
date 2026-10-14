@@ -1,3 +1,1 @@
-TDB Gaming Universe 8.3.0 RC1
-Base: TDB 8.2.0 RC1
-Noticias primeiro · Premium Gold + Social · Zero servicos pagos novos
+TDB 8.3.1 RC1 — Social & Admin (Nuuvem, Perfil, Amigos, ADM seguro)

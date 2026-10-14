@@ -10,7 +10,7 @@ const fallbackLinks=[
   {name:'Ofertas Steam',url:'https://store.steampowered.com/specials/',kind:'steam'},
   {name:'Jogos grátis Epic',url:'https://store.epicgames.com/pt-BR/free-games',kind:'epic'},
   {name:'Xbox Wire',url:'https://news.xbox.com/pt-br/',kind:'news'},
-  {name:'GeForce NOW',url:'https://blogs.nvidia.com/blog/category/gaming/',kind:'cloud'}
+  {name:'Nuuvem',url:'https://www.nuuvem.com/br-pt',kind:'nuuvem'}
 ];
 const text=(v,max=180)=>String(v??'').replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim().slice(0,max);
 const safeLink=(value,hosts)=>{try{const u=new URL(value);return u.protocol==='https:'&&hosts.some(h=>u.hostname===h||u.hostname.endsWith('.'+h))?u.toString():null}catch{return null}};
@@ -55,12 +55,11 @@ async function loadFeeds(){
   const feeds=await Promise.allSettled([
     fetchContent('https://store.steampowered.com/api/featuredcategories/?cc=BR&l=portuguese').then(steamOffers),
     fetchContent('https://store-site-backend-static.ak.epicgames.com/freeGamesPromotions?locale=pt-BR&country=BR&allowCountries=BR').then(epicFree),
-    fetchContent('https://news.xbox.com/en-us/feed/','xml').then(xml=>newsRss(xml,'Xbox Wire',['news.xbox.com'])),
-    fetchContent('https://blogs.nvidia.com/blog/category/gaming/feed/','xml').then(xml=>newsRss(xml,'NVIDIA Gaming',['blogs.nvidia.com']))
+    fetchContent('https://news.xbox.com/en-us/feed/','xml').then(xml=>newsRss(xml,'Xbox Wire',['news.xbox.com']))
   ]);
   return {steam:feeds[0].status==='fulfilled'?feeds[0].value:[],epic:feeds[1].status==='fulfilled'?feeds[1].value:[],
-    news:[...(feeds[2].status==='fulfilled'?feeds[2].value:[]),...(feeds[3].status==='fulfilled'?feeds[3].value:[])].slice(0,8),
-    sources:feeds.map((r,i)=>({name:['Steam','Epic','Xbox Wire','NVIDIA'][i],available:r.status==='fulfilled'})),links:fallbackLinks,
+    news:feeds[2].status==='fulfilled'?feeds[2].value:[],
+    sources:feeds.map((r,i)=>({name:['Steam','Epic','Xbox Wire'][i],available:r.status==='fulfilled'})),links:fallbackLinks,
     updatedAt:new Date().toISOString()};
 }
 export async function discoverFeed(){

@@ -30,9 +30,10 @@ const actionIds={
   'universe-quick-library':()=>click('home-library'),
   'universe-quick-history':()=>click('nav-history'),
   'universe-room-tables':()=>clickTab('tables'),
-  'universe-room-streams':()=>$('#room-music-card')?.closest('.room-rail')?.querySelector('.share-card')?.scrollIntoView({block:'start',behavior:'smooth'}),
+  'universe-room-streams':()=>$('#room-view .share-card')?.scrollIntoView({block:'nearest',behavior:'smooth'}),
   'universe-room-chat':()=>clickTab('chat'),
-  'universe-room-people':()=>clickTab('members')
+  'universe-room-people':()=>clickTab('members'),
+  'universe-room-invite':()=>click('nav-friends')
 };
 function clickTab(tab){$(`[data-tab="${tab}"]`)?.click();$('#'+(tab==='chat'?'chat-panel':tab==='members'?'members-panel':'tables-panel'))?.scrollIntoView({block:'nearest',behavior:'smooth'})}
 // In HTML the explore anchor is a real existing section, not an independent view.
@@ -47,7 +48,7 @@ updateRoomGuide();
 $('#universe-guide-create')?.addEventListener('click',()=>click('new-table'));
 $('#universe-guide-bot')?.addEventListener('click',()=>click('new-bot-table'));
 // Keep selected sidebar state consistent with the existing home/room nav.
-const shell=$('#shell');const setNav=()=>{const home=!$('#home')?.classList.contains('hidden');$('#nav-home')?.classList.toggle('active',home);$('#nav-room')?.classList.toggle('active',!home);updateResume()};
+const shell=$('#shell');const setNav=()=>{const home=!$('#home')?.classList.contains('hidden');const room=!$('#room-view')?.classList.contains('hidden');$('#nav-home')?.classList.toggle('active',home);$('#nav-room')?.classList.toggle('active',room);updateResume()};
 window.addEventListener('storage',e=>{if(e.key==='tdb_hub_last_room')updateResume()});
 if(shell)new MutationObserver(setNav).observe($('#home'),{attributes:true,attributeFilter:['class']});setNav();
 // Global palette/search with keyboard navigation; no new backend or private data.
@@ -56,11 +57,13 @@ const shortcuts=[
   {title:'Notícias e promoções',desc:'Abrir home gamer',fn:()=>click('nav-home')},
   {title:'Ofertas Steam',desc:'Ver promoções disponíveis',fn:()=>showNews('steam')},
   {title:'Jogos grátis Epic',desc:'Conferir ofertas gratuitas',fn:()=>showNews('epic')},
-  {title:'Cloud gaming',desc:'Novidades de jogos em nuvem',fn:()=>showNews('cloud')},
+  {title:'Nuuvem',desc:'Loja brasileira de jogos e ofertas',fn:()=>showNews('nuuvem')},
   {title:'Explorar salas',desc:'Ver salas abertas',fn:()=>scrollToSection('universe-home-rooms-anchor')},
   {title:'Criar sala',desc:'Abrir criação de sala',fn:()=>click('top-create')},
   {title:'Entrar com código',desc:'Acessar sala privada',fn:()=>click('top-join')},
-  {title:'Treinar contra BOT',desc:'Xadrez ou Truco',fn:()=>click('top-training')},
+  {title:'Jogos',desc:'Xadrez ou Truco com BOT',fn:()=>click('top-training')},
+  {title:'Meu perfil',desc:'Minha conta e minhas estatísticas',fn:()=>click('nav-profile')},
+  {title:'Amigos e convites',desc:'Adicionar amigos e convidar para salas',fn:()=>click('nav-friends')},
   {title:'Biblioteca musical',desc:'Favoritos, playlists e histórico',fn:()=>click('home-library')},
   {title:'Histórico de partidas',desc:'Consultar resultados anteriores',fn:()=>click('nav-history')}
 ];
@@ -76,10 +79,10 @@ input?.addEventListener('input',renderCommands);
 results?.addEventListener('click',e=>{const b=e.target.closest('[data-command-index]');if(!b)return;const choice=shown[Number(b.dataset.commandIndex)];if(choice){closeCommand();choice.fn()}});
 input?.addEventListener('keydown',e=>{if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();selectCommand(highlighted+(e.key==='ArrowDown'?1:-1))}else if(e.key==='Enter'&&shown.length){e.preventDefault();const chosen=shown[highlighted];closeCommand();chosen?.fn()}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&command.open){e.preventDefault();closeCommand();return}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();command.open?closeCommand():openCommand()}});
-// Notifications are not stored in v8.2; show accurate connection status only.
-$('#universe-notifications')?.addEventListener('click',()=>{const status=$('#status')?.textContent||'Status indisponível';const el=$('#toast');if(el){el.textContent=`TDB · ${status}. Não há uma central de notificações ativa nesta versão.`;el.classList.add('visible');clearTimeout(window.__universeToastTimer);window.__universeToastTimer=setTimeout(()=>el.classList.remove('visible'),3200)}});
+// Notifications panel now delegates to real pending friend/room requests.
+$('#universe-notifications')?.addEventListener('click',()=>click('nav-friends'));
 const account=$('#universe-account-dialog');
-$('#universe-profile')?.addEventListener('click',()=>{updateUser();account.showModal()});
+$('#universe-profile')?.addEventListener('click',()=>{click('nav-profile')});
 $('#universe-account-close')?.addEventListener('click',()=>account.close());
 $('#universe-account-history')?.addEventListener('click',()=>{account.close();click('nav-history')});
 // Featured news is linked only to a verified public item returned by /api/discover.

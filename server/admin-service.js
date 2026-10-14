@@ -8,10 +8,13 @@ import {
 } from './realtime-store.js';
 
 const ADMIN_SESSION_MS=12*60*60*1000;
-const ADMIN_USERNAME='adm';
-// Somente o hash/salt ficam no servidor. A senha em texto puro nunca é enviada ao navegador.
-const ADMIN_PASSWORD_SALT='73b425711eee7ee60fe2c60e13e7f4fa';
-const ADMIN_PASSWORD_HASH='c7e65f647837c1e76624e8939eef6261b06527caf7331fe40af6caea2644d7931320b16c7f612431a2a4c7f14c6a3afe57ce96acca7ac5263886e78986ac64c3';
+// Segredos exclusivamente em variáveis de ambiente do servidor.
+// Sem configuração, ADM fica DESABILITADO (fail closed), inclusive em desenvolvimento.
+const ADMIN_USERNAME=String(process.env.TDB_ADMIN_USERNAME||'adm').trim().toLowerCase();
+const ADMIN_PASSWORD_SALT=String(process.env.TDB_ADMIN_PASSWORD_SALT||'');
+const ADMIN_PASSWORD_HASH=String(process.env.TDB_ADMIN_PASSWORD_HASH||'').toLowerCase();
+function adminConfigured(){return Boolean(ADMIN_USERNAME&&/^[0-9a-f]{32,128}$/i.test(ADMIN_PASSWORD_SALT)&&/^[0-9a-f]{128}$/i.test(ADMIN_PASSWORD_HASH))}
+
 
 function normalize(v){return String(v||'').trim().toLowerCase()}
 function hashPassword(password,salt){return crypto.scryptSync(String(password),salt,64).toString('hex')}
@@ -26,11 +29,12 @@ function publicAdmin(){return{username:ADMIN_USERNAME,role:'admin'}}
 function generatedPassword(){
   const chars='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   let out='TDB-';
-  for(let i=0;i<10;i++)out+=chars[Math.floor(Math.random()*chars.length)];
+  for(let i=0;i<10;i++)out+=chars[crypto.randomInt(chars.length)];
   return out;
 }
 
 export async function loginAdmin(username,password){
+  if(!adminConfigured())throw new Error('ADM não configurado: defina as variáveis TDB_ADMIN_* na Vercel.');
   const okUser=normalize(username)===ADMIN_USERNAME;
   const computed=hashPassword(password,ADMIN_PASSWORD_SALT);
   if(!okUser||!safeEqualHex(computed,ADMIN_PASSWORD_HASH)) throw new Error('Usuário ou senha de administrador inválidos.');
@@ -58,7 +62,7 @@ export async function loginAdmin(username,password){
 }
 
 export async function adminSession(token){
-  if(!token)return null;
+  if(!token||!adminConfigured())return null;
   await initSupabase();
 
   if(isSupabaseReady()){
@@ -117,7 +121,7 @@ export async function overview(){
     db.from('tdb_reports').select('*',{count:'exact',head:true}).in('status',['open','reviewing']),
     db.from('tdb_error_logs').select('*',{count:'exact',head:true}).gte('created_at',since),
     db.from('tdb_presence').select('*',{count:'exact',head:true}).gte('updated_at',onlineSince),
-    db.from('tdb_rooms').select('*',{count:'exact',head:true}).eq('status','open'),
+    db.from('tdb_hubs').select('*',{count:'exact',head:true}),
     db.from('tdb_matches').select('*',{count:'exact',head:true}).neq('status','finished'),
     getSharedValue('app:maintenance',{enabled:false,message:'TDB em manutenção • voltamos em breve'})
   ]);
@@ -281,7 +285,7 @@ export async function operations(){
 
   const db=getSupabaseClient();
   const [roomsRes,logsRes]=await Promise.all([
-    db.from('tdb_rooms').select('code,game,owner_id,status,privacy,data,updated_at').order('updated_at',{ascending:false}).limit(150),
+    db.from('tdb_hubs').select('code,name,owner_id,visibility,data,updated_at').order('updated_at',{ascending:false}).limit(150),
     db.from('tdb_error_logs').select('context,created_at').order('created_at',{ascending:false}).limit(500)
   ]);
 
@@ -298,18 +302,19 @@ export async function operations(){
     .map(([version,count])=>({version,count}))
     .sort((a,b)=>b.count-a.count);
 
-  const rooms=(roomsRes.error?[]:(roomsRes.data||[])).map(row=>({
-    code:row.code,
-    game:row.game,
-    ownerId:row.owner_id,
-    status:row.status,
-    privacy:row.privacy,
-    updated_at:row.updated_at,
-    name:row.data?.name||row.code,
-    players:row.data?.players?.length||0,
-    spectators:row.data?.spectators?.length||0,
-    emptyExpiresAt:row.data?.emptyExpiresAt||null
-  }));
+  const rooms=(roomsRes.error?[]:(roomsRes.data||[])).map(row=>{
+    const data=row.data||{},members=(data.members||[]).filter(m=>Date.now()-Number(m.lastSeen||0)<75000);
+    const tables=(data.tables||[]).filter(t=>t.game==='chess'||t.game==='truco');
+    return{
+      code:row.code,game:'social',ownerId:row.owner_id,
+      status:tables.some(t=>t.status==='playing')?'playing':members.length?'open':'empty',
+      privacy:row.visibility,updated_at:row.updated_at,
+      name:data.displayName||row.name||row.code,
+      players:members.length,spectators:tables.reduce((n,t)=>n+(t.watchers||[]).length,0),
+      activeTables:tables.filter(t=>t.status==='playing').length,
+      emptyExpiresAt:data.emptySince?new Date(data.emptySince+3600000).toISOString():null
+    };
+  });
 
   return{rooms,maintenance:{...maintenance,internal:maintenanceInternal},errorVersions,warnings};
 }

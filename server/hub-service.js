@@ -214,6 +214,18 @@ export async function listRooms(user){
   return (data||[]).filter(r=>!expired(r.data)&&(r.visibility==='public'||r.owner_id===user.id||r.data?.members?.some(m=>m.id===user.id))).map(summary);
 }
 function summary(r){return {code:r.code,name:r.data?.displayName||r.name,visibility:r.visibility,members:activeMembers(r.data||{}).length,tables:(r.data?.tables||[]).filter(t=>t.game!=='pool').length}}
+// Internal validation for friend invitations to the *current* TDB social room,
+// not the v7 single-game legacy tdb_rooms table.
+export async function inspectRoomForInvite(codeValue,senderId,receiverId){
+  const room=await get(codeValue);
+  assert(room&&!expired(room.data),'Sala não encontrada ou expirada.',404);
+  assert(!room.data.training,'Salas pessoais de treinamento não permitem convidados.',403);
+  assert(room.data.members.some(m=>m.id===senderId&&fresh(m)),'Entre na sala antes de convidar.',403);
+  assert(!room.data.members.some(m=>m.id===receiverId&&fresh(m)),'Esse amigo já está na sala.');
+  assert(!(room.data.banned||[]).includes(receiverId),'Este jogador foi removido da sala.',403);
+  assert(activeMembers(room.data).length<30,'A sala atingiu o limite de participantes.');
+  return {code:room.code,name:room.name,visibility:room.visibility};
+}
 export async function joinRoom(codeValue,user){
   const room=await get(codeValue);assert(room,'Sala não encontrada.',404);
   assert(!expired(room.data),'Sala expirada.',404);

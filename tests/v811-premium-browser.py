@@ -107,7 +107,7 @@ def run(width,height,home_shot=None,room_shot=None):
   page.locator('#room-settings').click()
   assert page.locator('#modal-title').inner_text()=='Permissões da sala'
   page.locator('#modal-cancel').click()
-  page.locator('#social-members-open').click()
+  page.locator('#universe-members-access' if page.locator('#universe-members-access').count() else '#social-members-open').click()
   assert page.locator('#members-list .member-card').count()==3
   page.locator('[data-tab="tables"]').click()
   page.locator('#room-delete').click()

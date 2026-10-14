@@ -1,14 +1,14 @@
 // Public gaming feeds are noncritical: the TDB must work even when all sources fail.
 const safe=(v)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safeUrl=(raw)=>{try{const u=new URL(raw);return u.protocol==='https:'?u.href:null}catch{return null}};
-const links={steam:'https://store.steampowered.com/specials/',epic:'https://store.epicgames.com/pt-BR/free-games',news:'https://news.xbox.com/pt-br/',cloud:'https://blogs.nvidia.com/blog/category/gaming/'};
+const links={steam:'https://store.steampowered.com/specials/',epic:'https://store.epicgames.com/pt-BR/free-games',news:'https://news.xbox.com/pt-br/',nuuvem:'https://www.nuuvem.com/br-pt'};
 let result=null,pending=null,active='all';
-const fallback=()=>Object.entries(links).map(([type,url])=>({title:({steam:'Confira as promoções Steam',epic:'Confira os jogos gratuitos da Epic',news:'Leia as notícias do Xbox Wire',cloud:'Novidades do GeForce NOW'})[type],url,source:({steam:'Steam',epic:'Epic Games',news:'Xbox Wire',cloud:'NVIDIA'})[type],type:'link'}));
+const fallback=()=>Object.entries(links).map(([type,url])=>({title:({steam:'Confira as promoções Steam',epic:'Confira os jogos gratuitos da Epic',news:'Leia as notícias do Xbox Wire',nuuvem:'Ofertas na loja Nuuvem'})[type],url,source:({steam:'Steam',epic:'Epic Games',news:'Xbox Wire',nuuvem:'Nuuvem'})[type],type:'link'}));
 function render(){
   const root=document.querySelector('#discover-list'),meta=document.querySelector('#discover-meta');if(!root)return;
-  const d=result||{};let entries=[...(d.epic||[]).map(i=>({...i,group:'epic'})),...(d.steam||[]).map(i=>({...i,group:'steam'})),...(d.news||[]).map(i=>({...i,group:i.source==='NVIDIA Gaming'?'cloud':'news'}))];
+  const d=result||{};let entries=[...(d.epic||[]).map(i=>({...i,group:'epic'})),...(d.steam||[]).map(i=>({...i,group:'steam'})),...(d.news||[]).map(i=>({...i,group:'news'}))];
   entries=entries.filter(i=>active==='all'||i.group===active);
-  const linksFiltered=fallback().map((item,i)=>({...item,group:['steam','epic','news','cloud'][i]})).filter(item=>active==='all'||item.group===active);
+  const linksFiltered=fallback().map((item,i)=>({...item,group:['steam','epic','news','nuuvem'][i]})).filter(item=>active==='all'||item.group===active);
   const present=new Set(entries.map(item=>item.group));
   const fillers=linksFiltered.filter(item=>!present.has(item.group));
   const display=[...entries.slice(0,8),...fillers].slice(0,9);

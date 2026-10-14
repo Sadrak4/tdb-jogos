@@ -95,3 +95,9 @@ Ver `LEIA-PRIMEIRO-PREMIUM.md`.
 - Até 12 mesas por sala: Xadrez, Sinuca e Truco (1x1); jogadores e espectadores.
 - Chat, sinais WebRTC persistidos, suporte a Vercel e migração aditiva Supabase.
 - Testes de integração local; validação na Vercel e redes reais pendente.
+
+## 8.3.1 RC1 — Social & Admin
+
+- Nuuvem no lugar de Cloud Gaming, menu sem treino duplicado.
+- Compartilhamento na coluna social, Perfil e Amigos completos, ADM reativado com credenciais por ambiente.
+- Convites agora integrados às salas de `tdb_hubs`; motores de jogo preservados.
