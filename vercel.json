@@ -7,6 +7,14 @@
   },
   "rewrites": [
     {
+      "source": "/api/hub-cleanup",
+      "destination": "/api/router?route=hub-cleanup"
+    },
+    {
+      "source": "/api/hub",
+      "destination": "/api/router?route=hub"
+    },
+    {
       "source": "/api/health",
       "destination": "/api/router?route=health"
     },
@@ -209,6 +217,12 @@
     {
       "source": "/api/admin/operations",
       "destination": "/api/router?route=admin/operations"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/hub-cleanup",
+      "schedule": "0 3 * * *"
     }
   ]
 }

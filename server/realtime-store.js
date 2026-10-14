@@ -78,18 +78,14 @@ export async function initSupabase(){
         auth:{persistSession:false,autoRefreshToken:false},
         global:{headers:{'X-Client-Info':'tdb-jogos-server/7.2.5'}}
       });
-      const checks=await withTimeout(Promise.all([
-        supabaseClient.from('tdb_rooms').select('code',{head:true,count:'exact'}).limit(1),
-        supabaseClient.from('tdb_game_results').select('match_id',{head:true,count:'exact'}).limit(1),
-        supabaseClient.from('tdb_friend_requests').select('sender_id',{head:true,count:'exact'}).limit(1),
-        supabaseClient.from('tdb_room_invites').select('id',{head:true,count:'exact'}).limit(1),
-        supabaseClient.from('tdb_reports').select('id',{head:true,count:'exact'}).limit(1),
-        supabaseClient.from('tdb_admin_sessions').select('token',{head:true,count:'exact'}).limit(1),
-        supabaseClient.from('tdb_users').select('id,banned',{head:true,count:'exact'}).limit(1)
-      ]),SUPABASE_INIT_TIMEOUT_MS,'Supabase');
-      const schemaError=checks.find(x=>x.error)?.error;
-      if(schemaError){supabaseReady=true;schemaReady=false;lastError=`Schema v5.5 pendente: ${schemaError.message}`;return false;}
-
+      // Uma única validação essencial durante a inicialização fria.
+      // As sete sondagens anteriores faziam tráfego redundante em toda
+      // instância serverless nova; os módulos validam suas próprias tabelas
+      // ao realizar a primeira consulta real.
+      const {error:schemaError}=await withTimeout(
+        supabaseClient.from('tdb_users').select('id',{head:true,count:'exact'}).limit(1),
+        SUPABASE_INIT_TIMEOUT_MS,'Supabase');
+      if(schemaError){supabaseReady=true;schemaReady=false;lastError=`Tabela de usuários indisponível: ${schemaError.message}`;return false;}
 
       supabaseReady=true;
       schemaReady=true;
@@ -346,6 +342,31 @@ export async function setSharedValue(key,value){
   const {topic,roomCode}=sharedEventMeta(key);
   await emitEvent(topic,roomCode,'set');
   return value;
+}
+
+/** Gravação transacional com controle de versão. Requer a migração 8.1.4
+ * no Supabase; sem ela falha explicitamente, em vez de sobrescrever jogadas.
+ */
+export async function compareAndSetGame(key,expectedVersion,value){
+  if(!String(key).startsWith('game:'))throw new Error('CAS restrito a partidas.');
+  await initSupabase();
+  if(isSupabaseReady()){
+    const {data,error}=await runSupabaseQuery(supabaseClient.rpc('tdb_cas_game_state',{
+      p_key:key,p_expected_version:Number(expectedVersion),p_value:value
+    }),'Salvar jogada com controle de versão');
+    if(error){
+      if(error.code==='PGRST202'||error.code==='42883')throw new Error('Execute database/SUPABASE-PERFORMANCE-v8.1.4.sql antes de instalar esta versão.');
+      throw new Error(error.message);
+    }
+    if(data!==true)return false;
+  }else{
+    const current=MEMORY.shared.get(key);
+    if(!current||Number(current.version||0)!==Number(expectedVersion))return false;
+    MEMORY.shared.set(key,clone(value));
+  }
+  const {topic,roomCode}=sharedEventMeta(key);
+  await emitEvent(topic,roomCode,'set');
+  return true;
 }
 
 export async function removeSharedValue(key){

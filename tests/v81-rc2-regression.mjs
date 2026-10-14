@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import * as Hub from '../server/hub-service.js';
+const creator={id:'RC2-ORIGINAL-OWNER',username:'Criador'},another={id:'RC2-VISITOR',username:'Visitante'};
+const {code}=await Hub.createRoom(creator,{name:'Privada anterior',visibility:'private'});
+await Hub.joinRoom(code,another);
+await assert.rejects(Hub.act(code,another,{type:'room:delete'}),/criou|criador|Apenas/i);
+await Hub.leaveRoom(code,creator);
+const ownList=await Hub.listRooms(creator);
+assert(ownList.some(r=>r.code===code),'Criador perdeu acesso à sala privada após sair.');
+await Hub.joinRoom(code,creator);
+const snapshot=await Hub.getSnapshot(code,creator);
+assert.equal(snapshot.room.ownerId,creator.id,'Criador original perdeu a propriedade.');
+await Hub.act(code,creator,{type:'room:delete'});
+await assert.rejects(Hub.joinRoom(code,creator),/não encontrada/i);
+console.log('✔ RC2: criador preservado, sala privada visível após sair, terceiro não exclui, criador exclui.');

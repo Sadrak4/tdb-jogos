@@ -1,3 +1,4 @@
+import * as Hub from './hub-service.js';
 import {
   initSupabase,isSupabaseReady,getSupabaseClient,
   getSharedValue,setSharedValue,getRoomPrivate,setRoomPrivate,emitEvent
@@ -115,9 +116,10 @@ export async function musicProfileAction(user,action={}){
   if(type==='SAVE_PRESET'){
     const code=String(action.roomCode||'').toUpperCase();
     const room=await getRoomPrivate(code);
-    if(!room||room.game!=='music'||room.ownerId!==user.id)throw new Error('Somente o host da sala Music pode salvar a playlist.');
-    const state=await getSharedValue(musicStateKey(code),null);
-    const queue=(state?.queue||[]).slice(0,50).map(t=>({videoId:t.videoId,title:t.title,channel:t.channel,thumbnail:t.thumbnail,url:t.url}));
+    // Legacy Music rooms retain their original behavior. Social hubs use their own synchronized queue.
+    const queue=room?.game==='music'&&room.ownerId===user.id
+      ? (await getSharedValue(musicStateKey(code),null))?.queue?.slice(0,50).map(t=>({videoId:t.videoId,title:t.title,channel:t.channel,thumbnail:t.thumbnail,url:t.url}))||[]
+      :await Hub.musicQueueForUser(code,user);
     if(!queue.length)throw new Error('A fila está vazia.');
     const name=cleanText(action.name,30)||`Playlist ${new Date().toLocaleDateString('pt-BR')}`;
     let presets=await getSharedValue(musicPresetsKey(user.id),[]);
@@ -130,10 +132,14 @@ export async function musicProfileAction(user,action={}){
   if(type==='APPLY_PRESET'){
     const code=String(action.roomCode||'').toUpperCase();
     const room=await getRoomPrivate(code);
-    if(!room||room.game!=='music'||room.ownerId!==user.id)throw new Error('Somente o host pode carregar uma playlist na sala.');
+    if(room?.game==='music'&&room.ownerId!==user.id)throw new Error('Apenas o host pode usar esta playlist na sala Music antiga.');
     const presets=await getSharedValue(musicPresetsKey(user.id),[]);
     const preset=(Array.isArray(presets)?presets:[]).find(p=>p.id===action.presetId);
     if(!preset)throw new Error('Playlist não encontrada.');
+    if(room?.game!=='music'){
+      await Hub.appendMusicPreset(code,user,preset.tracks||[],{replace:action.replace===true});
+      return {presets,loaded:true};
+    }
     const state=clone(await getSharedValue(musicStateKey(code),{roomCode:code,queue:[],currentIndex:-1,status:'paused',position:0,changedAt:now(),history:[],skipVotes:[]}));
     state.queue=(preset.tracks||[]).map((t,i)=>({...t,id:`Q-${now()}-${i}-${Math.random().toString(36).slice(2,5)}`,addedBy:user.username,addedById:user.id,addedAt:now()+i}));
     state.currentIndex=state.queue.length?0:-1;state.status='paused';state.position=0;state.changedAt=now();state.skipVotes=[];state.updatedAt=now();state.updatedBy=user.id;state.revision=Number(state.revision||0)+1;state.playbackRevision=Number(state.playbackRevision||0)+1;state.lastAction={type:'preset',by:user.username,byId:user.id,at:now(),name:preset.name};

@@ -2,7 +2,7 @@ import * as Chess from './chess-engine.js';
 import * as Truco from './truco-engine.js';
 import * as Blackjack from './blackjack-engine.js';
 import * as Pool from './pool-engine.js';
-import {getSharedValue,setSharedValue,removeSharedValue,getRoomPrivate,setRoomPrivate,applyMutation} from './realtime-store.js';
+import {getSharedValue,setSharedValue,compareAndSetGame,removeSharedValue,getRoomPrivate,setRoomPrivate,applyMutation} from './realtime-store.js';
 import {recordGameResult} from './stats-service.js';
 
 function gameKey(code){return`game:${code}`}
@@ -54,33 +54,78 @@ async function finalizeIfNeeded(state,reason=null){
     room.finishedAt=Date.now();
     await setRoomPrivate(room);
   }
+  // O match resumido é sincronizado apenas ao iniciar/finalizar, não em cada jogada.
   await syncMatchRow(state);
   return state;
 }
 
 export async function getGame(code){return await getSharedValue(gameKey(code),null)}
 
-export async function refreshGame(code){
-  let state=await getGame(code);
+export async function refreshGame(code,existingState=null){
+  let state=existingState||await getGame(code);
   if(!state)return null;
+  // Never advance clocks or BOTs while a disconnected player has paused a match.
+  if(state.pausedAt)return state;
   const beforeVersion=state.version||0;
   if(state.game==='chess'&&state.clockEnabled&&state.status==='playing')state=chessTick(state);
-  if(state.game==='truco'&&state.phase!=='finished')state=Truco.tick(state,Date.now());
+  if(state.game==='chess'&&state.status==='playing')state=chessBotTurn(state);
+  if(state.game==='truco'&&!isTerminal(state)){state=Truco.tick(state,Date.now());state=Truco.runBotTurn(state,Date.now());}
   if(state.game==='blackjack'){
     const room=await getRoomPrivate(code);
     if(room){const ticked=Blackjack.tick(state,room,Date.now());state=ticked.state}
   }
   if(state.game==='pool'&&state.status==='playing'){const now=Date.now();state=Pool.tick(state,now);state=Pool.runBotTurn(state,now)}
-  if((state.version||0)!==beforeVersion||isTerminal(state)){
-    await saveGame(code,state);
-    await finalizeIfNeeded(state,state.status==='timeout'?'timeout':state.lastAutoAction?.type||null);
+  if((state.version||0)!==beforeVersion){
+    try{
+      await saveGame(code,state,beforeVersion);
+    }catch(err){
+      if(err.code==='STALE_STATE')return await getGame(code);
+      throw err;
+    }
+    if(isTerminal(state))await finalizeIfNeeded(state,state.status==='timeout'?'timeout':state.lastAutoAction?.type||null);
   }
   return state;
 }
 
-export async function saveGame(code,state){
-  await setSharedValue(gameKey(code),state);
-  await syncMatchRow(state);
+// O BOT usa a inteligência ORIGINAL do Xadrez 7.2.5 (análise posicional,
+// busca alpha-beta e dificuldades reais). O servidor mantém a decisão oficial.
+function chessBotTurn(state){
+  const player=state.players?.[state.turn];if(!player?.bot)return state;
+  const difficulty=['easy','medium','hard'].includes(player.difficulty)?player.difficulty:'medium';
+  const move=Chess.chooseBotMove(state,state.turn,difficulty,{timeBudgetMs:difficulty==='hard'?680:260});
+  if(!move)return state;
+  const next=Chess.applyMove(state,move,'queen');
+  next.game='chess';next.roomCode=state.roomCode;next.version=(state.version||0)+1;next.serverClockAt=Date.now();
+  return next;
+}
+export async function pauseGame(code,shouldPause,existingState=null){
+  const state=existingState||await getGame(code);if(!state||isTerminal(state))return state;
+  if(shouldPause&&!state.pausedAt){const previous=Number(state.version||0);state.pausedAt=Date.now();state.version=previous+1;await saveGame(code,state,previous)}
+  else if(!shouldPause&&state.pausedAt){
+    const delta=Date.now()-state.pausedAt;delete state.pausedAt;
+    if(state.serverClockAt)state.serverClockAt+=delta;
+    if(state.turnDeadlineAt)state.turnDeadlineAt+=delta;
+    if(state.botThinkUntil)state.botThinkUntil+=delta;
+    if(state.trickResolveAt)state.trickResolveAt+=delta;
+    if(state.readyAt)state.readyAt+=delta;
+    const previous=Number(state.version||0);state.version=previous+1;await saveGame(code,state,previous);
+  }
+  return state;
+}
+export async function cancelGame(code,reason='admin'){const state=await getGame(code);if(!state||isTerminal(state))return state;
+  state.canceled=true;state.finishReason=reason;state.winner=null;state.winnerId=null;
+  if(state.game==='truco')state.phase='finished';else state.status='canceled';
+  const previous=Number(state.version||0);state.version=previous+1;
+  try{await saveGame(code,state,previous)}catch(err){if(err.code==='STALE_STATE')return await cancelGame(code,reason);throw err}
+  await finalizeIfNeeded(state,reason);return state;
+}
+export async function saveGame(code,state,expectedVersion=null){
+  if(expectedVersion===null)await setSharedValue(gameKey(code),state);
+  else if(!await compareAndSetGame(gameKey(code),expectedVersion,state)){
+    throw Object.assign(new Error('A partida mudou. Atualize e tente novamente.'),{code:'STALE_STATE'});
+  }
+  // Estado completo somente em tdb_shared; tdb_matches guarda resumo de
+  // início/fim, sem uma gravação extra em cada jogada.
   return state;
 }
 
@@ -158,6 +203,8 @@ function rememberAction(state,actionId){
 export async function applyAction(code,userId,action){
   let state=await refreshGame(code);
   if(!state)throw new Error('Partida não encontrada.');
+  if(state.pausedAt)throw new Error('Partida pausada aguardando reconexão.');
+  const originalVersion=Number(state.version||0);
   const actionId=String(action?.actionId||'');
   if(actionId&&state.processedActionIds?.includes(actionId))return state;
   if(action?.expectedVersion!==undefined&&Number(action.expectedVersion)!==Number(state.version||0)){
@@ -193,15 +240,27 @@ export async function applyAction(code,userId,action){
   }else if(state.game==='pool'){
     state=Pool.applyAction(state,userId,action,Date.now());
   }else throw new Error('Jogo não suportado.');
+  // Antecipar o turno dos BOTs ainda na resposta à jogada humana.
+  // Mantém a estratégia original (inclusive as dificuldades) e respeita pausas,
+  // turnos humanos e o breve tempo de revelação da carta no Truco.
+  if(!state.pausedAt&&state.game==='chess'&&state.status==='playing')state=chessBotTurn(state);
+  if(!state.pausedAt&&state.game==='truco'&&!isTerminal(state)){
+    for(let i=0;i<4;i++){
+      const before=state.version||0;
+      state=Truco.runBotTurn(state,Date.now());
+      if((state.version||0)===before)break;
+    }
+  }
   rememberAction(state,actionId);
-  await saveGame(code,state);
-  await finalizeIfNeeded(state);
+  await saveGame(code,state,originalVersion);
+  if(isTerminal(state))await finalizeIfNeeded(state);
   return state;
 }
 
 export async function abandonGame(code,userId,reason='abandonment'){
   let state=await getGame(code);
   if(!state||isTerminal(state))return state;
+  const originalVersion=Number(state.version||0);
   if(state.game==='chess'){
     const ident=roleAndIdentity(state,userId,'player');if(ident.role!=='player')return state;
     state.status='abandoned';state.winner=Chess.other(ident.color);state.finishReason=reason;state.version=(state.version||0)+1;
@@ -214,7 +273,7 @@ export async function abandonGame(code,userId,reason='abandonment'){
     const ident=roleAndIdentity(state,userId,'player');if(ident.role!=='player')return state;
     const opp=state.players.find(p=>p.id!==userId);state.status='finished';state.winnerId=opp?.id||null;state.loserId=userId;state.finishReason=reason;state.turnDeadlineAt=null;state.version=(state.version||0)+1;
   }
-  await saveGame(code,state);
+  try{await saveGame(code,state,originalVersion)}catch(err){if(err.code==='STALE_STATE')return await abandonGame(code,userId,reason);throw err}
   await finalizeIfNeeded(state,reason);
   return state;
 }

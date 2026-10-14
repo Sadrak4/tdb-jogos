@@ -290,3 +290,67 @@ export function viewFor(state,userId,role='player'){
 export function seatForUser(state,userId){
   return state.players.find(p=>p.id===userId)?.seat ?? null;
 }
+
+// BOTs do Truco adaptados da lógica original: dificuldade, blefe, respostas a
+// Truco, decisão da mão de 11 e leitura das cartas JÁ ABERTAS na mesa.
+// Não usam cartas ocultas dos adversários para planejar a própria jogada.
+function botStrength(s,seat){
+  const hand=s.hands?.[seat]||[];
+  return hand.reduce((sum,c)=>sum+(c?strength(c,s.manilhaRank):0),0);
+}
+function botCardDecision(s,p){
+  const hand=s.hands[p.seat]||[];
+  const values=hand.map((card,i)=>({i,value:strength(card,s.manilhaRank)})).sort((a,b)=>a.value-b.value);
+  const difficulty=['easy','medium','hard'].includes(p.difficulty)?p.difficulty:'medium';
+  if(difficulty==='easy'){
+    if(Math.random()<.64)return values[Math.floor(Math.random()*values.length)].i;
+    return values[values.length-1].i;
+  }
+  // Observa somente cartas expostas, turno, equipe e manilha.
+  const visible=s.trickCards.filter(t=>!t.hidden&&t.card);
+  const best=visible.length?visible.reduce((a,b)=>strength(a.card,s.manilhaRank)>=strength(b.card,s.manilhaRank)?a:b):null;
+  const myTeam=p.team;
+  const bestTeam=best?teamForSeat(s,best.seat):null;
+  if(best && bestTeam===myTeam){
+    // A dupla está ganhando: preserve a carta mais alta para outras rodadas.
+    return values[0].i;
+  }
+  const winning=best?values.find(x=>x.value>strength(best.card,s.manilhaRank)):null;
+  if(winning){
+    if(difficulty==='hard'||Math.random()<.75)return winning.i;
+  }
+  if(difficulty==='hard')return best?values[0].i:values[values.length-1].i;
+  return Math.random()<.65?values[values.length-1].i:values[Math.floor(Math.random()*values.length)].i;
+}
+function botRaiseResponse(s,p){
+  const pr=s.pendingRaise;
+  const strengthTotal=botStrength(s,p.seat);
+  const difficulty=p.difficulty||'medium',level=pr?.to||3;
+  if(difficulty==='easy')return Math.random()<.12&&strengthTotal<12?'run':'accept';
+  const threshold=level>=12?18:level>=9?14:level>=6?12:9;
+  if(strengthTotal<threshold&&Math.random()<(difficulty==='hard'?.67:.42))return 'run';
+  if(level<12&&strengthTotal>210&&Math.random()<(difficulty==='hard'?.20:.07))return 'raise';
+  return 'accept';
+}
+export function runBotTurn(input,now=Date.now()){
+  let s=clone(input);if(['finished','abandoned','resolving'].includes(s.phase))return s;
+  let seat=null,act=null;
+  if(s.phase==='playing'){
+    seat=s.current;const p=s.players.find(p=>p.seat===seat);if(!p?.bot)return s;
+    const hand=s.hands[seat]||[];if(!hand.length)return s;
+    const diff=p.difficulty||'medium',total=botStrength(s,seat);
+    const roll=Math.random();
+    // O bot antigo podia blefar pedindo Truco; o servidor mantém essa opção.
+    const chance=diff==='easy'?.08:diff==='hard'?(total>=30?.24:.09):.10;
+    if(!s.eleven&&!s.ironHand&&nextRaise(s.handValue)&&roll<chance){act={type:'REQUEST_RAISE'}}
+    else act={type:'PLAY_CARD',cardIdx:botCardDecision(s,p),hidden:s.round>0&&!s.ironHand&&Math.random()<(diff==='hard'?.10:.05)};
+  }else if(s.phase==='raise-response'&&s.pendingRaise){
+    const p=s.players.find(p=>p.bot&&p.team===s.pendingRaise.targetTeam&&s.pendingRaise.responses?.[p.seat]===undefined);
+    if(!p)return s;seat=p.seat;act={type:'RESPOND_RAISE',answer:botRaiseResponse(s,p)};
+  }else if(s.phase==='eleven'&&s.eleven?.pending){
+    const p=s.players.find(p=>p.bot&&p.team===s.eleven.team&&s.eleven.responses?.[p.seat]===undefined);
+    if(!p)return s;seat=p.seat;act={type:'ELEVEN_DECISION',play:p.difficulty==='easy'||botStrength(s,seat)>=20};
+  }
+  if(act){try{s=applyTrucoAction(s,seat,act);s.lastAutoAction={type:'bot',seat,at:now}}catch{}}
+  return s;
+}

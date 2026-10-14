@@ -21,7 +21,9 @@ export async function recordGameResult(state,{reason=null}={}){
     if(state.winner!==null&&state.winner!==undefined){winnerIds=players.filter(p=>p.team===state.winner).map(p=>p.id);loserIds=players.filter(p=>p.team!==state.winner).map(p=>p.id);resultType=state.phase==='abandoned'?'abandonment':'win'}
     metadata={scores:state.scores||[],reason:reason||state.finishReason||null};
   }
-  const counted=players.length>=2&&players.every(realPlayer);
+  // Persist social and training matches, including BOT encounters; no competitive ranking.
+  if(state.canceled){resultType='canceled';winnerIds=[];loserIds=[];}
+  const counted=players.some(realPlayer);
   const payload={match_id:state.matchId,room_code:state.roomCode||state.roomId||null,game:state.game,mode,result_type:resultType,participant_ids:players.map(p=>p.id),winner_ids:winnerIds,loser_ids:loserIds,participants:players.map(p=>({id:p.id,username:p.username,avatar:p.avatar||null,team:p.team??null,color:p.color??null,group:p.group??null})),metadata,counted,started_at:state.startedAt?new Date(state.startedAt).toISOString():null,finished_at:new Date().toISOString()};
   const {error}=await c.from('tdb_game_results').upsert(payload,{onConflict:'match_id',ignoreDuplicates:true});
   if(error)throw new Error(error.message);
@@ -30,9 +32,15 @@ export async function recordGameResult(state,{reason=null}={}){
 
 export async function profileHistory(userId){
   const c=await db();if(!c)return{stats:{},recent:[]};
-  const {data,error}=await c.from('tdb_game_results').select('*').contains('participant_ids',[userId]).eq('counted',true).order('finished_at',{ascending:false}).limit(100);
-  if(error)throw new Error(error.message);
-  const rows=data||[],stats={};
-  for(const r of rows){const s=stats[r.game]||(stats[r.game]={played:0,wins:0,losses:0,draws:0});s.played++;if((r.winner_ids||[]).includes(userId))s.wins++;else if((r.loser_ids||[]).includes(userId))s.losses++;else s.draws++}
-  return{stats,recent:rows.slice(0,20)};
+  const [recentResponse,statsResponse]=await Promise.all([
+    c.from('tdb_game_results').select('*').contains('participant_ids',[userId]).order('finished_at',{ascending:false}).limit(20),
+    c.rpc('tdb_profile_history_stats',{p_user_id:userId})
+  ]);
+  if(recentResponse.error)throw new Error(recentResponse.error.message);
+  const rows=recentResponse.data||[];
+  if(!statsResponse.error)return{stats:statsResponse.data||{},recent:rows};
+  if(!['PGRST202','42883'].includes(statsResponse.error.code))throw new Error(statsResponse.error.message);
+  // Versões anteriores ao SQL 8.1.4: não fingir que os últimos 20
+  // resultados representam o histórico permanente.
+  return {stats:{},recent:rows,statsPendingMigration:true};
 }

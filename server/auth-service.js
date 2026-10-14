@@ -124,6 +124,16 @@ export async function login(username,password){
   return {user:safeUser(user),token};
 }
 
+async function sessionLegacySupabase(token,db){
+  const {data:s,error}=await runSupabaseQuery(db.from('tdb_sessions').select('user_id,expires_at').eq('token',token).maybeSingle(),'Validar sessão');
+  if(error)throw new Error(error.message);
+  if(!s)return null;
+  if(new Date(s.expires_at).getTime()<=Date.now())return null;
+  const {data:user,error:userError}=await runSupabaseQuery(db.from('tdb_users').select('*').eq('id',s.user_id).maybeSingle(),'Carregar sessão');
+  if(userError)throw new Error(userError.message);
+  return user&&!user.banned?safeUser(user):null;
+}
+
 export async function session(token){
   if(!token) return null;
   await initSupabase();
@@ -132,11 +142,13 @@ export async function session(token){
     const db=getSupabaseClient();
     const {data:s,error}=await runSupabaseQuery(db
       .from('tdb_sessions')
-      .select('user_id,expires_at')
+      .select('user_id,expires_at,tdb_users(*)')
       .eq('token',token)
       .maybeSingle(),'Validar sessão');
 
-    if(error) throw new Error(error.message);
+    // Return to two-query auth only if an older schema doesn't expose FK embedding.
+    if(error&&!(error.code==='PGRST200'||error.code==='PGRST201'))throw new Error(error.message);
+    if(error)return await sessionLegacySupabase(token,db);
     if(!s) return null;
 
     if(new Date(s.expires_at).getTime()<=Date.now()){
@@ -144,13 +156,7 @@ export async function session(token){
       return null;
     }
 
-    const {data:user,error:userError}=await runSupabaseQuery(db
-      .from('tdb_users')
-      .select('*')
-      .eq('id',s.user_id)
-      .maybeSingle(),'Carregar sessão');
-
-    if(userError) throw new Error(userError.message);
+    const user=Array.isArray(s.tdb_users)?s.tdb_users[0]:s.tdb_users;
     if(user?.banned){
       await runSupabaseQuery(db.from('tdb_sessions').delete().eq('token',token),'Revogar sessão');
       return null;

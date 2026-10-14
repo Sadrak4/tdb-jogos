@@ -1,22 +1,20 @@
 {
-  "name": "tdb",
-  "version": "7.2.5",
+  "name": "tdb-unificado",
+  "version": "8.1.4-rc.1",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "dev": "node server.js",
     "start": "node server.js",
-    "test:audit": "node tests/v7.2.5-activities-smoke.mjs",
-    "test:maintenance": "node tests/v7.1.5-maintenance-admin-smoke.mjs",
-    "test:v716": "node tests/v7.1.6-lobby-live-ux-smoke.mjs",
-    "test:v717": "node tests/v7.1.7-profile-chess-smoke.mjs",
-    "test:v718": "node tests/v7.1.8-chess-room-bot-smoke.mjs",
-    "test:v720": "node tests/v7.2.0-pool-engine-smoke.mjs",
-    "test:v721": "node tests/v7.2.1-music-unlimited-smoke.mjs",
-    "test:v722": "node tests/v7.2.2-online-stability-smoke.mjs",
-    "test:v723": "node tests/v7.2.3-pool-bot-smoke.mjs",
-    "test:v724": "node tests/v7.2.4-music-rebuild-smoke.mjs",
-    "test:v725": "node tests/v7.2.5-activities-smoke.mjs"
+    "dev": "node server.js",
+    "test:audit": "node tests/v8-hub-integration.mjs && node tests/v8-auth-route.mjs && node tests/v813-performance.mjs",
+    "test:integrated": "node tests/v8-hub-integration.mjs && node tests/v8-auth-route.mjs && node tests/v81-integrated.mjs && node tests/v81-rc2-regression.mjs && node tests/v81-rc3-tables.mjs && node tests/v813-performance.mjs && node tests/v814-integrity.mjs && node tests/v812-engine-regression.mjs",
+    "test:visual": "python tests/v812-classics-browser.py && python tests/v811-premium-browser.py && python tests/v81-rc3-browser.py",
+    "test:classics": "node tests/v812-engine-regression.mjs && python tests/v812-classics-browser.py",
+    "test:performance": "node tests/v813-performance.mjs",
+    "test:legacy-pool": "node tests/v8-pool-engine.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

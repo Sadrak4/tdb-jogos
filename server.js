@@ -43,7 +43,7 @@ async function start(port,attempt=0){
     const url=`http://localhost:${port}`;
     console.log('');
     console.log('======================================');
-    console.log(' TDB v7.2.5 - Central de Atividades');
+    console.log(' TDB v8.0.0-beta.1 - Salas unificadas');
     console.log('======================================');
     console.log(`Site: ${url}`);
     console.log(`Health: ${url}/api/health`);

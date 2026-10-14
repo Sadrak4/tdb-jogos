@@ -294,7 +294,11 @@ function botShotPlan(state,index){
       if(!best||score>best.score)best={...candidate,score};
     }catch{}
   }
-  return best||test[0];
+  const plan=best||test[0],difficulty=state.players[index]?.difficulty||'medium';
+  if(difficulty==='hard')return plan;
+  if(difficulty==='medium')return {...plan,angle:plan.angle+(Math.random()-.5)*.10,power:clamp(plan.power+(Math.random()-.5)*.08,.1,1)};
+  const simple=test[Math.floor(Math.random()*test.length)]||plan;
+  return {...simple,angle:simple.angle+(Math.random()-.5)*.45,power:clamp(simple.power+(Math.random()-.5)*.32,.1,1)};
 }
 function botCueSpot(state){
   const targets=legalBotTargets(state,state.turnIndex);

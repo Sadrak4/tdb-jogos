@@ -1,0 +1,95 @@
+/* TDB 8.1.2: janela independente com elementos dos jogos clássicos originais.
+   Os motores e a autenticação ficam no servidor existente. */
+.game-window{position:fixed;z-index:82;top:8vh;left:50%;transform:translateX(-50%);width:min(1080px,calc(100vw - 32px));height:min(730px,82dvh);min-width:590px;min-height:440px;resize:both;display:flex;flex-direction:column;background:#080a08;border:1px solid #b59552;border-radius:18px;box-shadow:0 26px 125px #000e,0 0 0 1px #f0d49520;overflow:hidden;color:#f4f1e8}
+.game-window.maximized{resize:none;inset:10px!important;top:10px!important;left:10px!important;width:calc(100vw - 20px)!important;height:calc(100dvh - 20px)!important;transform:none!important;border-radius:12px}
+.game-window-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex:none;min-height:61px;padding:8px 12px 8px 18px;background:linear-gradient(100deg,#1c2119,#111511);border-bottom:1px solid #7b613740;touch-action:none;cursor:move;user-select:none}
+.game-window-identity{display:flex;align-items:center;gap:11px;min-width:0}.game-window-identity img{width:39px;height:39px;object-fit:contain}.game-window-identity>span{min-width:0}.game-window-identity strong{color:#f0d495;display:block;font-size:14px}.game-window-identity small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#9a9f99;font-size:11px;margin-top:3px}
+.game-window-tools{display:flex;align-items:center;gap:7px}.game-window-tools button{border:1px solid #74613a55;background:#252b22;color:#f0d495;border-radius:9px;font-size:23px;line-height:1;width:36px;height:34px}.game-window-tools button:hover{background:#3e3824}.game-window-tools button:last-child{color:#f5a3a3}.game-window-body{min-height:0;flex:1;overflow:hidden;display:flex;flex-direction:column}.game-window-body>.game-wait{margin:auto 20px;width:calc(100% - 40px)}
+.game-restore{position:fixed;z-index:82;right:18px;bottom:100px;padding:12px 19px;border:1px solid #d8b568;color:#f0d495;background:linear-gradient(130deg,#24251b,#131b14);border-radius:12px;box-shadow:0 9px 38px #000b;font-weight:800}
+/* Xadrez: elementos, tabuleiro e acabamento do Xadrez clássico 7.2.5. */
+#game-window .chess-screen{width:100%!important;max-width:100%!important;height:100%!important;min-height:0!important;max-height:none!important;overflow:hidden!important;padding:10px!important;display:grid!important;grid-template-columns:minmax(165px,220px) minmax(0,1fr) minmax(215px,265px)!important;gap:10px!important;background:radial-gradient(circle at 50% 40%,#d8b56810,transparent 44%),#080908!important}
+#game-window .chess-left-panel,#game-window .chess-right-panel{min-width:0!important;max-width:none!important;display:flex!important;flex-direction:column!important;padding:12px!important;overflow:auto!important}
+#game-window .chess-center{height:100%!important;display:grid!important;min-height:0!important;grid-template-rows:auto auto minmax(0,1fr) auto!important;gap:6px!important}
+#game-window .chess-player-bar{min-height:54px!important;padding:5px 9px!important}
+#game-window .chess-turn-banner{min-height:30px!important;padding:6px 8px!important}
+#game-window .chess-board-shell{height:100%!important;width:100%!important;min-height:0!important;overflow:hidden!important;display:grid!important;place-items:center!important}
+#game-window .chess-board{width:min(100%,calc(88dvh - 225px))!important;height:auto!important;max-width:100%!important;max-height:100%!important;margin:0!important;aspect-ratio:1!important;border-radius:1px!important;border:6px solid #17120a!important;outline:1px solid #d8b568!important;overflow:visible!important;box-shadow:0 17px 45px #0008!important}
+#game-window .chess-square{aspect-ratio:1;border:0;outline-offset:-3px}
+#game-window .chess-square:disabled{opacity:1;cursor:default}
+#game-window .chess-piece{font-size:clamp(24px,3.9vw,52px)!important}
+#game-window .chess-history{height:clamp(100px,26vh,280px)!important;max-height:none!important;overflow:auto!important}
+#game-window .chess-right-panel .chess-side-actions{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#game-window .chess-right-panel .chess-side-actions button{padding:9px;font-size:11px;white-space:normal}
+#game-window .chess-player-info{min-width:0}#game-window .chess-mini-captured{min-width:0}#game-window .chess-clock{min-width:81px;font-size:15px}
+#game-window .history-row{grid-template-columns:25px 1fr auto;gap:4px;align-items:center}#game-window .history-row small{font-size:10px;white-space:nowrap}
+/* Truco: feltro, moldura, participantes, cartas e hierarquia do Truco Paulista original. */
+#game-window .classic-truco{height:100%;min-height:0;padding:10px 14px 11px;overflow:hidden;background:radial-gradient(circle at 50% 50%,#223d25aa,transparent 65%),#080908}
+#game-window .truco-table-wrap{height:100%;width:100%;max-width:1430px;margin:auto;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;gap:7px}
+#game-window .truco-hud{display:grid;grid-template-columns:minmax(154px,220px) 1fr minmax(175px,240px);gap:9px}
+#game-window .score-panel,#game-window .hand-panel,#game-window .turn-panel{background:linear-gradient(#191e17,#0d120d);border:1px solid #b58e493d;border-radius:12px;padding:8px 13px;color:#f0d495;min-width:0;box-shadow:0 3px 12px #0006}
+#game-window .score-title{font:800 11px Georgia,serif;letter-spacing:1.2px;padding-bottom:5px;border-bottom:1px solid #6a5730;color:#e8cf8b}
+#game-window .score-line{display:flex;justify-content:space-between;align-items:center;gap:6px;padding-top:4px;font-weight:700;font-size:11px;color:#cdd0c1}
+#game-window .score-num{font-size:21px;color:#ffdf82;font-weight:900}
+#game-window .hand-panel{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
+#game-window .hand-chip{background:#293021;border:1px solid #84713f58;border-radius:9px;padding:6px 9px;font-size:11px;color:#e3d8b5;white-space:nowrap}
+#game-window .hand-chip strong{color:#f0d495}
+#game-window .turn-panel{display:flex;flex-direction:column;justify-content:center;align-items:flex-end;text-align:right}
+#game-window .turn-name{color:#f0d495;font-weight:900;font-size:14px}
+#game-window .turn-sub{color:#aeb3a5;font-size:11px;margin-top:3px}
+#game-window .table-shell{position:relative;min-height:0;height:100%;border:10px solid #533919;border-radius:43% / 26%;background:radial-gradient(ellipse at 48% 35%,#246642,#123b2c 72%,#07251f);box-shadow:inset 0 0 0 3px #d6ae55,inset 0 0 0 9px #211909,0 14px 50px #000b;overflow:hidden}
+#game-window .table-shell:before{content:'';position:absolute;inset:15px;border:1px solid #e4cf8a31;border-radius:43% / 26%;pointer-events:none}
+#game-window .table-logo{position:absolute;top:48%;left:50%;transform:translate(-50%,-50%);width:min(26%,190px);max-height:55%;object-fit:contain;opacity:.11;pointer-events:none}
+#game-window .player-seat{position:absolute;z-index:3;min-width:115px;max-width:190px}
+#game-window .seat-top{top:3%;left:50%;transform:translateX(-50%)}#game-window .seat-bottom{bottom:1.5%;left:50%;transform:translateX(-50%)}
+#game-window .seat-left{left:2%;top:50%;transform:translateY(-50%)}#game-window .seat-right{right:2%;top:50%;transform:translateY(-50%)}
+#game-window .seat-badge{display:flex;align-items:center;gap:6px;border:1px solid #a58b5b8a;border-radius:11px;background:#09150feb;padding:6px;min-width:119px;box-shadow:0 6px 17px #0008}
+#game-window .seat-badge.current{border-color:#efd18a;box-shadow:0 0 0 2px #f3d18144,0 0 20px #dfba6555}
+#game-window .seat-avatar{display:grid;place-items:center;width:31px;height:31px;border:1px solid #97743b;border-radius:50%;background:#3c422c;color:#f0d495;font-weight:900;flex:none}
+#game-window .seat-name{min-width:0;flex:1}#game-window .seat-name strong{display:block;color:#f5e6ba;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#game-window .seat-name small{display:block;color:#a4b19c;font-size:9px}
+#game-window .seat-team{font-size:10px;color:#d8b568;font-weight:900}
+#game-window .classic-truco-vira{position:absolute;z-index:4;top:13%;right:22%;display:grid;gap:4px;justify-items:center;color:#f0d495;font-weight:900;font-size:10px}
+#game-window .classic-truco-deck{position:absolute;left:29%;top:23%;height:67px;width:47px;border:3px solid #f0d495;border-radius:7px;background:repeating-linear-gradient(45deg,#1b271b,#1b271b 5px,#38482e 6px,#38482e 10px);display:grid;place-items:center;transform:rotate(-11deg);box-shadow:3px 4px 0 #19241b,6px 8px 0 #101910}
+#game-window .classic-truco-deck img{width:83%;height:83%;object-fit:contain}
+#game-window .classic-truco-playzone{position:absolute;z-index:4;top:24%;left:29%;right:29%;bottom:30%;display:grid;place-items:center;pointer-events:none}
+#game-window .classic-empty-trick{font-size:11px;color:#e5e1c177;text-align:center}
+#game-window .classic-trick-card{position:absolute;filter:drop-shadow(0 8px 12px #000a)}#game-window .classic-trick-card.position-bottom{bottom:0;left:45%;transform:rotate(-8deg)}#game-window .classic-trick-card.position-top{top:0;left:42%;transform:rotate(7deg)}#game-window .classic-trick-card.position-left{left:0;top:35%;transform:rotate(-18deg)}#game-window .classic-trick-card.position-right{right:0;top:35%;transform:rotate(17deg)}
+#game-window .truco-card{width:61px;height:86px;border-radius:8px;background:linear-gradient(142deg,#fffdf5,#e8dfcd);border:2px solid #ffffff;color:#1a1e1b;display:flex;flex-direction:column;justify-content:space-between;text-align:left;padding:6px;box-shadow:0 5px 12px #0008;font-weight:900;position:relative;cursor:default}
+#game-window .truco-card.red{color:#ad2224}#game-window .truco-card .rank{font-size:16px;line-height:1;display:grid;justify-items:start}#game-window .truco-card .rank small{font-size:13px}#game-window .truco-card .suit{align-self:center;font-size:25px}
+#game-window .truco-card.hidden{background:repeating-linear-gradient(45deg,#172819,#172819 5px,#344b34 6px,#344b34 9px);border:3px solid #d3b569;display:grid;place-items:center}#game-window .truco-card.hidden img{width:85%;object-fit:contain}
+#game-window .classic-truco-hand{position:absolute;z-index:6;bottom:0.5%;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:end;justify-content:center;max-width:70%}
+#game-window .classic-truco-hand .truco-card{width:75px;height:104px;cursor:pointer;transition:transform .16s,box-shadow .16s}
+#game-window .classic-truco-hand .classic-hand-slot:nth-child(1){transform:rotate(-7deg) translateY(5px)}#game-window .classic-truco-hand .classic-hand-slot:nth-child(3){transform:rotate(7deg) translateY(5px)}
+#game-window .classic-truco-hand button.truco-card:not(:disabled):hover{transform:translateY(-14px);box-shadow:0 12px 18px #000a;border-color:#d8b568}
+#game-window .classic-truco-hand button:disabled{opacity:1;cursor:default}
+#game-window .classic-truco-hand .truco-card .rank{font-size:19px}#game-window .classic-truco-hand .truco-card .suit{font-size:30px}
+#game-window .truco-actions{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;min-height:44px;gap:10px;padding:0}
+#game-window .truco-actions .btn{font-size:11px;padding:9px 16px}#game-window .player-prompt{color:#e1ca87;font-size:12px}
+#game-window .truco-log{font-size:11px;color:#aaa996;padding:7px 10px;border:1px solid #d8b56822;background:#111a11;border-radius:9px;min-height:33px;max-height:60px;overflow:auto}
+#game-window .classic-truco-flash{position:absolute;top:46%;left:50%;transform:translate(-50%,-50%);z-index:8;border:1px solid #eaca70;background:#0e1c15e8;color:#ffdd8c;border-radius:12px;padding:11px 18px;font-weight:900;text-align:center;box-shadow:0 8px 34px #000b}
+@media(max-width:1030px){#game-window .chess-screen{grid-template-columns:minmax(0,1fr) minmax(175px,240px)!important}#game-window .chess-left-panel{display:none!important}}
+@media(max-width:720px){
+ .game-window{resize:none!important;min-width:0!important;top:4px!important;left:4px!important;transform:none!important;width:calc(100vw - 8px)!important;height:calc(100dvh - 8px)!important;min-height:0;border-radius:12px}
+ .game-window-bar{min-height:53px;padding:6px 9px;cursor:default}.game-window-identity img{width:32px;height:32px}.game-window-identity strong{font-size:12px}.game-window-identity small{font-size:9px}
+ .game-window-tools{gap:3px}.game-window-tools button{width:31px;height:31px}
+ #game-window .chess-screen{display:flex!important;flex-direction:column!important;overflow:auto!important;padding:7px!important;gap:8px!important}
+ #game-window .chess-center{height:auto!important;flex:none;grid-template-rows:auto auto auto auto!important}
+ #game-window .chess-board{width:min(100%,calc(100vw - 42px))!important;max-height:none!important}
+ #game-window .chess-board-shell{height:auto!important;overflow:visible!important}
+ #game-window .chess-right-panel{overflow:visible!important;flex:none!important}
+ #game-window .chess-left-panel{display:none!important}
+ #game-window .chess-piece{font-size:clamp(19px,8vw,41px)!important}
+ #game-window .chess-history{height:125px!important}
+ #game-window .classic-truco{overflow:auto;padding:7px 5px}
+ #game-window .truco-table-wrap{min-height:710px;height:710px;grid-template-rows:auto minmax(0,1fr) auto auto}
+ #game-window .truco-hud{grid-template-columns:1fr 1fr;gap:5px}#game-window .hand-panel{grid-column:1/-1;grid-row:2}#game-window .score-panel,#game-window .hand-panel,#game-window .turn-panel{padding:5px 6px}#game-window .score-title{font-size:9px}#game-window .turn-name{font-size:10px}
+ #game-window .table-shell{border-width:6px}#game-window .seat-left{left:1%;top:41%}#game-window .seat-right{right:1%;top:41%}
+ #game-window .seat-badge{min-width:0;max-width:118px;padding:4px;gap:3px}#game-window .seat-avatar{width:23px;height:23px;font-size:10px}#game-window .seat-team{font-size:9px}#game-window .seat-name strong{font-size:9px}
+ #game-window .classic-truco-hand .truco-card{width:64px;height:90px}
+ #game-window .classic-truco-vira{right:16%;top:15%}#game-window .classic-truco-deck{left:23%;top:20%}
+ #game-window .classic-truco-playzone{left:22%;right:22%}
+ .game-restore{bottom:80px;right:10px}
+}
+@media(prefers-reduced-motion:reduce){#game-window .chess-piece,#game-window .truco-card{transition:none!important}}
+/* Mantém o jogador local visível mesmo com o leque de cartas na parte inferior. */
+#game-window .classic-truco .seat-bottom{left:15%;bottom:2%;transform:none}
+@media(max-width:720px){#game-window .classic-truco .seat-bottom{left:2%;bottom:20%;transform:none}}

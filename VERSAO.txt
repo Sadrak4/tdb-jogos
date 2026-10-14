@@ -1,1 +1,1 @@
-TDB v7.2.5 - Central de Atividades (organização de documentação)
+TDB v8.1.4 RC1 — performance geral, integridade de partidas, atualização incremental e manutenção dos clássicos.

@@ -1,42 +1,42 @@
-# Publicação — TDB v7.2.5 (pacote organizado)
+# TDB 8.0 Beta — Instalação segura
 
-## Precisa atualizar o quê?
+## ANTES: resolva o conflito do GitHub Desktop
 
-| Plataforma | Precisa atualizar? |
-|---|---|
-| GitHub Desktop | **SIM** — para publicar os arquivos organizados |
-| Supabase (SQL Editor) | **NÃO** — nenhuma mudança no esquema nesta revisão |
-| Vercel | **Deploy automático**, se o repositório/branch estão conectados |
+Se o GitHub Desktop ainda exibir “15 conflicted files”, **NÃO tente publicar sobre o merge**. Faça uma cópia da pasta atual e, no GitHub Desktop, use **Branch > Abort Merge** se essa opção estiver disponível. Se não estiver, preserve o backup e não altere a pasta que está em conflito.
 
-## Antes de começar
+**Caminho mais seguro para testar a reconstrução sem prejudicar o site em funcionamento:** crie um **novo repositório** no GitHub Desktop (File > New repository) chamado `tdb-v8-beta`; copie o conteúdo deste ZIP para esse repositório e faça `Commit to main` e `Push origin` (ou `Publish repository`). Na Vercel, importe esse repositório como **um novo projeto de teste**. Não mova o domínio principal nem desligue a versão anterior até validar tudo.
 
-1. Faça **backup** da pasta do seu repositório local.
-2. Baixe e extraia o ZIP organizado da v7.2.5.
-3. No GitHub Desktop, selecione o repositório TDB e clique em **Repository > Show in Explorer**.
+Se você optar por atualizar o repositório antigo, primeiro encerre o conflito, confira que o Git está limpo, crie uma branch de teste e substitua o projeto por este pacote. Não copie por cima de uma mesclagem inacabada e **não use Force Push**.
 
-## Atenção: copiar por cima NÃO apaga documentos antigos
+## Supabase: atualização OBRIGATÓRIA
 
-Se você apenas copiar os arquivos extraídos para seu repositório, os arquivos antigos continuarão na raiz! Para que a pasta fique realmente limpa, siga esta ordem:
+1. Faça um backup/exportação dos seus dados ou garanta um restore disponível.
+2. Acesse Supabase > SQL Editor e abra o arquivo `database/SUPABASE-HUB-v8.sql`.
+3. Execute o SQL **uma vez**; ele cria 3 novas tabelas: `tdb_hubs`, `tdb_hub_messages` e `tdb_hub_signals`. Não apaga usuários nem as tabelas 7.x.
+4. Confirme que as tabelas apareceram no Table Editor.
+5. **Não execute** novamente `SUPABASE-SCHEMA.sql` num banco existente.
 
-1. No repositório que está no Explorer, crie as pastas `docs\historico` e `database` (se não existirem).
-2. **Mova**, sem apagar, todos os arquivos `ATUALIZACAO-v*.md` **antigos** (v7.1.x, v7.2.0 até v7.2.4) da raiz para `docs\historico`. **Mantenha `ATUALIZACAO-v7.2.5.md` na raiz.**
-3. Mova todos os `REVISAO-*.md` da raiz para `docs\historico`.
-4. Mova `SUPABASE-SCHEMA.sql` e os `SUPABASE-MIGRATION-*.sql` da raiz para `database`.
-5. Agora copie **o conteúdo interno** da pasta extraída do novo ZIP para a **raiz** do repositório, aceitando substituir os arquivos com o mesmo nome. Não copie a pasta contêiner para dentro do repositório. Não apague `.git`.
-6. Confira se os arquivos `README.md`, `CHANGELOG.md`, `VERSAO.txt`, `DEPLOY-VERCEL.md`, `ATUALIZACAO-v7.2.5.md` estão na raiz; históricos em `docs\historico` e SQL em `database`.
-7. No GitHub Desktop, confira **Changes**: é normal aparecerem arquivos movidos e atualizações de documentação e testes.
-8. Faça Commit com a mensagem `TDB v7.2.5 - Organizar documentacao e SQL` e clique em **Push origin**.
-9. Na Vercel, confira em **Deployments** que a publicação ficou **Ready**. Verifique `/api/health`: a versão deve continuar `7.2.5`.
+## Vercel: configurar projeto beta
 
-Se você **ainda não publicou** a v7.2.5 anterior, este pacote organizado **também contém o código funcional da Central de Atividades**, além dos documentos.
+1. Importe o repositório e defina Framework Preset: **Other**.
+2. Configure em **Settings > Environment Variables** as variáveis `SUPABASE_URL` e `SUPABASE_SECRET_KEY` (ou `SUPABASE_SERVICE_ROLE_KEY`). Se usar a chave pública, mantenha `SUPABASE_PUBLISHABLE_KEY` conforme o projeto antigo.
+3. **Nunca coloque a service role key no código ou no GitHub.**
+4. Faça Deploy. O arquivo `vercel.json` já inclui `/api/hub` via `api/router.js`.
+5. Abra a URL de testes da Vercel. Crie uma sala, entre com duas contas e teste chat, YouTube, Xadrez, Sinuca, Truco e transmissão.
 
-## Teste rápido depois do deploy
+## Teste mínimo obrigatório antes de substituir o site
 
-- Entrar na conta e abrir o TDB Lobby;
-- Criar uma mesa de organização de Xadrez, Truco ou Sinuca;
-- Ver a mesa usando outra conta em outro navegador;
-- Reproduzir música e verificar que entrar/sair da mesa não reinicia o player;
-- Testar o compartilhamento de tela em duas abas/dispositivos;
-- Confirmar que as rotas `/api/health` e `/api/platform/activities` respondem conforme suas permissões.
+- [ ] Duas contas entram na mesma sala e visualizam chat e participantes.
+- [ ] Iniciam uma partida e ouvem a mesma música, sem reiniciar o player ao abrir o jogo.
+- [ ] Alteram de mesa sem sair da sala social.
+- [ ] Iniciam uma transmissão e outro navegador consegue assistir.
+- [ ] Recarregam e retornam à mesma sala.
+- [ ] Tudo funciona em PC e celular, no HTTPS da Vercel.
 
-**Não execute SQL novo na Supabase para esta atualização.**
+Se a transmissão não funcionar em algumas redes, configurar TURN será uma próxima atividade técnica; a beta não inclui um serviço TURN gerenciado.
+
+### Nesta entrega
+
+GitHub Desktop: **SIM — atualização do código (recomendado em repo beta novo)**.
+Supabase: **SIM — executar `SUPABASE-HUB-v8.sql`**.
+Vercel: **SIM — publicar e configurar variáveis do projeto beta**.

@@ -1,49 +1,88 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TDB</title>
-  <meta name="theme-color" content="#080808" />
-  <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="games/chess/chess.css" />
-  <link rel="stylesheet" href="games/pool/pool.css" />
-  <link rel="stylesheet" href="games/blackjack/blackjack.css" />
-  <link rel="stylesheet" href="games/music/music.css" />
-  <link rel="stylesheet" href="ui/tokens.css" />
-  <link rel="stylesheet" href="ui/shell.css" />
-  <link rel="stylesheet" href="ui/components.css" />
-  <link rel="stylesheet" href="ui/pages.css" />
-  <link rel="stylesheet" href="ui/games.css" />
-  <link rel="stylesheet" href="ui/responsive.css" />
-  <link rel="stylesheet" href="ui/gameplay-fixes.css" />
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070807"><title>TDB Oficial • Jogue junto. Fique junto.</title>
+  <meta name="description" content="Uma sala. Seus amigos. Música, transmissão e jogos sem sair da conversa.">
+  <link rel="stylesheet" href="hub/hub.css?v=8.1.1-premium"><link rel="stylesheet" href="hub/premium-gold.css?v=8.1.1-premium"><link rel="stylesheet" href="games/chess/chess.css?v=8.1.2-original"><link rel="stylesheet" href="hub/classic-window.css?v=8.1.2">
+  <script src="https://www.youtube.com/iframe_api" async></script>
 </head>
-<body class="tdb-v7">
-  <div class="bg-orb orb-1"></div>
-  <div class="bg-orb orb-2"></div>
-
-  <main id="app"></main>
-
-  <div id="toast" class="toast"></div>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="ui/icon-system.js"></script>
-  <script src="core/sound-manager.js"></script>
-  <script src="core/runtime.js"></script>
-  <script src="core/game-registry.js"></script>
-  <script src="core/online-client.js"></script>
-  <script src="core/online-auth.js"></script>
-  <script src="core/admin-client.js"></script>
-  <script src="games/chess/chess-engine.js"></script>
-  <script src="games/pool/pool-physics.js"></script>
-  <script src="games/pool/pool.js"></script>
-  <script src="games/chess/chess-ui.js"></script>
-  <script src="games/blackjack/blackjack.js"></script>
-  <script src="app.js"></script>
-  <script src="core/presence-manager.js"></script>
-  <script src="games/music/music.js"></script>
-  <script src="games/music/screen-share.js"></script>
-  <script src="core/platform-ui.js"></script>
-  <script src="admin-panel.js"></script>
-</body>
-</html>
+<body>
+  <div class="aurora aurora-one"></div><div class="aurora aurora-two"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <main id="auth" class="auth-screen">
+    <section class="auth-story"><div class="brand brand-large"><span class="brand-mark"><img src="assets/logo-official.png" alt="Logo oficial TDB"></span><span class="brand-name-wrap"><span class="brand-name">TDB</span><span class="brand-tagline">Oficial</span></span><span class="brand-pill">Premium</span></div>
+      <span class="eyebrow">SEU LUGAR COM A GALERA</span>
+      <h1>Uma sala.<br><span>Infinitas jogadas.</span></h1>
+      <p>Escute música, compartilhe sua tela e dispute partidas de Truco ou Xadrez. Tudo na mesma sala, com os mesmos amigos.</p>
+      <div class="auth-features"><span>♫ Música em conjunto</span><span>▣ Transmissão ao vivo</span><span>♟ Jogos integrados</span></div>
+    </section>
+    <form id="auth-form" class="auth-card"><span class="eyebrow">BEM-VINDO DE VOLTA</span><h2 id="auth-title">Entre no seu mundo.</h2><p class="subtle">Use sua conta TDB existente.</p>
+      <label>Nome de usuário<input id="auth-user" autocomplete="username" required minlength="3" maxlength="40" placeholder="Seu apelido"></label>
+      <label>Senha<input id="auth-pass" type="password" autocomplete="current-password" required minlength="4" placeholder="••••••••"></label>
+      <button class="btn btn-primary btn-wide" id="auth-submit" type="submit">Entrar no TDB <span>→</span></button>
+      <button type="button" class="plain-link" id="auth-toggle">Ainda não tem conta? <b>Criar conta</b></button>
+      <p class="auth-note">A mesma conta do TDB anterior continua válida se você mantiver o banco de dados.</p>
+    </form>
+  </main>
+  <div id="shell" class="shell hidden">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark"><img src="assets/logo-official.png" alt="Logo oficial TDB"></span><span class="brand-name-wrap"><span class="brand-name">TDB</span><span class="brand-tagline">Oficial</span></span><span class="brand-pill">Premium</span></div>
+      <div class="sidebar-caption">SEU ESPAÇO <span class="sidebar-caption-mark">● ONLINE</span></div>
+      <button class="nav-link active" id="nav-home" data-nav="home"><span>▦</span> Explorar salas</button>
+      <button class="nav-link" id="nav-room" data-nav="room"><span>◈</span> Minha sala</button>
+      <button class="nav-link" id="nav-history"><span>◷</span> Meu histórico</button><button class="nav-link" id="top-training"><span>♟</span> Treinar contra BOT</button><div class="sidebar-caption rooms-label">SALAS DISPONÍVEIS <button id="refresh-rooms" title="Atualizar lista">↻</button></div>
+      <div id="room-list" class="room-list"><span class="muted">Carregando...</span></div>
+      <div class="sidebar-bottom"><div class="account"><div id="user-avatar" class="avatar">?</div><div class="account-copy"><b id="user-name">Jogador</b><small>Conectado</small></div><span class="online-dot"></span></div><button id="logout" class="btn-quiet">Sair da conta ↗</button></div>
+    </aside>
+    <div class="content-frame">
+      <header class="topbar"><div class="breadcrumbs"><span>TDB</span><span class="slash">/</span><b id="where">Explorar salas</b></div><div class="top-actions"><div class="connection-state"><span class="status-dot"></span><span id="status">Conectado</span></div><button id="top-join" class="btn btn-soft">Entrar com código</button><button id="top-create" class="btn btn-primary">+ Criar sala</button></div></header>
+      <div id="home" class="home-view">
+        <section class="hero" aria-label="Bem-vindo ao TDB"><div class="hero-copy"><span class="eyebrow hero-eyebrow"><span class="glow-dot"></span> SUA GALERA, SEU ESPAÇO</span><h1>O seu lugar<br>é <em>aqui.</em></h1><p>Entre na sala, coloque sua música e comece a jogar. Tudo conectado — sem sair da conversa.</p><div class="hero-actions"><button class="btn btn-primary btn-hero" data-create-room>✦ Criar minha sala <span>→</span></button><button class="btn btn-outline btn-hero" id="home-join">Entrar com código</button></div><div class="hero-proof"><span class="live-pulse"></span> Música, jogos e transmissões em um só lugar</div></div>
+          <div class="hero-art" aria-hidden="true"><div class="hero-art-halo"></div><div class="hero-showcase"><div class="hero-showcase-head"><span class="hero-showcase-brand"><img src="assets/logo-official.png" alt=""> TDB <small>OFICIAL</small></span><span class="hero-showcase-live"><span></span> SALA AO VIVO</span></div><div class="hero-showcase-body"><div class="hero-illustration-chess"><span>♜</span><span>♞</span><span>♝</span><span>♛</span><span>♚</span><span>♝</span><span>♞</span><span>♜</span><span>♟</span><span>♟</span><span>♟</span><span>♟</span><span>♟</span><span>♟</span><span>♟</span><span>♟</span></div><div class="hero-side"><div class="hero-mini-label">SALA SOCIAL</div><div class="hero-mini-card"><span>♫</span><b>DJ DA GALERA</b><small>Playlist compartilhada</small></div><div class="hero-mini-card"><span>▣</span><b>TELAS AO VIVO</b><small>Até 3 transmissões</small></div><div class="hero-mini-card"><span>♟</span><b>MESAS</b><small>Amigos + BOTs</small></div></div></div><div class="hero-showcase-foot"><span>● Online</span><span>Jogue junto. Fique junto.</span></div></div></div></section>
+        <section class="home-metrics" aria-label="Resumo das salas"><div class="metric-card"><span class="metric-icon">⌂</span><div><strong id="home-room-count">—</strong><small>Salas disponíveis</small></div></div><div class="metric-card"><span class="metric-icon">◉</span><div><strong id="home-people-count">—</strong><small>Pessoas nas salas</small></div></div><div class="metric-card"><span class="metric-icon">♟</span><div><strong>03</strong><small>Jogos integrados</small></div></div></section>
+        <section class="quick-actions" aria-label="Acessos rápidos"><div class="section-row quick-head"><div><span class="eyebrow">COM UM CLIQUE</span><h2>O que vamos fazer hoje?</h2></div></div><div class="quick-grid"><button id="home-training" class="quick-tile"><span class="quick-symbol">♟</span><span><b>Jogar com BOT</b><small>Treine no seu ritmo</small></span><span class="quick-arrow">↗</span></button><button id="home-library" class="quick-tile"><span class="quick-symbol">♫</span><span><b>Minha música</b><small>Favoritos e playlists</small></span><span class="quick-arrow">↗</span></button><button id="home-history" class="quick-tile"><span class="quick-symbol">◷</span><span><b>Meu histórico</b><small>Suas partidas salvas</small></span><span class="quick-arrow">↗</span></button></div></section>
+        <section class="home-rooms-section"><div class="section-row"><div><span class="eyebrow">ENCONTRE SUA GALERA</span><h2>Explore as salas <span class="title-accent">abertas</span></h2><p class="section-sub">Entre para conversar, ouvir música ou começar uma partida.</p></div><button class="btn btn-outline" id="home-refresh">↻ Atualizar salas</button></div><div id="home-rooms" class="room-grid"></div></section>
+        <div class="section-row bottom-space"><div><span class="eyebrow">TUDO JUNTO</span><h2>Uma sala. Todas as possibilidades.</h2></div></div><div class="feature-grid"><div><span>♫</span><b>Seu som, sua galera</b><small>Música compartilhada, favoritos e playlists pessoais.</small></div><div><span>▣</span><b>Compartilhe momentos</b><small>Até três transmissões ao vivo na mesma sala.</small></div><div><span>♟</span><b>Partidas sem limites</b><small>Xadrez e Truco com amigos ou BOTs.</small></div></div>
+      </div>
+      <div id="room-view" class="room-view hidden">
+        <section class="room-heading"><div><span class="eyebrow"><span class="glow-dot"></span> SALA SOCIAL ATIVA</span><h1 id="room-name">Sala</h1><div class="room-detail"><span class="room-online-pill"><span class="live-pulse"></span> <span id="room-member-count">0 pessoas</span></span><span class="room-code-pill"><span id="room-code-text">SALA-...</span><button id="copy-code" class="plain-link" title="Copiar código da sala">⧉ Copiar</button></span></div></div><div class="room-head-actions"><button id="room-settings" class="btn btn-soft hidden">⚙ Configurações</button><button id="room-delete" class="btn btn-outline hidden">Excluir sala</button><button id="leave-room" class="btn btn-outline">Sair da sala</button></div></section>
+        <div class="room-layout">
+          <section class="game-area"><nav class="tabs"><button class="tab selected" data-tab="tables">♟ <span>Mesas de jogos</span></button><button class="tab" data-tab="chat">◉ <span>Conversa</span></button><button class="tab" data-tab="members">♙ <span>Participantes</span></button></nav>
+            <div id="tables-panel"><div class="section-row"><div><h2>Mesas da sala</h2><p class="subtle">Jogue ou assista sem perder a música.</p></div><div class="table-creation-buttons"><button class="btn btn-primary" id="new-table">+ Nova mesa</button><button class="btn btn-soft" id="new-bot-table">🤖 Jogar com BOT</button></div></div><div id="tables-list" class="table-grid"></div><div id="game-area" class="game-wrapper hidden"></div></div>
+            <div id="chat-panel" class="hidden"><div class="chat-heading"><h2>Chat da sala</h2><span>Mensagens visíveis para todos os participantes</span></div><div class="messages" id="messages"></div><form id="chat-form" class="chat-composer"><input id="chat-input" maxlength="450" placeholder="Envie uma mensagem para a galera…" autocomplete="off"><button class="btn btn-primary" type="submit">Enviar ↗</button></form></div>
+            <div id="members-panel" class="hidden"><h2>Quem está aqui</h2><div id="members-list" class="members-list"></div></div>
+          </section>
+          <aside class="room-rail">
+            <section class="rail-card music-card" id="room-music-card"><div class="rail-title"><div><span class="live-indicator">♫</span><b>Música da sala</b></div><span id="music-label" class="rail-substatus">Sem música</span></div>
+              <div class="video-wrap"><div id="yt-player"></div><div id="yt-placeholder" class="video-placeholder"><span>♫</span><small>Adicione um vídeo para começar</small></div></div>
+              <div class="track-name" id="track-name">Nenhuma música tocando</div>
+              <div class="player-actions"><button id="music-prev" title="Anterior / início">↺</button><button id="music-play" class="play-btn" title="Reproduzir">▶</button><button id="music-next" title="Próxima">⇥</button><button id="music-vote" title="Votar para pular música">Votar</button><button id="music-unlock" title="Ativar reprodução com som">Ativar áudio</button></div>
+              <form id="music-form" class="add-track"><input id="music-link" type="text" placeholder="Link do YouTube" aria-label="Link do YouTube"><button class="btn btn-soft" type="submit">+</button></form><div class="music-addons"><button type="button" id="music-library" class="btn btn-outline">♡ Favoritos / Playlists</button><button type="button" id="music-save" class="btn btn-soft">Salvar fila</button><label class="volume-mini">Vol. <input id="music-volume" aria-label="Volume da música" type="range" min="0" max="100" value="65"></label></div><div class="queue-title">PRÓXIMAS MÚSICAS <span id="queue-count">0</span></div><div id="queue" class="queue"></div>
+            </section>
+            <section class="rail-card share-card"><div class="rail-title"><div><span class="live-indicator">▣</span><b>Compartilhamento</b></div><span id="share-indicator">Inativo</span></div><div class="share-preview"><div id="screens-list" class="screen-gallery"></div><div id="share-placeholder">▤ <small>Nenhuma tela compartilhada</small></div></div><div id="share-meta" class="subtle">Mostre sua tela para a sala</div><div class="share-buttons"><button id="share-start" class="btn btn-soft">Compartilhar tela</button><button id="share-stop" class="btn btn-outline hidden">Parar transmissão</button></div><p class="rail-hint">Use HTTPS e permita o compartilhamento no navegador. Dependendo da rede, pode ser necessário um servidor TURN.</p></section>
+          </aside>
+          <aside class="social-rail" aria-label="Atividade social da sala">
+            <section class="social-card social-members-card"><div class="social-card-head"><div><span class="eyebrow">SUA GALERA</span><h3>Na sala <span class="social-online-indicator">●</span></h3></div><button class="social-icon-button" id="social-members-open" title="Ver participantes" aria-label="Ver participantes">↗</button></div><div id="social-members-preview" class="social-members-preview"><span class="subtle">Aguardando participantes...</span></div></section>
+            <section class="social-card social-chat-card"><div class="social-card-head"><div><span class="eyebrow">CONVERSA AO VIVO</span><h3>Chat da sala</h3></div><button class="social-icon-button" id="social-chat-open" title="Abrir conversa completa" aria-label="Abrir conversa completa">↗</button></div><div id="social-chat-preview" class="social-chat-preview" aria-live="polite"><span class="subtle">Aguardando mensagens...</span></div><form id="social-chat-form" class="social-chat-composer"><input id="social-chat-input" aria-label="Mensagem rápida" maxlength="450" placeholder="Diga alguma coisa..." autocomplete="off"><button type="submit" aria-label="Enviar mensagem">➤</button></form></section>
+          </aside>
+        </div>
+        <div class="music-dock" id="music-dock" role="region" aria-label="Player musical da sala"><div class="dock-track-art">♫</div><div class="dock-track"><span class="dock-kicker"><span class="live-pulse"></span> MÚSICA DA SALA</span><strong id="dock-now">Nenhuma música tocando</strong></div><div class="dock-playback"><button id="dock-play" title="Reproduzir ou pausar" aria-label="Reproduzir ou pausar">▶</button><button id="dock-next" title="Pular para próxima música" aria-label="Próxima música">⇥</button></div><div class="dock-divider"></div><button class="dock-open" id="dock-open" title="Ver fila e controles de música">♫ Abrir player <span>↑</span></button></div>
+      </div>
+    </div>
+  </div>
+  <!-- A janela flutuante não altera o estado da partida ao minimizar ou fechar. -->
+  <section id="game-window" class="game-window hidden" role="region" aria-label="Janela da partida">
+    <header class="game-window-bar" id="game-window-handle">
+      <span class="game-window-identity"><img src="assets/logo-official.png" alt=""><span><strong id="game-window-title">Partida TDB</strong><small id="game-window-subtitle">Sala social</small></span></span>
+      <span class="game-window-tools"><button type="button" data-window="minimize" title="Minimizar jogo" aria-label="Minimizar jogo">−</button><button type="button" data-window="maximize" id="game-window-maximize" title="Maximizar ou restaurar" aria-label="Maximizar ou restaurar">□</button><button type="button" data-window="close" title="Fechar visualização sem desistir" aria-label="Fechar visualização">×</button></span>
+    </header><div class="game-window-body" id="game-window-body"></div>
+  </section>
+  <button id="game-restore" class="game-restore hidden" type="button">♟ Voltar à partida</button>
+  <div id="broadcast-bar" class="broadcast-bar hidden" role="status"><span>● Você transmite para <b id="broadcast-room">sua sala</b></span><button id="broadcast-stop" class="btn btn-outline">Encerrar</button></div>
+  <dialog id="history-dialog" class="extra-dialog"><div class="modal-top"><h2>Meu histórico de partidas</h2><button id="history-close" class="x-btn">×</button></div><div id="history-data" class="history-list">Carregando...</div></dialog>
+  <dialog id="library-dialog" class="extra-dialog"><div class="modal-top"><h2>Minha biblioteca musical</h2><button id="library-close" class="x-btn">×</button></div><div id="library-data">Carregando...</div></dialog>
+  <dialog id="modal"><form method="dialog" id="modal-form" class="modal-form"><div class="modal-top"><span id="modal-icon">✦</span><button type="button" class="x-btn" id="modal-close">×</button></div><h2 id="modal-title">Nova sala</h2><p id="modal-description" class="subtle"></p><div id="modal-fields"></div><div class="modal-actions"><button type="button" class="btn btn-outline" id="modal-cancel">Cancelar</button><button type="submit" class="btn btn-primary" id="modal-ok">Confirmar</button></div></form></dialog>
+  <script src="games/chess/chess-engine.js?v=8.1.3-original"></script>
+  <script src="hub/hub.js?v=8.1.4-estabilidade" type="module"></script>
+</body></html>
