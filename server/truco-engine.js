@@ -1,7 +1,8 @@
 const RANKS=['4','5','6','7','Q','J','K','A','2','3'];
 const SUITS=['diamonds','spades','hearts','clubs'];
 const SUIT_POWER={diamonds:1,spades:2,hearts:3,clubs:4};
-export const TRICK_REVEAL_MS=1800;
+// 1,25 s: exibe a carta vencedora sem segurar excessivamente a próxima rodada.
+export const TRICK_REVEAL_MS=1250;
 
 function clone(v){return structuredClone(v)}
 function nextRank(rank){return RANKS[(RANKS.indexOf(rank)+1)%RANKS.length]}
@@ -121,7 +122,8 @@ function finalizeResolvedTrick(s){
   s.lastTrickSummary={
     ...resolved,
     winnerName:resolved.result==='tie'?'Empate':(winnerPlayer?.username||'Jogador'),
-    at:Date.now()
+    at:Date.now(),
+    expiresAt:Date.now()+2200
   };
   s.round++;
   s.trickCards=[];
@@ -150,7 +152,7 @@ function awardHand(s,team,points){
     winningCard:s.lastTrickSummary?.result===team?s.lastTrickSummary?.winningCard||null:null,
     hidden:s.lastTrickSummary?.result===team?!!s.lastTrickSummary?.hidden:false,
     at:Date.now(),
-    expiresAt:Date.now()+4800
+    expiresAt:Date.now()+3200
   };
   s.logs.push(`Time ${team+1} ganhou ${points} ponto(s).`);
   if(s.scores[team]>=12){

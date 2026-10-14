@@ -1,3 +1,14 @@
+## 8.3.3 RC1 — Biblioteca e detalhes clássicos dos jogos
+
+- Retirada a barra `room-quickbar` da sala; ação de convidar amigos preservada no cabeçalho.
+- Biblioteca musical pessoal em três abas, com pesquisa e playlists expansíveis; renomear, mover e remover músicas mantidos.
+- Corrigida perda de favoritos/estado de sincronização quando a janela de jogo era restaurada/fechada.
+- Truco: efeito dourado na carta vencedora, resumo de vitória da rodada e mão, novos avisos de Truco/Seis/Nove/Doze e Mão de 11, destaque de manilhas.
+- Truco: tempo de revelação reduzido de 1,8 s para 1,25 s, com atualização direcionada na resolução e sem aumentar o polling geral.
+- Xadrez: resumo de final de jogo (xeque-mate, desistência, empate, tempo), aviso de empate e recurso de PGN mantidos.
+- Motores originais, BOTs, WebRTC, banco de dados, ADM `/adm`, identidade visual e Sinuca removida permanecem intactos, salvo o tempo de revelação explicitamente ajustado no Truco.
+- Testes locais de regras, Chromium desktop/mobile, janelas, menus, biblioteca e jogos. Integração total Supabase indisponível neste ambiente pela ausência de dependências npm.
+
 ## 8.3.2 RC1 — Navegação, `/adm` e ofertas Nuuvem
 
 - Sidebar reduzida a Notícias, Salas, Jogos, Música, Amigos e Meu perfil, sem nome/status duplicado.

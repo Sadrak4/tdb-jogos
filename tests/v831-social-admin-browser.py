@@ -4,7 +4,7 @@ import base64, re, runpy
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1]
 MOCK=runpy.run_path(str(ROOT/'tests/v811-premium-browser.py'))['MOCK']
-css=['hub/hub.css','hub/premium-gold.css','games/chess/chess.css','hub/classic-window.css','hub/upgrade-free.css','hub/universe-83.css','hub/social-admin-831.css']
+css=['hub/hub.css','hub/premium-gold.css','games/chess/chess.css','hub/classic-window.css','hub/upgrade-free.css','hub/universe-83.css','hub/social-admin-831.css','hub/navigation-832.css','hub/quality-833.css']
 DISCOVER="""
 if(path.includes('/api/discover'))val={ok:true,steam:[{title:'Jogo com desconto verificado',discount:35,url:'https://store.steampowered.com/app/123/',source:'Steam',type:'offer'}],epic:[],news:[{title:'Notícia do TDB',url:'https://news.xbox.com/en-us/',source:'Xbox Wire',type:'news'}]}; else if(path.includes('/auth/session'))
 """
@@ -65,7 +65,7 @@ def test(width,height):
   assert page.locator('#profile-view').is_visible(),errors
   assert 'Dono' in page.locator('#profile-username').inner_text(),errors
   assert 'Vitórias' in page.locator('#profile-stats').inner_text()
-  if width>700: page.screenshot(path='/mnt/data/TDB-8.3.1-PREVIA-PERFIL.png',full_page=True)
+  if width>700: page.screenshot(path=str(ROOT/'tests/preview-social-perfil-833.png'),full_page=True)
   page.locator('#profile-edit').click()
   assert page.locator('#profile-edit-dialog').is_visible()
   page.locator('#profile-edit-form [name=username]').fill('DonoPremium')
@@ -75,31 +75,23 @@ def test(width,height):
   page.locator('#nav-friends').click();page.wait_for_timeout(150)
   assert page.locator('#friends-view').is_visible(),errors
   assert page.locator('#friends-list').get_by_text('Amigo123').count()==1,errors
-  if width>700: page.screenshot(path='/mnt/data/TDB-8.3.1-PREVIA-AMIGOS.png',full_page=True)
+  if width>700: page.screenshot(path=str(ROOT/'tests/preview-social-amigos-833.png'),full_page=True)
   page.locator('#friends-search-form input').fill('Nova');page.locator('#friends-search-form button').click();page.wait_for_timeout(90)
   assert page.locator('#friends-results').get_by_text('Novato').count()==1
   page.locator('#friends-results [data-social="add"]').click()
   assert page.evaluate("window.__socialCalls.some(x=>x.path==='/api/friends/add'&&x.body.friendId==='U4')")
-  page.locator('#nav-admin').click();page.wait_for_timeout(150)
-  assert page.locator('#admin-view').is_visible()
-  page.locator('#admin-login-form [name=username]').fill('adm');page.locator('#admin-login-form [name=password]').fill('test-password')
-  page.locator('#admin-login-form button').click();page.wait_for_timeout(160)
-  assert page.locator('#admin-console').is_visible(),errors
-  assert page.locator('#admin-content').get_by_text('Contas').count()==1
-  if width>700: page.screenshot(path='/mnt/data/TDB-8.3.1-PREVIA-ADM.png',full_page=True)
-  page.locator('[data-admin-tab="users"]').click();page.wait_for_timeout(160)
-  assert page.locator('#admin-users-table').get_by_text('Novato').count()==1
-  page.locator('[data-admin-tab="reports"]').click();page.wait_for_timeout(140)
-  assert page.locator('#admin-content').get_by_text('Spam').count()==1
+  # A partir de 8.3.2 o ADM não pode ficar visível no aplicativo normal.
+  assert page.locator('#nav-admin,#admin-view').count()==0
+  # A autenticação /adm independente é verificada em v832-navigation-browser.py.
   page.locator('#nav-home').click();page.wait_for_timeout(80)
   assert page.locator('#home').is_visible() and page.locator('#profile-view').is_hidden()
   page.locator('#home-rooms [data-enter]').first.click();page.wait_for_timeout(220)
   assert page.locator('#room-view .social-rail .share-card').count()==1
   assert page.locator('#room-view .room-rail .share-card').count()==0
-  if width>700: page.screenshot(path='/mnt/data/TDB-8.3.1-PREVIA-SALA.png',full_page=True)
+  if width>700: page.screenshot(path=str(ROOT/'tests/preview-social-sala-833.png'),full_page=True)
   assert page.locator('#social-members-preview').is_hidden()
   page.locator('#universe-members-access').click();assert page.locator('#members-panel').is_visible()
-  page.locator('#universe-room-invite').click();page.wait_for_timeout(170)
+  page.locator('#room-invite-friends').click();page.wait_for_timeout(170)
   assert page.locator('#friends-view').is_visible()
   assert page.locator('#friends-list [data-social="invite"]').count()==1
   page.locator('#friends-list [data-social="invite"]').click();page.wait_for_timeout(120)
@@ -107,7 +99,7 @@ def test(width,height):
   viewport_width=page.evaluate('document.documentElement.scrollWidth')
   assert viewport_width<=width+5,(width,viewport_width)
   assert not errors,errors
-  print('✔ 8.3.1 Chromium',width,'home, profile, friends/invite, admin, panels, no JS errors')
+  print('✔ 8.3.1 Chromium',width,'home, profile, friends/invite, admin absent from user app, panels, no JS errors')
   browser.close()
 if __name__=='__main__':
  test(1440,900)

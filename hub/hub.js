@@ -10,6 +10,7 @@ const S={token:localStorage.getItem('tdb_session_token')||'',user:null,room:null
 S.favoriteIds=new Set();S.libraryProfile=null;S.lastMusicLog='';
 S.musicIntent='';S.musicNeedsInitialAlign=false;S.musicTrackChangedAt=0;S.musicLastSeekAt=0;S.musicDriftSince=0;S.musicLastIntentAt=0;
 S.gameWindowMode='normal';S.trucoHideNext=false;S.gameWindowTableId=null;S.dragGame=null;
+S.trucoResolveTimer=null;S.trucoResolveKey='';S.trucoNoticeKey='';
 S.shareRoom=null;S.shareSession=null;S.shareRoomName='';S.shareTimer=null;S.viewerPcs=new Map();S.shareCursors={};S.shareSignature='';
 const actionIn=(code,type,extra={})=>hubPost('action',{code,action:{type,...extra}});
 let toastTimer;
@@ -85,7 +86,9 @@ document.addEventListener('tdb:profile-updated',event=>{if(S.user&&event.detail?
 document.addEventListener('tdb:navigate',event=>{const view=event.detail?.view;if(['home','room','rooms','profile','friends'].includes(view))setView(view)});
 document.addEventListener('tdb:resume-room',()=>{const code=localStorage.getItem('tdb_hub_last_room');if(code)void enter(code);});
 // Non-destructive per-device layout preferences; games and audio stay mounted.
-const roomLayoutPrefs={music:localStorage.getItem('tdb_hide_music_panel')==='yes',social:localStorage.getItem('tdb_hide_social_panel')==='yes'};
+// Os controles duplicados foram removidos da sala. Não deixe preferências antigas esconderem painéis sem botão para restaurar.
+localStorage.removeItem('tdb_hide_music_panel');localStorage.removeItem('tdb_hide_social_panel');
+const roomLayoutPrefs={music:false,social:false};
 function applyRoomLayout(){
   const root=$('#room-view');if(!root)return;
   root.classList.toggle('tdb-hide-music',roomLayoutPrefs.music);
@@ -103,6 +106,7 @@ $('#home-training')?.addEventListener('click',()=>$('#top-training')?.click());
 $('#home-library')?.addEventListener('click',()=>$('#music-library')?.click());
 $('#social-members-open')?.addEventListener('click',()=>{selectTab('members');$('#members-panel')?.scrollIntoView({block:'nearest',behavior:'smooth'})});
 $('#universe-members-access')?.addEventListener('click',()=>{selectTab('members');$('#members-panel')?.scrollIntoView({block:'nearest',behavior:'smooth'})});
+$('#room-invite-friends')?.addEventListener('click',()=>$('#nav-friends')?.click());
 $('#social-chat-open')?.addEventListener('click',()=>{selectTab('chat');$('#chat-panel')?.scrollIntoView({block:'nearest',behavior:'smooth'})});
 $('#social-chat-form')?.addEventListener('submit',e=>{
   e.preventDefault();const input=$('#social-chat-input'),val=input?.value.trim();if(!val||!S.room)return;
@@ -286,17 +290,29 @@ $('#tables-list').addEventListener('click',async e=>{
 });
 function openGameTable(id){
   if(S.selectedTable!==id){S.selectedSq=null;S.trucoHideNext=false;}
-  S.selectedTable=id;S.gameWindowTableId=id;S.gameVersion='';S.favoriteIds=new Set();S.libraryProfile=null;S.lastMusicLog='';
-S.musicIntent='';S.musicNeedsInitialAlign=false;S.musicTrackChangedAt=0;S.musicLastSeekAt=0;S.musicDriftSince=0;S.musicLastIntentAt=0;
+  S.selectedTable=id;S.gameWindowTableId=id;S.gameVersion='';
 S.gameWindowMode='normal';
   // Reset position only when the user opens a new table.
   const win=$('#game-window');win?.style.removeProperty('left');win?.style.removeProperty('top');win?.style.removeProperty('transform');
 }
 function closeGameWindow(clearSelection=false){
-  show('#game-window',false);show('#game-restore',false);S.favoriteIds=new Set();S.libraryProfile=null;S.lastMusicLog='';
-S.musicIntent='';S.musicNeedsInitialAlign=false;S.musicTrackChangedAt=0;S.musicLastSeekAt=0;S.musicDriftSince=0;S.musicLastIntentAt=0;
+  clearTimeout(S.trucoResolveTimer);S.trucoResolveTimer=null;S.trucoResolveKey='';
+  show('#game-window',false);show('#game-restore',false);
 S.gameWindowMode='normal';
   if(clearSelection){S.gameWindowTableId=null;S.trucoHideNext=false;S.selectedSq=null;}
+}
+function scheduleTrucoResolve(g,tableId){
+  if(g?.game!=='truco'||g.phase!=='resolving'||!g.trickResolveAt)return;
+  const key=`${tableId}:${g.matchId}:${g.trickResolveAt}`;
+  if(S.trucoResolveKey===key)return;
+  clearTimeout(S.trucoResolveTimer);
+  S.trucoResolveKey=key;
+  const epoch=S.roomEpoch;
+  const wait=Math.max(70,Math.min(2200,Number(g.trickResolveAt)-Date.now()+130));
+  S.trucoResolveTimer=setTimeout(()=>{
+    S.trucoResolveTimer=null;
+    if(S.roomEpoch===epoch&&S.selectedTable===tableId)void refresh();
+  },wait);
 }
 function renderSelectedGame(){
   const container=$('#game-area'),table=S.snapshot?.room?.tables.find(t=>t.id===S.selectedTable&&t.game!=='pool');
@@ -312,6 +328,7 @@ function renderSelectedGame(){
     $('#game-restore').textContent=`${symbols[table.game]} Retomar ${gameNames[table.game]}`;
   }
   const g=S.snapshot.game,version=`${table.id}:${table.status}:${g?.version||'none'}:${g?.phase||''}:${g?.status||''}`;
+  if(g?.game==='truco')scheduleTrucoResolve(g,table.id);
   if(version===S.gameVersion)return;
   S.gameVersion=version;
   if(classic){
@@ -375,8 +392,7 @@ $('#game-window').addEventListener('drop',async e=>{
 });
 $('#game-window').addEventListener('dragend',()=>S.chessDragFrom=null);
 $('#game-window').addEventListener('click',gameWindowClick);
-$('#game-restore').addEventListener('click',()=>{if(!S.selectedTable)return;S.favoriteIds=new Set();S.libraryProfile=null;S.lastMusicLog='';
-S.musicIntent='';S.musicNeedsInitialAlign=false;S.musicTrackChangedAt=0;S.musicLastSeekAt=0;S.musicDriftSince=0;S.musicLastIntentAt=0;
+$('#game-restore').addEventListener('click',()=>{if(!S.selectedTable)return;
 S.gameWindowMode='normal';show('#game-window',true);show('#game-restore',false)});
 // Janela arrastável no desktop. Arrastar não interfere na partida.
 $('#game-window-handle').addEventListener('pointerdown',e=>{
@@ -525,21 +541,31 @@ $('#music-save').addEventListener('click',async()=>{if(!S.room)return;
   const f=await dialog({title:'Salvar playlist pessoal',description:'Copia as músicas da fila para sua biblioteca pessoal.',fields:[{name:'name',label:'Nome da playlist',required:true,max:30}]});if(!f)return;
   try{await request('/api/platform/music-profile',{action:{type:'SAVE_PRESET',roomCode:S.room,name:f.name}});toast('Playlist salva na sua conta.')}catch(e){toast(e.message)}
 });
+// Biblioteca pessoal: três áreas independentes, sem alterar o formato salvo no banco.
+let libraryTab='playlists';
+const expandedPlaylists=new Set();
+const libraryTabs=[['playlists','Playlists','♫'],['favorites','Favoritos','♥'],['history','Histórico','↺']];
 function libraryRows(profile,q=''){
-  const fav=profile.favorites||[],presets=profile.presets||[],history=profile.history||[],needle=q.toLocaleLowerCase('pt-BR').trim();
+  const fav=profile.favorites||[],presets=profile.presets||[],history=profile.history||[],needle=String(q||'').toLocaleLowerCase('pt-BR').trim();
   const match=t=>String(t||'').toLocaleLowerCase('pt-BR').includes(needle);
-  const playlistHtml=presets.filter(p=>match(p.name)||(p.tracks||[]).some(t=>match(t.title))).map(p=>{
-    const tracks=p.tracks||[];
-    const rows=tracks.map((t,i)=>({t,i})).filter(({t})=>!needle||match(t.title)||match(p.name)).map(({t,i})=>`<div class="library-track"><span class="library-song">${esc(t.title||'YouTube')}</span><button data-library="add" data-video="${esc(t.videoId)}" title="Adicionar à fila">+ Fila</button><button data-library="move" data-id="${esc(p.id)}" data-from="${i}" data-to="${i-1}" title="Mover acima" ${i===0?'disabled':''}>↑</button><button data-library="move" data-id="${esc(p.id)}" data-from="${i}" data-to="${i+1}" title="Mover abaixo" ${i===tracks.length-1?'disabled':''}>↓</button><button data-library="remove" data-id="${esc(p.id)}" data-index="${i}" title="Remover da playlist">×</button></div>`).join('');
-    return `<div class="library-row"><div><b>${esc(p.name)}</b><small>${tracks.length} músicas</small></div><div class="library-actions"><button class="btn btn-soft" data-library="load" data-id="${esc(p.id)}">+ Fila</button><button class="btn btn-outline" data-library="rename" data-id="${esc(p.id)}">Renomear</button><button class="btn btn-outline" data-library="delete" data-id="${esc(p.id)}">Excluir</button></div></div><div class="library-tracks">${rows}</div>`;
-  }).join('')||'<p class="subtle">Nenhuma playlist encontrada.</p>';
-  const favorites=fav.filter(f=>match(f.title)).map(f=>`<div class="library-track"><span class="library-song">♥ ${esc(f.title||'YouTube')}</span><button data-library="add" data-video="${esc(f.videoId)}">+ Fila</button></div>`).join('')||'<p class="subtle">Nenhum favorito encontrado.</p>';
-  const recent=history.filter(h=>match(h.title)).slice(0,70).map(h=>`<div class="library-track"><span class="library-song">${esc(h.title||'YouTube')}<small> · ${new Date(h.playedAt).toLocaleString('pt-BR')}</small></span><button data-library="add" data-video="${esc(h.videoId)}" title="Reproduzir novamente">↻ Repetir</button></div>`).join('')||'<p class="subtle">Seu histórico aparecerá quando você ouvir músicas no TDB.</p>';
-  return `<div class="library-section"><h3>Playlists pessoais (${presets.length})</h3>${playlistHtml}</div><div class="library-section"><h3>Favoritos (${fav.length})</h3>${favorites}</div><div class="library-section"><h3>Histórico de reprodução (${history.length})</h3>${recent}</div>`;
+  const entries=presets.filter(p=>match(p.name)||(p.tracks||[]).some(t=>match(t.title)));
+  const playlists=entries.map(p=>{
+    const tracks=p.tracks||[],expanded=expandedPlaylists.has(String(p.id))||!!needle;
+    const items=tracks.map((t,i)=>({t,i})).filter(({t})=>!needle||match(t.title)||match(p.name)).map(({t,i})=>`<div class="library-track library-song-row"><span class="library-song"><b>${esc(t.title||'YouTube')}</b><small>Faixa ${i+1} de ${tracks.length}</small></span><div class="library-song-actions"><button type="button" data-library="add" data-video="${esc(t.videoId)}" title="Adicionar música à fila" aria-label="Adicionar ${esc(t.title||'música')} à fila">+ Fila</button><button type="button" data-library="move" data-id="${esc(p.id)}" data-from="${i}" data-to="${i-1}" title="Mover para cima" aria-label="Mover para cima" ${i===0?'disabled':''}>↑</button><button type="button" data-library="move" data-id="${esc(p.id)}" data-from="${i}" data-to="${i+1}" title="Mover para baixo" aria-label="Mover para baixo" ${i===tracks.length-1?'disabled':''}>↓</button><button type="button" data-library="remove" data-id="${esc(p.id)}" data-index="${i}" title="Remover música da playlist" aria-label="Remover da playlist">×</button></div></div>`).join('');
+    return `<article class="library-playlist"><div class="library-playlist-head"><button type="button" class="library-expand" data-library="expand" data-id="${esc(p.id)}" aria-expanded="${expanded}"><span class="library-playlist-art" aria-hidden="true">♫</span><span class="library-playlist-info"><b>${esc(p.name)}</b><small>${tracks.length} ${tracks.length===1?'música':'músicas'} • ${expanded?'Recolher':'Ver faixas'}</small></span><span aria-hidden="true">${expanded?'⌃':'⌄'}</span></button><div class="library-playlist-actions"><button type="button" class="btn btn-soft" data-library="load" data-id="${esc(p.id)}" title="Adicionar playlist inteira à fila">+ Fila</button><button type="button" class="btn btn-outline" data-library="rename" data-id="${esc(p.id)}">Renomear</button><button type="button" class="btn btn-outline" data-library="delete" data-id="${esc(p.id)}" title="Excluir playlist">Excluir</button></div></div>${expanded?`<div class="library-playlist-tracks">${items||'<p class="library-empty">Nenhuma faixa encontrada.</p>'}</div>`:''}</article>`;
+  }).join('')||'<div class="library-empty">Nenhuma playlist encontrada. Salve uma fila de músicas para começar.</div>';
+  const favorites=fav.filter(f=>match(f.title)).map(f=>`<div class="library-track library-song-row"><span class="library-fav-icon" aria-hidden="true">♥</span><span class="library-song"><b>${esc(f.title||'YouTube')}</b><small>Música favorita</small></span><div class="library-song-actions"><button type="button" data-library="add" data-video="${esc(f.videoId)}">+ Fila</button></div></div>`).join('')||'<div class="library-empty">Nenhum favorito encontrado. Use o coração ao lado de uma música para salvá-la.</div>';
+  const recent=history.filter(x=>match(x.title)).slice(0,70).map(x=>`<div class="library-track library-song-row"><span class="library-fav-icon" aria-hidden="true">↺</span><span class="library-song"><b>${esc(x.title||'YouTube')}</b><small>${Number.isFinite(new Date(x.playedAt).getTime())?new Date(x.playedAt).toLocaleString('pt-BR'):'Reproduzida anteriormente'}</small></span><div class="library-song-actions"><button type="button" data-library="add" data-video="${esc(x.videoId)}" title="Reproduzir novamente na fila">↺ Repetir</button></div></div>`).join('')||'<div class="library-empty">O histórico aparecerá quando você ouvir músicas no TDB.</div>';
+  const counts={playlists:presets.length,favorites:fav.length,history:history.length};
+  const tabs=libraryTabs.map(([key,title,icon])=>`<button type="button" class="library-switch ${libraryTab===key?'selected':''}" data-library="tab" data-tab="${key}" aria-selected="${libraryTab===key}" role="tab"><span aria-hidden="true">${icon}</span><span>${title}</span><small>${counts[key]}</small></button>`).join('');
+  const content=libraryTab==='playlists'?playlists:libraryTab==='favorites'?favorites:recent;
+  const heading={playlists:'Suas playlists',favorites:'Músicas favoritas',history:'Ouvidas recentemente'}[libraryTab];
+  const info={playlists:'Abra uma playlist para organizar as faixas ou adicioná-la à fila.',favorites:'Músicas que você salvou para encontrar rapidamente.',history:'Recupere músicas que já tocaram na sua conta.'}[libraryTab];
+  return `<nav class="library-nav" role="tablist" aria-label="Seções da biblioteca">${tabs}</nav><section class="library-active-section" role="tabpanel"><div class="library-section-intro"><h3>${heading}</h3><p>${info}</p></div><div class="library-content">${content}</div></section>`;
 }
 function renderLibrary(q=''){
   const data=$('#library-data');if(!data||!S.libraryProfile)return;
-  data.innerHTML=`<div class="library-tools"><label for="library-search">Buscar músicas e playlists</label><input id="library-search" type="search" value="${esc(q)}" placeholder="Buscar na minha biblioteca" autocomplete="off"></div><div id="library-results">${libraryRows(S.libraryProfile,q)}</div>`;
+  data.innerHTML=`<div class="library-tools"><label for="library-search">Pesquisar na biblioteca</label><div class="library-search-wrap"><span aria-hidden="true">⌕</span><input id="library-search" type="search" value="${esc(q)}" placeholder="Nome da música ou da playlist" autocomplete="off"></div></div><div id="library-results">${libraryRows(S.libraryProfile,q)}</div>`;
 }
 async function openLibrary(){try{
   const {profile}=await request('/api/platform/music-profile');S.libraryProfile=profile;
@@ -555,6 +581,19 @@ $('#library-data').addEventListener('input',e=>{
 $('#library-data').addEventListener('click',async e=>{
   const b=e.target.closest('[data-library]');if(!b)return;
   const type=b.dataset.library;
+  if(type==='tab'){
+    if(!libraryTabs.some(x=>x[0]===b.dataset.tab))return;
+    libraryTab=b.dataset.tab;
+    const query=$('#library-search')?.value||'';
+    $('#library-results').innerHTML=libraryRows(S.libraryProfile,query);
+    return;
+  }
+  if(type==='expand'){
+    const id=String(b.dataset.id||'');
+    if(expandedPlaylists.has(id))expandedPlaylists.delete(id);else expandedPlaylists.add(id);
+    $('#library-results').innerHTML=libraryRows(S.libraryProfile,$('#library-search')?.value||'');
+    return;
+  }
   if(type==='add'){
     if(!S.room){toast('Entre em uma sala para adicionar músicas à fila.');return}
     await musicAction('add',{url:`https://www.youtube.com/watch?v=${b.dataset.video}`});return;

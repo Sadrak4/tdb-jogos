@@ -24,7 +24,7 @@ with sync_playwright() as p:
     html=re.sub(r'<script[^>]+src=[^>]+></script>','',(ROOT/'index.html').read_text())
     html=re.sub(r'<link[^>]+rel="stylesheet"[^>]*>','',html)
     page.set_content(html)
-    for css in ['hub/hub.css','hub/premium-gold.css','hub/upgrade-free.css','games/chess/chess.css','hub/classic-window.css','hub/upgrade-free.css','hub/universe-83.css']:
+    for css in ['hub/hub.css','hub/premium-gold.css','hub/upgrade-free.css','games/chess/chess.css','hub/classic-window.css','hub/upgrade-free.css','hub/universe-83.css','hub/quality-833.css']:
         page.evaluate('(css)=>{const s=document.createElement("style");s.textContent=css;document.head.appendChild(s)}',(ROOT/css).read_text())
     page.evaluate('() => {'+mock+'}')
     page.add_script_tag(content=(ROOT/'games/chess/chess-engine.js').read_text())
@@ -43,8 +43,15 @@ with sync_playwright() as p:
     page.locator('#home-library').click()
     page.wait_for_timeout(100)
     assert page.locator('#library-dialog').is_visible(),errors
+    assert page.locator('.library-nav .library-switch').count()==3
+    assert page.locator('.library-playlist').count()==1
+    assert page.locator('.library-playlist-tracks').count()==0
+    page.locator('[data-library="tab"][data-tab="history"]').click()
     assert page.locator('#library-data').get_by_text('Tocou ontem').count()==1
-    page.locator('#library-dialog').screenshot(path='/mnt/data/TDB-8.2.0-PREVIA-BIBLIOTECA.png')
+    page.locator('[data-library="tab"][data-tab="favorites"]').click()
+    assert page.locator('#library-data').get_by_text('Música favorita').count()>=1
+    page.locator('[data-library="tab"][data-tab="playlists"]').click()
+    page.locator('[data-library="expand"]').first.click()
     page.locator('#library-search').fill('Faixa B')
     assert page.locator('#library-data').get_by_text('Faixa B').count()==1
     assert page.locator('#library-data').get_by_text('Faixa A').count()==0
@@ -61,16 +68,11 @@ with sync_playwright() as p:
     page.locator('#library-close').click()
     page.locator('#home-rooms [data-enter="SALA-PREMIUM01"]').click();page.wait_for_timeout(150)
     assert page.locator('#room-view').is_visible()
-    page.locator('#room-toggle-social').click()
-    assert 'tdb-hide-social' in page.locator('#room-view').get_attribute('class')
-    page.locator('#room-toggle-social').click()
+    assert page.locator('.room-quickbar').count()==0
     assert page.locator('.social-rail').is_visible()
-    page.locator('#room-toggle-music').click()
-    assert not page.locator('.room-rail').is_visible()
-    page.locator('#room-toggle-music').click()
     assert page.locator('.room-rail').is_visible()
+    assert page.locator('#room-invite-friends').is_visible(),'Convites continuam disponíveis na sala'
     page.evaluate('window.__musicTest.S.snapshot.room.music.playing=true')
-    page.locator('#room-toggle-music').click()
     assert page.locator('.room-rail').is_visible(),'Player ativo não pode desaparecer'
     page.evaluate('window.__musicTest.S.snapshot.room.music.playing=false')
     # A correção só acontece após desvio prolongado, sem ciclar play/pause/seek.
@@ -99,5 +101,5 @@ with sync_playwright() as p:
     page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(100)
     assert page.evaluate('document.documentElement.scrollWidth')<=392,'Layout 8.2 transbordou no celular'
     assert not errors,errors
-    print('✔ 8.2 Chromium: home gamer, filtros, biblioteca/histórico, renomear/reordenar, painéis recolhíveis e sem erros JS')
+    print('✔ 8.2 Chromium: home gamer, filtros, biblioteca/histórico em abas, renomear/reordenar, convites acessíveis sem a antiga barra e sem erros JS')
     browser.close()
