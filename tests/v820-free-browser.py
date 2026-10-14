@@ -24,7 +24,7 @@ with sync_playwright() as p:
     html=re.sub(r'<script[^>]+src=[^>]+></script>','',(ROOT/'index.html').read_text())
     html=re.sub(r'<link[^>]+rel="stylesheet"[^>]*>','',html)
     page.set_content(html)
-    for css in ['hub/hub.css','hub/premium-gold.css','hub/upgrade-free.css','games/chess/chess.css','hub/classic-window.css']:
+    for css in ['hub/hub.css','hub/premium-gold.css','hub/upgrade-free.css','games/chess/chess.css','hub/classic-window.css','hub/upgrade-free.css','hub/universe-83.css']:
         page.evaluate('(css)=>{const s=document.createElement("style");s.textContent=css;document.head.appendChild(s)}',(ROOT/css).read_text())
     page.evaluate('() => {'+mock+'}')
     page.add_script_tag(content=(ROOT/'games/chess/chess-engine.js').read_text())
@@ -32,6 +32,7 @@ with sync_playwright() as p:
     discover='data:text/javascript;base64,'+base64.b64encode((ROOT/'hub/discover.js').read_bytes()).decode('ascii')
     hub=(ROOT/'hub/hub.js').read_text().replace("'./classic-games.js'",repr(classics)).replace("'./discover.js'",repr(discover)).replace('login();', 'window.__musicTest={S,syncMusic};login();')
     page.add_script_tag(content=hub,type='module')
+    page.add_script_tag(content=(ROOT/'hub/universe-83.js').read_text(),type='module')
     page.wait_for_timeout(450)
     assert page.locator('#discover-list .discover-card').count()>=4,errors
     assert page.locator('#discover-list').get_by_text('Promoção comprovada').count()==1

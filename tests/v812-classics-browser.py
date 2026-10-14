@@ -71,7 +71,7 @@ try:
   html=re.sub(r'<script[^>]+src=[^>]+></script>','',html)
   html=re.sub(r'<link[^>]+rel="stylesheet"[^>]*>','',html)
   page.set_content(html,wait_until='domcontentloaded')
-  for f in ['hub/hub.css','hub/premium-gold.css','games/chess/chess.css','hub/classic-window.css']:
+  for f in ['hub/hub.css','hub/premium-gold.css','games/chess/chess.css','hub/classic-window.css','hub/upgrade-free.css','hub/universe-83.css']:
    page.evaluate('(css)=>{const s=document.createElement("style");s.textContent=css;document.head.appendChild(s)}',(ROOT/f).read_text())
   page.evaluate('window.__trucoFixture='+json.dumps(truco)+';')
   page.evaluate('() => {'+MOCK+'}')
@@ -81,6 +81,7 @@ try:
   discoveruri='data:text/javascript;base64,'+base64.b64encode((ROOT/'hub/discover.js').read_bytes()).decode('ascii')
   hub=(ROOT/'hub/hub.js').read_text().replace("'./classic-games.js'",repr(datauri)).replace("'./discover.js'",repr(discoveruri))
   page.add_script_tag(content=hub,type='module')
+  page.add_script_tag(content=(ROOT/'hub/universe-83.js').read_text(),type='module')
   page.wait_for_timeout(450)
   assert page.locator('#home').is_visible(),errors
   page.locator('[data-enter="SALA-ORIGINAL"]').first.click()

@@ -1,3 +1,14 @@
+# TDB 8.3.0 RC1 — Gaming Universe (redesign aprovado)
+
+- Notícias passam a ser a primeira tela após autenticação, com destaque vinculado ao feed público real e fallback para links oficiais.
+- Home estilo portal gamer, sidebar e navegação renovadas em preto/dourado/verde, arte decorativa derivada da prévia oficial aprovada.
+- Pesquisa Ctrl+K, botões de ação rápida e lista de salas com dados reais, conta conectada, opção para retomar última sala.
+- Salas com cabeçalho, atalhos e layout refinados; continuam os mesmos controles, motores clássicos, BOTs, biblioteca, chat e transmissão.
+- Sem Sinuca, ranking, serviços pagos novos ou SQL novo. Requer a migração já prevista da base 8.1.4 caso ainda ausente.
+- Regressão Node local e Chromium desktop/mobile; pendente validação online antes de produção.
+
+---
+
 # TDB v8.2.0 RC1 — sem serviços adicionais pagos
 
 Ver `ATUALIZACAO-v8.2.0.md` e `LEIA-PRIMEIRO-8.2.0.md`.

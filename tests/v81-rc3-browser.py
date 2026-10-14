@@ -42,6 +42,7 @@ with sync_playwright() as p:
   discoveruri='data:text/javascript;base64,'+base64.b64encode((ROOT/'hub/discover.js').read_bytes()).decode('ascii')
   hub=(ROOT/'hub/hub.js').read_text().replace("'./classic-games.js'",repr(datauri)).replace("'./discover.js'",repr(discoveruri))
   page.add_script_tag(content=hub,type='module')
+  page.add_script_tag(content=(ROOT/'hub/universe-83.js').read_text(),type='module')
   page.wait_for_timeout(200)
   page.locator('[data-enter="SALA-RC3BOT01"]').first.click();page.wait_for_timeout(150)
   assert page.locator('#new-bot-table').is_visible(),'BOT button not visible inside room'

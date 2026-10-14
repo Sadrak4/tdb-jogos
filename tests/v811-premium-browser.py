@@ -46,12 +46,14 @@ def run(width,height,home_shot=None,room_shot=None):
   page.evaluate('(css)=>{const s=document.createElement("style");s.textContent=css;document.head.appendChild(s)}',(ROOT/'hub/hub.css').read_text())
   
   page.evaluate('(css)=>{const s=document.createElement("style");s.textContent=css;document.head.appendChild(s)}',(ROOT/'hub/premium-gold.css').read_text())
+  page.evaluate('(css)=>{const style=document.createElement("style");style.textContent=css;document.head.appendChild(style)}',(ROOT/"hub/universe-83.css").read_text())
   page.evaluate('() => {'+MOCK+'}')
   page.add_script_tag(content=(ROOT/'games/chess/chess-engine.js').read_text())
   datauri='data:text/javascript;base64,'+base64.b64encode((ROOT/'hub/classic-games.js').read_bytes()).decode('ascii')
   discoveruri='data:text/javascript;base64,'+base64.b64encode((ROOT/'hub/discover.js').read_bytes()).decode('ascii')
   hub=(ROOT/'hub/hub.js').read_text().replace("'./classic-games.js'",repr(datauri)).replace("'./discover.js'",repr(discoveruri))
   page.add_script_tag(content=hub,type='module')
+  page.add_script_tag(content=(ROOT/'hub/universe-83.js').read_text(),type='module')
   
   page.wait_for_timeout(220)
   assert page.locator('#home').is_visible()
@@ -69,7 +71,7 @@ def run(width,height,home_shot=None,room_shot=None):
   page.locator('#home-training').click()
   assert page.locator('#modal-title').inner_text()=='Treinamento individual'
   page.locator('#modal-cancel').click()
-  page.locator('#home-join').click()
+  page.locator('#universe-join-room').click()
   assert page.locator('#modal-title').inner_text()=='Entrar com código'
   page.locator('#modal-cancel').click()
   page.locator('#home-rooms [data-enter="SALA-PREMIUM01"]').click()

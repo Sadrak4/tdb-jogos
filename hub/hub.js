@@ -31,10 +31,10 @@ async function request(path,body=null){
 const hubGet=(op,params={})=>request(`/api/hub?${new URLSearchParams({op,...params})}`);
 const hubPost=(op,params={})=>request('/api/hub',{op,...params});
 const action=(type,extra={})=>hubPost('action',{code:S.room,action:{type,...extra}});
-function setView(view){show('#home',view==='home');show('#room-view',view==='room');$$('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));$('#where').textContent=view==='home'?'Explorar salas':S.snapshot?.room?.name||'Sala social';window.scrollTo({top:0,behavior:'instant'})}
+function setView(view){show('#home',view==='home');show('#room-view',view==='room');$$('[data-nav]').forEach(x=>x.classList.toggle('active',x.dataset.nav===view));$('#where').textContent=view==='home'?'Notícias':S.snapshot?.room?.name||'Sala social';window.scrollTo({top:0,behavior:'instant'})}
 function loggedIn(user){S.user=user;show('#auth',false);show('#shell',true);$('#user-name').textContent=user.username;$('#user-avatar').textContent=shortName(user.username);$('#status').textContent='Conectado';setView('home');refreshRooms();initDiscover();request('/api/platform/music-profile').then(d=>{if(S.user?.id!==user.id)return;S.favoriteIds=new Set((d.profile?.favorites||[]).map(t=>t.videoId));S.queueRevision=-1;if(S.snapshot?.room?.music)syncMusic(S.snapshot.room.music)}).catch(()=>{});}
 function loggedOut(){S.favoriteIds.clear();S.libraryProfile=null;closeGameWindow(true);S.user=null;S.token='';localStorage.removeItem('tdb_session_token');show('#auth');show('#shell',false);$('#auth-user').focus()}
-async function login(){if(!S.token){loggedOut();return}try{const data=await request('/api/auth/session');loggedIn(data.user);if(localStorage.getItem('tdb_hub_last_room'))await enter(localStorage.getItem('tdb_hub_last_room'),true)}catch{loggedOut()}}
+async function login(){if(!S.token){loggedOut();return}try{const data=await request('/api/auth/session');loggedIn(data.user);/* 8.3: notícias primeiro após autenticar; reentrada na última sala fica por escolha do usuário. */}catch{loggedOut()}}
 $('#auth-toggle').addEventListener('click',()=>{S.authMode=S.authMode==='login'?'register':'login';$('#auth-title').textContent=S.authMode==='login'?'Entre no seu mundo.':'Faça parte da galera.';$('#auth-submit').innerHTML=S.authMode==='login'?'Entrar no TDB <span>→</span>':'Criar minha conta <span>→</span>';$('#auth-toggle').innerHTML=S.authMode==='login'?'Ainda não tem conta? <b>Criar conta</b>':'Já tem conta? <b>Entrar</b>'});
 $('#auth-form').addEventListener('submit',async e=>{e.preventDefault();const btn=$('#auth-submit');btn.disabled=true;try{const d=await request(`/api/auth/${S.authMode}`,{username:$('#auth-user').value.trim(),password:$('#auth-pass').value});S.token=d.token;localStorage.setItem('tdb_session_token',d.token);loggedIn(d.user);toast(`Bem-vindo ao TDB, ${d.user.username}!`)}catch(err){toast(err.message)}finally{btn.disabled=false}});
 $('#logout').addEventListener('click',async()=>{try{await request('/api/auth/logout',{})}catch{}stopLocalShare();closeViewer();stopTimers();S.room=null;S.snapshot=null;localStorage.removeItem('tdb_hub_last_room');S.yt?.pauseVideo?.();loggedOut()});
@@ -80,6 +80,7 @@ $('#top-training')?.addEventListener('click',async()=>{
 $('#refresh-rooms').addEventListener('click',refreshRooms);$('#home-refresh').addEventListener('click',refreshRooms);
 $('#nav-home').addEventListener('click',()=>setView('home'));
 $('#nav-room').addEventListener('click',()=>S.room?setView('room'):toast('Entre em uma sala primeiro.'));
+document.addEventListener('tdb:resume-room',()=>{const code=localStorage.getItem('tdb_hub_last_room');if(code)void enter(code);});
 // Non-destructive per-device layout preferences; games and audio stay mounted.
 const roomLayoutPrefs={music:localStorage.getItem('tdb_hide_music_panel')==='yes',social:localStorage.getItem('tdb_hide_social_panel')==='yes'};
 function applyRoomLayout(){

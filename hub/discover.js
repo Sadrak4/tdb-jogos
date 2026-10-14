@@ -20,6 +20,9 @@ function render(){
     const label=item.type==='link'?'Fonte oficial':source;
     return `<a class="discover-card" href="${safe(url)}" target="_blank" rel="noopener noreferrer"><span class="discover-source">${safe(label)}</span><strong>${title}</strong><div class="discover-card-foot">${free}${discount}${price}<span class="discover-arrow">↗</span></div></a>`;
   }).join('');
+  const featured=[...(d.news||[]),...(d.epic||[]),...(d.steam||[])].find(x=>x?.url&&x?.title);
+  window.__tdbDiscoverFeatured=featured||null;
+  document.dispatchEvent(new CustomEvent('tdb:discover',{detail:{featured:featured||null}}));
   if(meta)meta.textContent=entries.length?`Destaques públicos · Verifique valores e prazos na loja oficial${d.stale?' · últimas informações disponíveis':''}`:'Links oficiais disponíveis · As ofertas serão exibidas quando as fontes responderem';
   document.querySelectorAll('[data-discover-filter]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.discoverFilter===active)));
 }
